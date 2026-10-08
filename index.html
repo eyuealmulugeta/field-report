@@ -2,16 +2,19 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <script>window.__AFR_CFG = { url: "", key: "" };</script>
-  <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0e7490"><link rel="icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#f4f5f7"><link rel="icon" href="icon-192.png">
   <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function () {}); }</script>
   <title>Amistad Prefab Field Report v1.4</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0e7490; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
-    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #0e7490; z-index: 9999; }
-    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    body { background: #f4f5f7; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { display: none; position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; background: #f4f5f7; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #__bundler_thumbnail img { width: 132px; height: 132px; border-radius: 30px; box-shadow: 0 6px 24px rgba(14,116,144,.18); }
+    #__bundler_thumbnail b { position: absolute; left: 0; right: 0; bottom: max(36px, env(safe-area-inset-bottom)); text-align: center; font: 800 20px/1 -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: .38em; text-indent: .38em; color: #0e7490; }
+    
     #__bundler_placeholder { color: #999; font-size: 14px; }
   </style>
   <noscript>
@@ -22,7 +25,7 @@
   </noscript>
 </head>
 <body>
-  <div id="__bundler_thumbnail"><svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg"><rect x="470" y="150" width="260" height="500" rx="44" fill="#fff"></rect><rect x="500" y="200" width="200" height="40" rx="10" fill="#0e7490"></rect><rect x="500" y="270" width="200" height="14" rx="7" fill="#9fd0da"></rect><rect x="500" y="300" width="150" height="14" rx="7" fill="#9fd0da"></rect><rect x="500" y="540" width="200" height="60" rx="16" fill="#0e7490"></rect></svg></div>
+  <div id="__bundler_thumbnail"><img src="icon-192.png" alt=""><b>APTF</b></div>
   <div id="__bundler_loading">Unpacking...</div>
 
   <script>
