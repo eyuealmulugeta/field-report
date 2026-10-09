@@ -1,6 +1,6 @@
 {
-  "name": "Amistad Prefab Field Report v1.4",
-  "short_name": "Field Report v1.4",
+  "name": "Amistad Prefab Field Report",
+  "short_name": "Field Report",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
