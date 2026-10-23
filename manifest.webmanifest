@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Amistad Prefab",
-  "short_name": "Amistad Prefab",
+  "name": "Field Report",
+  "short_name": "Field Report",
   "description": "Daily site reports for Amistad Prefab projects",
   "start_url": "./",
   "scope": "./",
