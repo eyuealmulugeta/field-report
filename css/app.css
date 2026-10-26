@@ -326,3 +326,10 @@ kbd { font: 600 10px "Segoe UI", system-ui, sans-serif; border: 1px solid var(--
 .btn.bad { color: var(--bad); border-color: var(--bad); }
 button.li.callout { width: 100%; text-align: left; border: 0; }
 a.li.callout { text-decoration: none; }
+img.logo { background: none; object-fit: cover; padding: 0; }
+.li .pre { white-space: pre-line; }
+.li.more { justify-content: center; color: var(--brand); font-weight: 600; }
+.li.inbox .n > span { display: block; }
+.sig-tap { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 10px; border: 1.5px dashed var(--brand); border-radius: 12px; background: none; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; }
+.sig-tap img { max-height: 70px; opacity: .45; }
+.fld[readonly] { background: var(--soft, #f3f5f8); color: var(--muted); }

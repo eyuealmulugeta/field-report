@@ -1,6 +1,6 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, useFake, isDemo, ApiError, APP_VERSION, deviceId } from './core/api.js';
+import { post, signIn, signInReturn, useFake, isDemo, ApiError, APP_VERSION, deviceId } from './core/api.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
@@ -195,16 +195,32 @@ async function pullDraft() {
   try {
     const res = await call('draftGet', { proj: p.code });
     const how = draftChoice(res.found ? res.draft : null, report(), { today: realToday(), dev: devId() });
-    if (how === 'load') { useRemote(res.draft); toast(`Report carried on from your other phone (saved ${new Date(res.draft.at).toTimeString().slice(0, 5)}).${res.draft.photoCount ? ' Its photos stay on that phone.' : ''}`); }
+    if (how === 'load') { useRemote(res.draft); toast(`Report carried on from your other phone (saved ${new Date(res.draft.at).toTimeString().slice(0, 5)}).${res.draft.photoCount ? ' Photos it has not sent stay on that phone.' : ''}`); }
     if (how === 'ask') { ui.remote = res.draft; ui.sheet = 'draft'; draw(); }
   } catch { /* offline: try next time */ }
 }
 function useRemote(d) {
   const mine = report(), r = { ...d.s.report };
-  // photos taken on the other phone are not here: keep only the ones this phone has
+  // photos taken on the other phone are not here: keep the ones this phone has and the ones already in Drive (2.1.0)
   const here = new Set((mine && mine.photos || []).map(x => x.id));
-  r.photos = (r.photos || []).filter(x => here.has(x.id));
+  r.photos = (r.photos || []).filter(x => here.has(x.id) || x.drive);
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
+}
+
+/** The OneSignal app id, asked once and kept (2.0.1: the switch no longer waits for the script every time). */
+async function pushAppId() {
+  const s = store.get();
+  if (s.pushAppId) return s.pushAppId;
+  const ping = await call('ping', {});
+  if (ping.pushAppId) store.quiet({ pushAppId: ping.pushAppId });
+  return ping.pushAppId || '';
+}
+
+/** Me opened: the notification service loads in the background, so the switch answers at once. */
+function pushPreload() {
+  const s = store.get();
+  if (demo || !s.auth || !s.pushAppId || window.OneSignal) return;
+  oneSignal(s.pushAppId, s.auth.who).catch(() => {});
 }
 
 /** Push notifications through the same OneSignal app as the old app; the worker lives in push/. */
@@ -242,24 +258,40 @@ function remindTick() {
 
 const toDataUrl = blob => new Promise((ok, fail) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => fail(fr.error); fr.readAsDataURL(blob); });
 
-/** The report PDF, with today's photos from this phone and the saved signature. */
+/** The report PDF, with the report's photos (from this phone, or from Drive) and the saved signature. */
 async function makePdf(r, p, step = () => {}) {
   step('Making the PDF…');
   const JsPDF = await loadPdfLib();
   const photos = [];
   for (const ph of r.photos) {
-    const b = await getPhoto(ph.id).catch(() => null);
+    const b = await getPhoto(ph.id).catch(() => null) || (ph.drive ? await drivePhoto(pdfName(p, r.date, r.no), ph.id) : null);
     if (!b) continue;
     const bmp = await createImageBitmap(b).catch(() => null);
     photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, cap: photoCaption(ph, r.items) });
     if (bmp) bmp.close();
   }
   const prof = store.get().profile;
-  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), photos, sig: prof.sig, signedAt: now() });
+  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), photos, sig: r.signed ? prof.sig : '', signedAt: now() });
   const blob = doc.output('blob');
   if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
   ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
   return blob;
+}
+
+/** The script's answer to a sign-in (from the demo button or the return from Google). */
+async function signedIn(pending) {
+  ui.busy = true; ui.error = ''; draw();
+  try {
+    const a = await pending;
+    const s = store.get();
+    store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...s.profile, name: s.profile.name || a.name || '' } });
+    applyMe(a.me);
+    oldAppClear();
+    await loadProjects();
+    go('today');
+    checkStatus(); devCheck(true); inboxCheck(true);
+  } catch (e) { ui.error = e.message; }
+  ui.busy = false; draw();
 }
 
 /** trial.2: only the Admin may see, share or download the report PDF (the script also keeps the Drive link from the others). */
@@ -267,27 +299,45 @@ const adminRole = () => ((store.get().auth || {}).role || '') === 'admin';
 const dropPdf = () => { if (ui.pdf) { URL.revokeObjectURL(ui.pdf.url); ui.pdf = null; } };
 const pdfRefused = () => { toast('The report PDF goes to the office only. Use View the report.'); return true; };
 
-/** Field Report 1 (now at /v1/, same address so the same phone storage) may still hold a report that was not sent:
- *  its draft (afr_draft) or its upload queue (IndexedDB "afr", keys q:…). Today then says so, with a link to /v1/. */
-async function oldAppWork() {
-  if (demo && !new URLSearchParams(location.search).has('old')) return;   // ?demo&old shows the notice in the demo
-  let n = 0;
-  try { const d = JSON.parse(localStorage.getItem('afr_draft') || 'null'); if (d && d.key) n++; } catch { /* no old draft */ }
+/** 2.0.1: the old app (at /v1/) is for the Admin only. On everyone else's phone its saved data goes: its settings, sign-in,
+ *  drafts and unsent reports (localStorage "afr_…" and IndexedDB "afr"). The device id (afr_devid) stays: it is shared with this app. */
+function oldAppClear() {
+  const role = (store.get().auth || {}).role;
+  if (demo || !role || role === 'admin') return;
+  try { Object.keys(localStorage).filter(k => k.startsWith('afr') && k !== 'afr_devid').forEach(k => localStorage.removeItem(k)); } catch { /* no storage */ }
+  try { indexedDB.deleteDatabase('afr'); } catch { /* no IndexedDB */ }
+}
+
+/** 2.0.2: the name and position Central Hub confirmed win over what was typed here, and cannot be changed on the phone. */
+function applyMe(me) {
+  if (!me) return;
+  const p = store.get().profile;
+  if (me.locked) {
+    if (p.name !== me.name || p.position !== me.position || !p.locked) store.set({ profile: { ...p, name: me.name, position: me.position, locked: true, sentNP: `${me.name}|${me.position}` } });
+  } else if (p.locked) store.set({ profile: { ...p, locked: false } });
+}
+
+/** 2.0.2: what the person typed goes to Central Hub to be confirmed (once per change; quietly, it is sent again later if offline). */
+async function sendProfile() {
+  const p = store.get().profile, np = `${String(p.name || '').trim()}|${String(p.position || '').trim()}`;
+  if (demo || p.locked || !store.get().auth || np === p.sentNP) return;
   try {
-    n += await new Promise(ok => {
-      const rq = indexedDB.open('afr');
-      rq.onupgradeneeded = () => rq.transaction.abort();   // the old app never ran on this phone: do not create its database
-      rq.onerror = () => ok(0);
-      rq.onsuccess = () => {
-        const db = rq.result;
-        if (!db.objectStoreNames.contains('kv')) { db.close(); ok(0); return; }
-        const g = db.transaction('kv').objectStore('kv').getAllKeys();
-        g.onsuccess = () => { db.close(); ok(g.result.filter(k => String(k).startsWith('q:')).length); };
-        g.onerror = () => { db.close(); ok(0); };
-      };
-    });
-  } catch { /* no IndexedDB */ }
-  if (n !== (ui.oldWork || 0)) { ui.oldWork = n; draw(); }
+    const r = await call('profilePut', { name: p.name || '', position: p.position || '' });
+    store.quiet({ profile: { ...store.get().profile, sentNP: np } });
+    applyMe(r.me);
+  } catch { /* offline or an older script: sent again next time */ }
+}
+
+/** 2.0.1: the notifications sent to this person (script 7.29.0), shown at the top of Today. At most once a minute unless asked. */
+async function inboxCheck(force) {
+  if (!store.get().auth || (!force && Date.now() - (ui.inboxAt || 0) < 60e3)) return;
+  ui.inboxAt = Date.now();
+  try {
+    const r = await call('inbox', {});
+    applyMe(r.me);
+    const items = r.items || [], was = store.get().inbox || [];
+    if (JSON.stringify(items) !== JSON.stringify(was)) store.set({ inbox: items });
+  } catch (e) { if (force && e.code !== 'BAD_REQUEST') toast(e.message); }
 }
 
 /** The Admin's list of devices (script 7.28.0), at most once a minute unless asked. */
@@ -318,8 +368,12 @@ const unqueue = k => store.set({ outbox: store.get().outbox.filter(j => !(j.acti
 async function sendReport(k, step = () => {}) {
   const r = store.get().drafts[k], p = store.get().projects.find(x => x.code === r.proj);
   const name = pdfName(p, r.date, r.no), meta = reportMeta(r, p, store.get().profile);
+  try { await sendPhotos(k, name, step); } catch (e) {
+    if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
+    throw e;
+  }
   let blob;
-  try { blob = await makePdf(r, p, step); } catch { queueReport(k); return 'queued'; }
+  try { blob = await makePdf(store.get().drafts[k], p, step); } catch { queueReport(k); return 'queued'; }
   step('Sending…');
   const data = (await toDataUrl(blob)).split(',')[1];
   if (!adminRole()) dropPdf();   // trial.2: the PDF is made only to send it; the engineer's phone does not keep it
@@ -335,6 +389,56 @@ async function sendReport(k, step = () => {}) {
   } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
     throw e;
+  }
+}
+
+/** 2.1.0: the report's photos to Drive, before its PDF. Each one is marked (drive = its Drive id, upAt) as it arrives,
+ *  so a Send that stops halfway carries on where it stopped. */
+async function sendPhotos(k, name, step) {
+  const todo = (store.get().drafts[k].photos || []).filter(ph => !ph.drive);
+  let i = 0;
+  for (const ph of todo) {
+    i += 1;
+    const b = await getPhoto(ph.id).catch(() => null);
+    if (!b) continue;   // taken on another phone and never sent from there
+    step(`Sending photos… ${i} of ${todo.length}`);
+    const res = await call('photoPut', { report: name, id: ph.id, data: (await toDataUrl(b)).split(',')[1] });
+    editKey(k, r => { const x = r.photos.find(y => y.id === ph.id); if (x) { x.drive = res.fileId || 'yes'; x.upAt = Date.now(); } });
+  }
+}
+
+/** 2.1.0: a photo this phone no longer has, read back from Drive (kept for this session only). */
+const fromDrive = new Map();
+async function drivePhoto(report, id) {
+  if (fromDrive.has(id)) return fromDrive.get(id);
+  const job = call('photoGet', { report, id }).then(res => fetch(`data:image/jpeg;base64,${res.data}`).then(x => x.blob())).catch(() => null);
+  fromDrive.set(id, job);
+  const b = await job;
+  if (!b) fromDrive.delete(id);   // offline: tried again next time
+  return b;
+}
+
+/** The thumbnail of a photo that left this phone: from Drive, through the report that holds it. */
+async function driveUrl(id) {
+  const d = store.get().drafts;
+  for (const r of Object.values(d)) {
+    const ph = (r.photos || []).find(x => x.id === id);
+    const p = ph && ph.drive && store.get().projects.find(x => x.code === r.proj);
+    if (!p) continue;
+    const b = await drivePhoto(pdfName(p, r.date, r.no), id);
+    return b ? URL.createObjectURL(b) : '';
+  }
+  return '';
+}
+
+/** 2.1.0: a photo leaves this phone 7 days after it is safely in Drive (the report keeps its caption and Drive mark). */
+const PHOTO_DAYS = 7;
+async function cleanPhotos() {
+  const old = [], d = store.get().drafts, limit = Date.now() - PHOTO_DAYS * 864e5;
+  for (const [k, r] of Object.entries(d)) for (const ph of r.photos || []) if (r.sentAt && ph.drive && !ph.gone && ph.upAt && ph.upAt < limit) old.push([k, ph.id]);
+  for (const [k, id] of old) {
+    await deletePhoto(id).catch(() => {});
+    editKey(k, r => { const x = r.photos.find(y => y.id === id); if (x) x.gone = true; });
   }
 }
 
@@ -505,21 +609,11 @@ const KEEP = new Set(['unit', 'captionKind', 'name', 'category', 'priority', 'te
 
 const ACTS = {
   go: d => go(d.to),
-  async signin() {
-    ui.busy = true; ui.error = ''; draw();
-    try {
-      const a = await signIn(store.get().profile.name || '');
-      const s = store.get();
-      store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...s.profile, name: s.profile.name || a.name || '' } });
-      await loadProjects();
-      go('today');
-      checkStatus(); devCheck(true);
-    } catch (e) { ui.error = e.message; }
-    ui.busy = false; draw();
-  },
+  signin: () => signedIn(signIn(store.get().profile.name || '')),
   saveProfile() {
     if (!store.get().profile.name.trim()) return toast('Write your name first.');
     store.set({ profile: { ...store.get().profile, done: true } });
+    sendProfile();
     go('today');
   },
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); },
@@ -614,18 +708,28 @@ const ACTS = {
   },
   async pushOn() {
     const pr = store.get().profile;
-    if (pr.push) { store.set({ profile: { ...pr, push: false } }); toast('Notifications off on this phone.'); return; }
+    if (ui.pushBusy) return;
+    if (pr.push) {
+      store.set({ profile: { ...pr, push: false } }); toast('Notifications off on this phone.');
+      try { window.OneSignal.User.PushSubscription.optOut().catch(() => {}); } catch { /* the service was not loaded: nothing to stop */ }
+      return;
+    }
     if (demo) return toast('Demo: notifications are not set up here.');
+    ui.pushBusy = true; draw();
     try {
-      const ping = await call('ping', {});
-      if (!ping.pushAppId) return toast('Notifications are not set up on the server yet.');
-      const OS = await oneSignal(ping.pushAppId, ping.who || (store.get().auth || {}).who);
-      await OS.Notifications.requestPermission();
+      const appId = await pushAppId();
+      if (!appId) return toast('Notifications are not set up on the server yet.');
+      const OS = await oneSignal(appId, (store.get().auth || {}).who);
+      if (!OS.Notifications.permission) await OS.Notifications.requestPermission();
       if (!OS.Notifications.permission) return toast('Notifications were not allowed. Allow them in the browser settings.');
+      try { OS.User.PushSubscription.optIn().catch(() => {}); } catch { /* older service: already in */ }
       store.set({ profile: { ...store.get().profile, push: true } });
       toast('Notifications on.');
     } catch (e) { toast(e.message || String(e)); }
+    finally { ui.pushBusy = false; draw(); }
   },
+  inboxClear() { store.set({ inboxSeen: ((store.get().inbox || [])[0] || {}).t || '' }); },
+  inboxMore() { ui.inboxAll = !ui.inboxAll; draw(); },
   async pushTest() {
     try { const r = await call('pushtest', {}); toast(r.ok ? 'Test sent. It should arrive in a few seconds.' : `Test failed: ${r.error || r.skipped || 'no answer'}`); }
     catch (e) { toast(`Test failed: ${e.message}`); }
@@ -667,9 +771,11 @@ const ACTS = {
     g.fillStyle = '#fff'; g.fillRect(0, 0, out.width, out.height); g.drawImage(cv, 0, 0);
     store.set({ profile: { ...store.get().profile, sig: out.toDataURL('image/png') } });
     ui.sig = [];
+    edit(r => { r.signed = new Date().toISOString(); });
   },
+  useSig() { edit(r => { r.signed = new Date().toISOString(); }); },
   wipeSig() { ui.sig = []; draw(); },
-  clearSig() { ui.sig = []; store.set({ profile: { ...store.get().profile, sig: '' } }); if (route() !== 'send') go('send'); },
+  clearSig() { ui.sig = []; store.set({ profile: { ...store.get().profile, sig: '' } }); if (report()) edit(r => { r.signed = ''; }); if (route() !== 'send') go('send'); },
   toSign() { root.querySelector('#sign')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   async openPdf() {
     if (!adminRole()) return pdfRefused();
@@ -913,7 +1019,6 @@ function draw() {
     + `${v.fab ? '<button type="button" class="fab" data-act="fab" aria-label="Log now"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}`
     + `${v.tab ? nav(v.tab) : ''}`;
   }
-  if (!ui.sheet && !setup && c.s.seenNew !== APP_VERSION) ui.sheet = 'new';
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`
     + `${ui.toast ? `<div class="toast" role="status">${escText(ui.toast)}</div>` : ''}`
@@ -921,7 +1026,7 @@ function draw() {
   if (ui.sheetNew) { root.querySelector('.sheet')?.classList.add('new'); ui.sheetNew = false; }
   if (same) { const bd = root.querySelector('.bd'); if (bd) bd.scrollTop = scroll; }
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
-  root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => { if (u) img.src = u; }); });
+  root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
   bindSig();
   if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
 }
@@ -1001,8 +1106,9 @@ window.addEventListener('hashchange', () => {
   if (h !== 'request') ui.req = null;
   draw();
   if (h === 'reports') checkStatus();
-  if (h === 'me' || h === 'today') devCheck();
-  if (h === 'today') oldAppWork();
+  if (h === 'me' || h === 'today') { devCheck(); inboxCheck(); }
+  if (h === 'me') pushPreload();
+  if (h !== 'me') sendProfile();
   if (h === 'today' || h === '') pullDraft();
 });
 window.addEventListener('online', () => { flush(); checkStatus(); });
@@ -1011,6 +1117,10 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.ser
 store.subscribe(draw);
 
 draw();
-if (store.get().auth) { flush(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); }).catch(() => {}); else checkStatus(); devCheck(); }
-oldAppWork();
+const back = signInReturn();
+if (back) signedIn(back);
+else if (store.get().auth) { flush(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
+oldAppClear();
+cleanPhotos();
+if (route() === 'me') pushPreload();
 remindTick();

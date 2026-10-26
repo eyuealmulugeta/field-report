@@ -65,10 +65,12 @@ export function request(c) {
   };
 }
 
-/** The signature: the saved one, or a pad to sign once. */
+/** The signature: the saved one goes on with one tap (2.0.2), or a pad to sign by hand (kept for the next reports). */
 function signBox(c) {
-  const sig = c.s.profile.sig;
-  if (sig) return html`<div class="box pad sigbox"><img src="${sig}" alt="Your signature"><div class="spread small"><span class="muted">Signed as ${c.s.profile.name}${c.s.profile.position ? `, ${c.s.profile.position}` : ''}</span><button type="button" class="btn t slim" data-act="clearSig">Sign again</button></div></div>`;
+  const sig = c.s.profile.sig, who = `${c.s.profile.name}${c.s.profile.position ? `, ${c.s.profile.position}` : ''}`;
+  if (sig && c.report && c.report.signed) return html`<div class="box pad sigbox"><img src="${sig}" alt="Your signature"><div class="spread small"><span class="muted">Signed as ${who}</span><button type="button" class="btn t slim" data-act="clearSig">Sign by hand</button></div></div>`;
+  if (sig) return html`<div class="box pad sigbox"><button type="button" class="sig-tap" data-act="useSig" aria-label="Sign with your saved signature"><img src="${sig}" alt=""><span>Tap to sign as ${who}</span></button>
+    <div class="spread small"><span class="muted">Your saved signature</span><button type="button" class="btn t slim" data-act="clearSig">Sign by hand</button></div></div>`;
   return html`<div class="box pad sigbox"><canvas id="sigpad" width="600" height="200" aria-label="Sign here with your finger"></canvas>
     <span class="muted small">Sign with your finger. It is kept on this phone for the next reports.</span>
     <div class="spread"><button type="button" class="btn t slim" data-act="wipeSig">Clear</button><button type="button" class="btn s slim" data-act="saveSig">${icon('check')}Use this signature</button></div></div>`;

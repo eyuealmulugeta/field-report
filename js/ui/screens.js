@@ -10,9 +10,16 @@ import { totals, STATES, STATE_LETTER, initials } from '../model/crew.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
 import { devBanner, devicesBox } from './devices.js';
 
-/** 2.0.0: a report written in the old app (now at /v1/) is not sent yet. */
-const oldBanner = c => (c.ui.oldWork ? html`<a class="li callout warn" href="v1/"><span class="ic warn">${icon('alert')}</span>
-  <div class="n"><b>A report in the old app is not sent</b><span>Open the old Field Report and send it from there.</span></div></a>` : '');
+/** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first, at the top of Today. */
+const when = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.toDateString().slice(4, 10)} · ${d.toTimeString().slice(0, 5)}`; };
+export function inboxBox(c) {
+  const seen = c.s.inboxSeen || '', items = (c.s.inbox || []).filter(x => x.t > seen);
+  if (!items.length) return '';
+  const shown = c.ui.inboxAll ? items : items.slice(0, 3);
+  return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><button type="button" class="btn t slim" data-act="inboxClear">Clear</button></div>
+    <div class="box">${shown.map(x => html`<div class="li inbox"><span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div></div>`)}
+    ${items.length > 3 ? html`<button type="button" class="li more" data-act="inboxMore">${c.ui.inboxAll ? 'Show fewer' : `Show all ${items.length}`}</button>` : ''}</div>`;
+}
 
 /** The steps that can be opened in this build. */
 export const READY = new Set(['start', 'crew', 'work', 'equipment', 'materials', 'safety', 'photos', 'end', 'send']);
@@ -20,9 +27,9 @@ export const READY = new Set(['start', 'crew', 'work', 'equipment', 'materials',
 export function signin(c) {
   return {
     body: html`<div class="center-page">
-      <div class="logo big">AP</div>
+      <img class="logo big" src="icon-192.png" alt="Amistad Prefab">
       <div><b class="title">Field Report</b><div class="muted">Amistad Prefab</div></div>
-      <p class="muted narrow">Sign in with the Google account the office gave access to. Nothing else to set up.</p>
+      <p class="muted narrow">Sign in with the Google account the office gave access to.</p>
       ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}
     </div>`,
     foot: html`<button type="button" class="btn o" data-act="signin" ${c.ui.busy ? 'disabled' : ''}><b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}</button>
@@ -35,8 +42,8 @@ export function profile(c) {
   return {
     head: head('Welcome', 'Asked once, then saved'),
     body: html`<p class="muted">Your name and position go on every report you sign.</p>
-      <label class="lab" for="pn">Your name</label><input id="pn" class="fld" data-f="profile.name" value="${p.name}" autocomplete="name">
-      <label class="lab" for="pp">Position</label><input id="pp" class="fld" data-f="profile.position" value="${p.position}" placeholder="Site engineer">`,
+      <label class="lab" for="pn">Your name</label><input id="pn" class="fld" data-f="profile.name" value="${p.name}" autocomplete="name" ${p.locked ? 'readonly' : ''}>
+      <label class="lab" for="pp">Position</label><input id="pp" class="fld" data-f="profile.position" value="${p.position}" placeholder="Site engineer" ${p.locked ? 'readonly' : ''}>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}`,
     foot: html`<button type="button" class="btn p" data-act="saveProfile">Continue</button>`,
   };
 }
@@ -73,16 +80,16 @@ export function today(c) {
     return {
       tab: 'today', fab: true,
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
-      body: html`<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
+      body: html`${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after 17:00. Finish steps 8 and 9 and send today's report.</p>` : ''}
-        ${oldBanner(c)}${devBanner(c)}${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${dayList(r, READY)}
+        ${devBanner(c)}${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${dayList(r, READY)}
         <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button></div>`,
     };
   }
   return {
     tab: 'today',
     head: head(p.name, sub, p.code),
-    body: html`<div class="soft">
+    body: html`${inboxBox(c)}<div class="soft">
         <div class="spread"><b class="big-t">Today · ${dayLabel(c.today)}</b><span class="k brand">Report #${no}</span></div>
         <div class="bar gap"><i style="width:0%"></i></div>
         <div class="muted small">${r && r.nowork ? `No work today: ${r.nowork.reason}` : c.dayOff ? 'A day off for this project · you can still report' : 'Not started · about 6 minutes in all'}</div>
@@ -93,7 +100,7 @@ export function today(c) {
         <button type="button" class="box pad tile" data-act="noWork"><b>No work today</b><span class="muted small">Give the reason</span></button>
       </div>
       <div class="k">This week</div>${weekStrip(c)}
-      ${oldBanner(c)}${devBanner(c)}<div class="k">Needs you</div>${needsBox(c)}
+      ${devBanner(c)}<div class="k">Needs you</div>${needsBox(c)}
       <div class="muted tiny center">File name: ${pdfName(p, c.today, no)}</div>`,
   };
 }
@@ -193,8 +200,8 @@ export function me(c) {
   return {
     tab: 'me',
     head: head('Me', a.email || ''),
-    body: html`<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}">
-      <label class="lab" for="mp">Position</label><input id="mp" class="fld" data-f="profile.position" value="${p.position}">
+    body: html`<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
+      <label class="lab" for="mp">Position</label><input id="mp" class="fld" data-f="profile.position" value="${p.position}" ${p.locked ? 'readonly' : ''}>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}
       <div class="k">Signature</div>
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="clearSig">Sign again</button></div></div>`
         : html`<div class="box pad muted small">Not signed yet. You sign once, on Review and send.</div>`}
@@ -207,10 +214,9 @@ export function me(c) {
       ${devicesBox(c)}
       <div class="k">Reminders and look</div>
       ${tog('flipPref', 'remind', p.remind !== false, 'Reminder at 17:00', "When today's report is not sent yet")}
-      ${tog('pushOn', '', !!p.push, 'Notifications', p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
+      ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}
-      <div class="box pad small"><b>Language</b><br><span class="muted">English. Amharic comes in a later version.</span></div>
       <button type="button" class="btn o" data-act="refresh">Refresh lists from the office</button>
       <button type="button" class="btn t" data-act="showNew">What's new</button>
       <button type="button" class="btn t" data-act="signout">Sign out</button>

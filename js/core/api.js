@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
 
 /** This phone's id for the Admin's new-device check (script 7.28.0): random, kept on the phone, sent with every request. */
 export function deviceId() {
@@ -57,43 +57,45 @@ export async function post(action, body = {}, token = '') {
   return r;
 }
 
-/** Loads Google's sign-in library once. */
-function loadGoogle() {
-  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
-  return new Promise((ok, fail) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.onload = () => ok();
-    s.onerror = () => fail(new ApiError('Google sign-in could not load. Check the connection.', 'OFFLINE'));
-    document.head.appendChild(s);
-  });
-}
-
 /** The script's sign-in; a new or denied device is refused with "Unauthorized user". */
 async function signinPost(body) {
   try { const r = await post('signin', body); sendWhere(r); return r; }
   catch (e) {
     if (e.code !== 'DEVICE') throw e;
     sendWhere(e.reply);
-    throw new ApiError(e.reply && e.reply.status === 'deny' ? 'Unauthorized user. The Admin has blocked this device.'
-      : 'Unauthorized user. This device is new: the Admin has been told. Sign in again after the Admin approves it.', 'DEVICE');
+    throw new ApiError('Unauthorized user', 'DEVICE');
   }
 }
 
-/** Google sign-in, then the script's own session: { token, who, role, email, name, days }. */
+/** Where Google sends the phone back after sign-in: the app's own address (registered in the Google Cloud OAuth client). */
+export const backUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
+const OAUTH = 'fr2_oauth';
+
+/**
+ * Google sign-in, then the script's own session: { token, who, role, email, name, days }.
+ * 2.0.1: the whole page goes to Google and comes back (no popup). The popup lost its way back on installed apps:
+ * after choosing the account the phone showed the email app, and only a second try worked.
+ */
 export async function signIn(name = '') {
   if (fake) return signinPost({ accessToken: 'demo', name, ua: deviceUa() });
   const cfg = await post('authcfg');
   if (!cfg.clientId) throw new ApiError('Google sign-in is not set up on the server yet.', 'AUTH');
-  await loadGoogle();
-  const accessToken = await new Promise((ok, fail) => {
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: cfg.clientId,
-      scope: 'openid email profile',
-      callback: r => (r && r.access_token ? ok(r.access_token) : fail(new ApiError('Google sign-in did not complete. Try again.', 'AUTH'))),
-      error_callback: () => fail(new ApiError('Google sign-in was closed. Try again.', 'AUTH')),
-    });
-    client.requestAccessToken();
-  });
-  return signinPost({ accessToken, name, ua: deviceUa() });
+  const a = new Uint8Array(16); crypto.getRandomValues(a);
+  const state = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+  try { localStorage.setItem(OAUTH, JSON.stringify({ state, name, at: Date.now() })); } catch { /* checked on the way back */ }
+  const q = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: backUrl(), response_type: 'token', scope: 'openid email profile', state, prompt: 'select_account', include_granted_scopes: 'true' });
+  location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${q}`);
+  return new Promise(() => {});   // the page is leaving
+}
+
+/** Back from Google: "#access_token=…&state=…" (or "#error=…"). null when this page load is not a return from Google. */
+export function signInReturn() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (!h.has('state') || !(h.has('access_token') || h.has('error'))) return null;
+  history.replaceState(null, '', location.pathname + location.search);   // the token never stays in the address bar
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(OAUTH) || 'null'); localStorage.removeItem(OAUTH); } catch { /* no storage */ }
+  if (!saved || saved.state !== h.get('state') || Date.now() - saved.at > 15 * 60e3) return Promise.reject(new ApiError('Google sign-in did not complete. Try again.', 'AUTH'));
+  if (!h.get('access_token')) return Promise.reject(new ApiError('Google sign-in was closed. Try again.', 'AUTH'));
+  return signinPost({ accessToken: h.get('access_token'), name: saved.name || '', ua: deviceUa() });
 }

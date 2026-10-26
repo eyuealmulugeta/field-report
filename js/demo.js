@@ -47,6 +47,14 @@ const DEVICES = [
   { email: 'dawit@example.com', dev: 'demo0003cccc', st: 'deny', name: 'Dawit T', role: 'engineer', first: '2026-10-12T15:20:00Z', ip: '102.218.50.7', loc: 'Nairobi, Kenya', ua: 'Windows NT 10.0; Win64; x64 · Chrome', by: 'Demo Admin', at: '2026-10-12T15:30:00Z' },
 ];
 
+/** Demo notifications for Today (sample data, demo only). */
+const INBOX = [
+  { t: '2026-10-20T14:10:00Z', h: 'Changes requested · Modjo Chemical Store', m: 'Report No. 41 (19 Oct)\nAdd the crane hours, please.', c: 'rev-1', f: 'Demo Admin' },
+  { t: '2026-10-20T09:02:00Z', h: 'Test from Demo Engineer', m: 'Sent by Demo Engineer (demo) at 12:02. Notifications work on this phone.', c: 'test-demo', f: 'Demo Engineer' },
+  { t: '2026-10-19T16:30:00Z', h: 'Approved · Modjo Chemical Store', m: 'Report No. 40 (18 Oct)', c: 'rev-0', f: 'Demo Admin' },
+  { t: '2026-10-18T17:05:00Z', h: 'MISSING REPORT · Modjo Chemical Store', m: 'No report or no-work notice for 18 Oct.', c: 'miss', f: 'Field Report' },
+];
+
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 export async function demoServer(action, body) {
@@ -84,6 +92,10 @@ export async function demoServer(action, body) {
     case 'draftPut': return { ok: true, at: Date.now() };
     case 'draftDel': return { ok: true };
     case 'ping': return { ok: true, who: 'DEMO', pushAppId: '' };
+    case 'inbox': return { ok: true, items: INBOX, me: new URLSearchParams(location.search).has('locked') ? { name: 'Abebe Kebede', position: 'Site Engineer', locked: true, st: 'active' } : null };
+    case 'profilePut': return { ok: true, me: null };
+    case 'photoPut': return { ok: true, id: body.id, fileId: `demo-${body.id}` };
+    case 'photoGet': return { ok: false, code: 'NOT_FOUND', error: 'The demo keeps no photos in Drive.' };
     default: return { ok: false, error: `The demo does not do "${action}" yet.` };
   }
 }

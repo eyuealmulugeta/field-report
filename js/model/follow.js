@@ -79,6 +79,9 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['cam', 'Photos kept in Drive (2.1.0)', 'Your photos go to the office with the report when you send it. A week later they leave the phone to free space; they stay in Drive.'],
+  ['user', 'Name, position and signature (2.0.2)', 'The office confirms your name and position; they go on every report. Tap your saved signature to sign.'],
+  ['bell', 'Notifications on Today (2.0.1)', 'Everything the office and Field Report sent you is listed at the top of Today, with who sent it.'],
   ['home', 'The day in three parts', 'Morning, during the day, end of day. Each step shows what is already in.'],
   ['plus', 'Log as it happens', 'The + button: work done, photo, delay, delivery, request, incident, or say it.'],
   ['users', 'Manpower from attendance', 'Mark who is absent; trades and man-hours are counted for you.'],

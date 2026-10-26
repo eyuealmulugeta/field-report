@@ -81,7 +81,7 @@ export function checks(r, profile = {}) {
   if (!r.photos.length) w('photos', 'No photos today');
   if (!(r.plan || []).filter(planReady).length) w('end', 'No plan for tomorrow');
   if (!String(profile.name || '').trim()) out.push({ step: 'me', level: 'need', text: 'Your name is missing' });
-  if (!profile.sig) out.push({ step: 'sign', level: 'need', text: 'Sign the report below' });
+  if (!profile.sig || !r.signed) out.push({ step: 'sign', level: 'need', text: profile.sig ? 'Tap your signature below' : 'Sign the report below' });
   return out;
 }
 
@@ -128,6 +128,8 @@ export function reportMeta(r, project, profile = {}) {
     preparedBy: String(profile.name || '').trim(), position: String(profile.position || '').trim(),
     photos: r.photos.length,
     photoTags: r.photos.map(p => ({ caption: p.caption || p.captionKind || '', time: p.at || '', zone: p.zone || '', task: (r.items.find(i => i.id === p.itemId) || {}).task || '' })),
+    // 2.1.0: the photos sent to Drive with this report (the script fills in fileId)
+    photoFiles: r.photos.map(p => ({ id: p.id, caption: p.caption || p.captionKind || '', time: p.at || '', zone: p.zone || '', task: (r.items.find(i => i.id === p.itemId) || {}).task || '' })),
   };
   meta.hash = fnv(JSON.stringify(meta));
   return meta;

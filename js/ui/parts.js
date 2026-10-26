@@ -15,7 +15,7 @@ export const nav = (on, badges = {}) => html`<nav class="nav">${TABS.map(t => ht
 </nav>`;
 
 /** Header for a tab: logo, title, subtitle and an optional pill on the right. */
-export const head = (title, sub, pill) => html`<header class="hd"><span class="logo">AP</span><div class="hd-t"><b>${title}</b><span>${sub}</span></div>${pill ? html`<span class="r pill info">${pill}</span>` : ''}</header>`;
+export const head = (title, sub, pill) => html`<header class="hd"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="hd-t"><b>${title}</b><span>${sub}</span></div>${pill ? html`<span class="r pill info">${pill}</span>` : ''}</header>`;
 
 /** Header for a step: a back button, the step and where it sits in the day. */
 export const stepHead = (title, sub, back = 'today') => html`<header class="hd"><button type="button" class="bk" data-act="go" data-to="${back}" aria-label="Back">${icon('back')}</button><div class="hd-t"><b>${title}</b><span>${sub}</span></div></header>`;

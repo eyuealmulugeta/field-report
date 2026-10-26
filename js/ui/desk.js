@@ -18,7 +18,7 @@ export function rail(c, on) {
   const p = c.project, saved = c.report && c.report.updated;
   const time = saved ? new Date(saved).toTimeString().slice(0, 5) : '';
   return html`<aside class="rail">
-    <div class="brand"><span class="logo">AP</span><div class="wide-only"><b>Field Report</b><span>Amistad Prefab</span></div></div>
+    <div class="brand"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="wide-only"><b>Field Report</b><span>Amistad Prefab</span></div></div>
     <button type="button" class="proj wide-only" data-act="go" data-to="me" title="Change project"><div><b>${p.name}</b><span>${p.code}${p.location ? ` · ${p.location}` : ''}</span></div></button>
     ${TABS.map(t => html`<button type="button" class="navi ${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
     <button type="button" class="log" data-act="fab" title="Log now (N)">${icon('plus')}<span class="wide-only">Log now</span><kbd class="wide-only">N</kbd></button>
