@@ -23,6 +23,8 @@ import { buildPdf, loadPdfLib, photoCaption } from './pdf.js';
 import * as F from './ui/follow.js';
 import { monthDays, sentBack, toCheck, draftChoice } from './model/follow.js';
 import { nav } from './ui/parts.js';
+import * as R from './ui/review.js';
+import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
@@ -41,6 +43,7 @@ const SCREENS = {
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
   end: E.end, request: E.request, send: E.send,
   reports: F.reports, requests: F.requests, view: V.view,
+  review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
 };
 const NEEDS_REPORT = new Set(['start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
 
@@ -50,6 +53,8 @@ const project = () => store.get().projects.find(p => p.code === store.get().proj
 const key = () => draftKey(store.get().proj, today());
 const report = () => store.get().drafts[key()] || null;
 const working = () => { const r = report(); return r && r.start ? r : null; };
+/** 2.6.0: reporter, reviewer or viewer, from the role the script gives at sign-in. */
+const kind = () => kindOf((store.get().auth || {}).role || 'engineer');
 
 function lastReport(code, before) {
   const d = store.get().drafts;
@@ -134,7 +139,7 @@ async function loadProjects() {
   const extra = new Map((mine.projects || []).map(p => [String(p.proj).toUpperCase(), p]));
   const projects = (cfg.projects || []).map(p => {
     const code = codesOf(p).code, m = extra.get(code) || {};
-    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {} };
+    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove };
   });
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
@@ -717,6 +722,58 @@ const ACTS = {
     store.set({ auth: null }); go('');
   },
   startDay() { ensureReport(); go('start'); fetchWeather(); },
+  /** 2.6.0: the reports of the open project, for a reviewer or viewer. */
+  async revLoad() {
+    const rv = ui.rv || (ui.rv = {});
+    rv.busy = true; draw();
+    try { const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || []; }
+    catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Could not get the reports: ${e.message}`); }
+    finally { rv.busy = false; draw(); }
+  },
+  revFilter(d) { (ui.rv ||= {}).f = d.v; draw(); },
+  async revOpen(d) {
+    const rv = ui.rv || (ui.rv = {});
+    rv.open = (rv.list || []).find(x => x.name === d.v) || null; ui.revText = '';
+    go('rev');
+    try { const res = await call('status', { name: d.v }); if (res.found && rv.open && rv.open.name === d.v) { rv.open = { ...rv.open, ...res.report }; draw(); } } catch { /* the list's line is enough */ }
+  },
+  /** Approve, send back, reopen or comment: it goes to the person who sent the report, and Central Hub sees it. */
+  async revDo(d) {
+    const rv = ui.rv || {}, x = rv.open, text = String(ui.revText || '').trim();
+    if (!x) return;
+    if ((d.v === 'changes' || d.v === 'comment') && !text) return toast('Write what to change first.');
+    if (d.v === 'approve' && !confirm(`Approve report No. ${x.no} of ${x.date}? It is signed with your signature and locked.`)) return;
+    rv.busy = true; draw();
+    try {
+      const res = await call('review', { name: x.name, decision: d.v, text });
+      const upd = res.report || {};
+      rv.open = { ...x, ...upd };
+      rv.list = (rv.list || []).map(y => (y.name === x.name ? { ...y, ...upd } : y));
+      ui.revText = '';
+      toast({ approve: 'Approved.', changes: 'Sent back.', reopen: 'Reopened for the site.', comment: 'Comment sent.' }[d.v] + ` ${x.preparedBy || x.uploadedBy || 'The sender'} is told.`);
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
+    finally { rv.busy = false; draw(); }
+  },
+  crewPick(d, el) { const rv = ui.rv || (ui.rv = {}); (rv.picks ||= {})[d.v] = !!el.checked; },
+  /** A reviewer gives the wages and approves the ticked people (script crewOk). */
+  async crewOkSend() {
+    const p = project(), rv = ui.rv || {}, wait = p.crewWait || [];
+    const typed = Object.fromEntries(wait.map(x => [x.id, num(ui[`cw_${x.id}`])]));
+    const wages = crewWages(wait, rv.picks || {}, typed);
+    const ticked = wait.filter(x => (rv.picks || {})[x.id]);
+    if (!ticked.length) return toast('Tick the people to approve.');
+    const noWage = ticked.find(x => !wages[x.id]);
+    if (noWage) return toast(`Give the daily wage of ${noWage.name}.`);
+    if (!confirm(`Approve ${ticked.length} ${ticked.length === 1 ? 'person' : 'people'} for ${p.name}?\n\n${ticked.map(x => `${x.name} · ${x.trade || ''} · ${wages[x.id]}`).join('\n')}`)) return;
+    ui.busy = true; draw();
+    try {
+      const res = await call('crewOk', { proj: p.code, wages });
+      store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || x.tradeWages } : x)) });
+      rv.picks = {};
+      toast(`Approved ${res.approved || 0}. Central Hub adds them to the crew.`);
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Not approved: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
   startCrew() { ensureReport(); go('crew'); },
   pick(d) {
     if (d.f.startsWith('ui.')) { ui[d.f.slice(3)] = d.v; return draw(); }
@@ -753,13 +810,13 @@ const ACTS = {
     const people = cl.people.filter(x => String(x.name).trim());
     if (!people.length) return toast('Write at least one name.');
     if (people.some(x => !x.trade)) return toast('Choose the trade of each person.');
-    const trades = Object.fromEntries(cl.trades.filter(t => String(t.trade).trim() && num(t.wage) > 0).map(t => [t.trade.trim(), num(t.wage)]));
-    const noWage = people.find(x => !(num(x.wage) > 0) && !trades[x.trade]);
-    if (noWage) return toast(`Give the daily wage of ${noWage.trade} (or of ${noWage.name}).`);
+    // 2.6.0: the site sends names and trades; the wages are given by the reviewer
+    const paid = kind() === 'reviewer';
+    const trades = paid ? Object.fromEntries(cl.trades.filter(t => String(t.trade).trim() && num(t.wage) > 0).map(t => [t.trade.trim(), num(t.wage)])) : {};
     ui.busy = true; draw();
     try {
-      const res = await call('crewPropose', { proj: p.code, trades, people: people.map(x => ({ name: x.name.trim(), trade: x.trade, wage: num(x.wage) > 0 ? num(x.wage) : trades[x.trade] })) });
-      store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || trades } : x)) });
+      const res = await call('crewPropose', { proj: p.code, trades, people: people.map(x => ({ name: x.name.trim(), trade: x.trade, ...(paid ? { wage: num(x.wage) > 0 ? num(x.wage) : trades[x.trade] } : {}) })) });
+      store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || {} } : x)) });
       cl.people = []; saveCl();
       toast(res.added ? `Sent ${res.added} to the office for approval.` : 'They were already sent; the office has them.');
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. The list stays here: send it again later.' : `Not sent: ${e.message}`); }
@@ -1081,7 +1138,7 @@ let layout = D.layoutOf(innerWidth);
 addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
 
 /** The open step's tab in the menu. */
-const TAB_OF = { reports: 'reports', requests: 'requests', me: 'me' };
+const TAB_OF = { reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'crewrev' };
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 
@@ -1090,7 +1147,7 @@ function context() {
   const r = report(), t = now();
   const needs = p ? sentBack(monthDays(realToday(), p, s.drafts, s.known)) : [];
   return {
-    s, ui, devId: devId(), wide: layout !== 'phone', now: t, today: today(), realToday: realToday(), past: !!ui.date, project: p, report: r, nextNo: p ? nextNo(p) : 1,
+    s, ui, kind: kind(), devId: devId(), wide: layout !== 'phone', now: t, today: today(), realToday: realToday(), past: !!ui.date, project: p, report: r, nextNo: p ? nextNo(p) : 1,
     dayOff: p ? (p.nwDow || [0]).includes(weekday(today())) : false, needs,
     fileName: p && r && r.no ? pdfName(p, r.date, r.no) : '',
     evening: !ui.date && !!r && !!r.start && !r.sentAt && t >= '17:00' && s.profile.remind !== false,
@@ -1103,6 +1160,9 @@ function route() {
   if (!s.profile.done) return 'profile';
   if (!project()) return 'choose';
   const h = location.hash.slice(1) || 'today';
+  // 2.6.0: a reviewer or viewer account writes no report: it opens on Review
+  if (kind() !== 'reporter' && (h === 'today' || h === 'reports' || h === 'requests' || NEEDS_REPORT.has(h))) return 'review';
+  if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';
   if (h === 'photo' && !ui.photo) return 'today';
@@ -1135,7 +1195,7 @@ function draw() {
   } else {
     root.innerHTML = page
     + `${v.fab ? '<button type="button" class="fab" data-act="fab" aria-label="Log now"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}`
-    + `${v.tab ? nav(v.tab) : ''}`;
+    + `${v.tab ? nav(v.tab, {}, c.kind) : ''}`;
   }
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`

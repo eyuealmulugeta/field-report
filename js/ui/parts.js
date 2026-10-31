@@ -10,7 +10,15 @@ export const TABS = [
   { id: 'me', title: 'Me', icon: 'user' },
 ];
 
-export const nav = (on, badges = {}) => html`<nav class="nav">${TABS.map(t => html`
+/** 2.6.0: a reviewer or viewer account: Review, Crew and Me. */
+export const REVIEW_TABS = [
+  { id: 'review', title: 'Review', icon: 'doc' },
+  { id: 'crewrev', title: 'Crew', icon: 'users' },
+  { id: 'me', title: 'Me', icon: 'user' },
+];
+export const tabsFor = kind => (kind && kind !== 'reporter' ? REVIEW_TABS : TABS);
+
+export const nav = (on, badges = {}, kind = 'reporter') => html`<nav class="nav">${tabsFor(kind).map(t => html`
   <button type="button" class="${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;
 

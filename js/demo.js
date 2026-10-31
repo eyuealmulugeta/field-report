@@ -63,6 +63,13 @@ const REFUSED = [
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
+// 2.6.0: what a reviewer sees in the demo: the site's reports and the crew waiting for wages.
+const REVIEW = [
+  { name: '2026-10-20_ETH_MJO_041.pdf', date: '2026-10-20', no: '041', status: 'submitted', version: 1, preparedBy: 'Abebe K', uploadedBy: 'ABK', uploadedAt: '2026-10-20T14:40:00Z', crew: 14, delayH: 2, requests: 1, comments: [] },
+  { name: '2026-10-19_ETH_MJO_040.pdf', date: '2026-10-19', no: '040', status: 'approved', version: 2, preparedBy: 'Abebe K', uploadedBy: 'ABK', uploadedAt: '2026-10-19T15:05:00Z', crew: 12, delayH: 0, requests: 0, reviewedBy: 'Sara M', reviewedAt: '2026-10-19T17:10:00Z', comments: [] },
+];
+const CREW_WAIT = [{ id: 'cw1', name: 'Girma T', trade: 'Mason', wage: 0, tradeWage: 450 }, { id: 'cw2', name: 'Lemlem A', trade: 'Mason', wage: 0, tradeWage: 450 }];
+
 export async function demoServer(action, body) {
   await wait(250);
   switch (action) {
@@ -72,7 +79,7 @@ export async function demoServer(action, body) {
       // 2.4.0: ?demo&signup shows the sign-up form, and after sending it the wait
       if (q.has('signup')) return { ok: false, code: 'SIGNUP', email: 'new.person@example.com', status: 'wait', error: 'Your request to use Field Report was sent (new.person@example.com). Please wait until it is approved: you get an email when it is.' };
       if (q.has('newdevice')) return { ok: false, code: 'DEVICE', error: 'This phone is new, so the Admin must approve it first. The Admin has been told. Sign in again after the approval.', status: 'wait', ticket: '', whereUrl: '' };
-      return { ok: true, token: 'demo', who: 'demo', role: q.has('admin') ? 'admin' : 'engineer', email: 'demo@example.com', name: 'Demo Engineer', days: 30 };
+      return { ok: true, token: 'demo', who: 'demo', role: q.has('admin') ? 'admin' : q.has('pm') ? 'coordinator' : q.has('viewer') ? 'viewer' : 'engineer', email: 'demo@example.com', name: q.has('pm') ? 'Demo Project Engineer' : 'Demo Engineer', days: 30 };
     }
     case 'devices': return { ok: true, devices: DEVICES, refused: REFUSED };
     case 'devDecide': {
@@ -81,7 +88,11 @@ export async function demoServer(action, body) {
       return { ok: true, devices: DEVICES };
     }
     case 'getconfig': return { ok: true, rev: 1, projects: [project] };
-    case 'myProjects': return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff }] };
+    case 'myProjects': { const pm = new URLSearchParams(location.search).has('pm');   // 2.6.0: a reviewer sees the crew waiting with their wages
+      return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff, ...(pm ? { crewApprove: true, tradeWages: { Mason: 450 }, crewWait: CREW_WAIT.filter(x => !x.ok) } : {}) }] }; }
+    case 'crewOk': { let n = 0; for (const x of CREW_WAIT) if (body.wages[x.id]) { x.ok = true; x.wage = body.wages[x.id]; n++; } return { ok: true, approved: n, crewWait: CREW_WAIT.filter(x => !x.ok), tradeWages: { Mason: 450 } }; }
+    case 'list': return { ok: true, reports: REVIEW, events: [] };
+    case 'review': { const r = REVIEW.find(x => x.name === body.name); if (r) { r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; r.reviewedBy = 'Demo Project Engineer'; r.reviewedAt = new Date().toISOString(); } return { ok: true, report: r || {} }; }
     case 'getSetup': return { ok: true, proj: body.proj, setup };
     case 'sync': return { ok: true, t: Date.now(), build: 'demo' };
     case 'crewPropose': return { ok: true, added: (body.people || []).length, crewWait: (body.people || []).map(x => ({ name: x.name, trade: x.trade })), tradeWages: body.trades || {} };

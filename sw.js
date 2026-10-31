@@ -2,7 +2,7 @@
 // (so a new upload is picked up at once) and the kept copy is used when there is no connection.
 // The PDF library from cdnjs is kept too. Google sign-in, the script and OneSignal always go to the network.
 
-const CACHE = 'fr2-v11';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
+const CACHE = 'fr2-v12';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/main.js', 'manifest.webmanifest', 'icon-192.png'];
 const KEEP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/';
 

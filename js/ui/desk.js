@@ -6,7 +6,7 @@ import { dayLabel } from '../core/util.js';
 import { doneCount } from '../model/report.js';
 import { totals } from '../model/crew.js';
 import { itemLine } from '../model/items.js';
-import { TABS, dayList, kpi } from './parts.js';
+import { tabsFor, dayList, kpi } from './parts.js';
 import { thumb, plannedBox } from './work.js';
 import { READY, weekStrip } from './screens.js';
 import { isDemo } from '../core/api.js';
@@ -20,8 +20,8 @@ export function rail(c, on) {
   return html`<aside class="rail">
     <div class="brand"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="wide-only"><b>Field Report</b><span>Amistad Prefab</span></div></div>
     <button type="button" class="proj wide-only" data-act="go" data-to="me" title="Change project"><div><b>${p.name}</b><span>${p.code}${p.location ? ` · ${p.location}` : ''}</span></div></button>
-    ${TABS.map(t => html`<button type="button" class="navi ${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
-    <button type="button" class="log" data-act="fab" title="Log now (N)">${icon('plus')}<span class="wide-only">Log now</span><kbd class="wide-only">N</kbd></button>
+    ${tabsFor(c.kind).map(t => html`<button type="button" class="navi ${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
+    ${c.kind !== 'reporter' ? '' : html`<button type="button" class="log" data-act="fab" title="Log now (N)">${icon('plus')}<span class="wide-only">Log now</span><kbd class="wide-only">N</kbd></button>`}
     <div class="rail-foot wide-only">${time ? html`<span><b>● Saved</b> on this computer · ${time}</span>` : ''}<span>${c.s.profile.name}${c.s.profile.position ? ` · ${c.s.profile.position}` : ''}</span>${isDemo() ? html`<span class="pill warn">Demo</span>` : ''}</div>
   </aside>`;
 }
