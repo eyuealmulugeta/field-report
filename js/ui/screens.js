@@ -8,7 +8,10 @@ import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND } from '../model/report.js';
 import { totals, STATES, STATE_LETTER, initials } from '../model/crew.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
-import { devBanner, devicesBox } from './devices.js';
+
+/** 2.4.0: the saved signature, or a button to sign full screen (or choose a PNG). */
+const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Change</button></div></div>`
+  : html`<div class="box pad sigbox"><span class="muted small">Draw it full screen, or choose a PNG from your phone. It signs every report you send.</span><button type="button" class="btn s slim" data-act="sigFull">Sign</button></div>`);
 
 /** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first, at the top of Today. */
 const when = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.toDateString().slice(4, 10)} · ${d.toTimeString().slice(0, 5)}`; };
@@ -25,15 +28,28 @@ export function inboxBox(c) {
 export const READY = new Set(['start', 'crew', 'work', 'equipment', 'materials', 'safety', 'photos', 'end', 'send']);
 
 export function signin(c) {
+  const su = c.ui.signup;
+  // 2.4.0: a Google account without access signs up: full name and phone, then waits for the office
+  if (su && !su.sent) return {
+    head: head('Sign up', su.email || 'Your Google account'),
+    body: html`<p class="muted">This Google account has no access to Field Report yet. Send your details to the office to ask for it.</p>
+      <label class="lab" for="sun">Full name</label><input id="sun" class="fld" autocomplete="name" value="${c.s.profile.name || ''}">
+      <label class="lab" for="sup">Phone</label><input id="sup" class="fld" type="tel" autocomplete="tel" placeholder="+251 …">
+      <p class="muted small">You sign once your request is approved.</p>
+      ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}`,
+    foot: html`<button type="button" class="btn p" data-act="signUp" ${c.ui.busy ? 'disabled' : ''}>${c.ui.busy ? 'Sending…' : 'Send the request'}</button>
+      <button type="button" class="btn t" data-act="signupBack">Use another account</button>`,
+  };
   return {
     body: html`<div class="center-page">
       <img class="logo big" src="icon-192.png" alt="Amistad Prefab">
       <div><b class="title">Field Report</b><div class="muted">Amistad Prefab</div></div>
-      <p class="muted narrow">Sign in with the Google account the office gave access to.</p>
+      ${su ? html`<p class="callout ok narrow">Please wait until your request is approved. You get an email when it is, then sign in again.</p>`
+        : html`<p class="muted narrow">Sign in with your Google account. New here? Sign in, then send the sign-up form.</p>`}
       ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}
+      <button type="button" class="btn o signin-btn" data-act="${su ? 'signupBack' : 'signin'}" ${c.ui.busy ? 'disabled' : ''}>${su ? 'Back' : html`<b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}`}</button>
+      <div class="center muted small">Works offline after the first sign-in${isDemo() ? ' · demo, nothing is sent' : ''}</div>
     </div>`,
-    foot: html`<button type="button" class="btn o" data-act="signin" ${c.ui.busy ? 'disabled' : ''}><b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}</button>
-      <div class="center muted small">Works offline after the first sign-in${isDemo() ? ' · demo, nothing is sent' : ''}</div>`,
   };
 }
 
@@ -43,7 +59,8 @@ export function profile(c) {
     head: head('Welcome', 'Asked once, then saved'),
     body: html`<p class="muted">Your name and position go on every report you sign.</p>
       <label class="lab" for="pn">Your name</label><input id="pn" class="fld" data-f="profile.name" value="${p.name}" autocomplete="name" ${p.locked ? 'readonly' : ''}>
-      <label class="lab" for="pp">Position</label><input id="pp" class="fld" data-f="profile.position" value="${p.position}" placeholder="Site engineer" ${p.locked ? 'readonly' : ''}>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}`,
+      <label class="lab" for="pp">Position</label><input id="pp" class="fld" data-f="profile.position" value="${p.position}" placeholder="Site engineer" ${p.locked ? 'readonly' : ''}>
+      <div class="k">Your signature</div>${sigLine(p)}${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}`,
     foot: html`<button type="button" class="btn p" data-act="saveProfile">Continue</button>`,
   };
 }
@@ -82,7 +99,7 @@ export function today(c) {
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
       body: html`${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after 17:00. Finish steps 8 and 9 and send today's report.</p>` : ''}
-        ${devBanner(c)}${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${dayList(r, READY)}
+        ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${dayList(r, READY)}
         <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button></div>`,
     };
   }
@@ -100,7 +117,7 @@ export function today(c) {
         <button type="button" class="box pad tile" data-act="noWork"><b>No work today</b><span class="muted small">Give the reason</span></button>
       </div>
       <div class="k">This week</div>${weekStrip(c)}
-      ${devBanner(c)}<div class="k">Needs you</div>${needsBox(c)}
+      <div class="k">Needs you</div>${needsBox(c)}
       <div class="muted tiny center">File name: ${pdfName(p, c.today, no)}</div>`,
   };
 }
@@ -203,15 +220,14 @@ export function me(c) {
     body: html`<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
       <label class="lab" for="mp">Position</label><input id="mp" class="fld" data-f="profile.position" value="${p.position}" ${p.locked ? 'readonly' : ''}>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}
       <div class="k">Signature</div>
-      ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="clearSig">Sign again</button></div></div>`
-        : html`<div class="box pad muted small">Not signed yet. You sign once, on Review and send.</div>`}
+      ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
+        : sigLine(p)}
       <div class="k">Project</div>
       <div class="box">${c.s.projects.map(x => html`<button type="button" class="li" data-act="pickProject" data-v="${x.code}"><span class="ic ${x.code === c.s.proj ? 'ok' : ''}">${icon(x.code === c.s.proj ? 'check' : 'pin')}</span><div class="n"><b>${x.name}</b><span>${x.code}</span></div></button>`)}</div>
       <div class="k">Your usual day</div>
       <div class="two"><label class="small">Start<input class="fld" type="time" data-f="profile.defStart" value="${p.defStart || (pr && pr.defStart) || '08:00'}"></label>
         <label class="small">End<input class="fld" type="time" data-f="profile.defEnd" value="${p.defEnd || (pr && pr.defEnd) || '17:00'}"></label></div>
       <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
-      ${devicesBox(c)}
       <div class="k">Reminders and look</div>
       ${tog('flipPref', 'remind', p.remind !== false, 'Reminder at 17:00', "When today's report is not sent yet")}
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}

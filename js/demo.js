@@ -69,6 +69,8 @@ export async function demoServer(action, body) {
     case 'signin': {
       // demo only: ?demo&newdevice shows the refusal a new device gets; ?demo&admin signs in as the Admin
       const q = new URLSearchParams(location.search);
+      // 2.4.0: ?demo&signup shows the sign-up form, and after sending it the wait
+      if (q.has('signup')) return { ok: false, code: 'SIGNUP', email: 'new.person@example.com', status: 'wait', error: 'Your request to use Field Report was sent (new.person@example.com). Please wait until it is approved: you get an email when it is.' };
       if (q.has('newdevice')) return { ok: false, code: 'DEVICE', error: 'This phone is new, so the Admin must approve it first. The Admin has been told. Sign in again after the approval.', status: 'wait', ticket: '', whereUrl: '' };
       return { ok: true, token: 'demo', who: 'demo', role: q.has('admin') ? 'admin' : 'engineer', email: 'demo@example.com', name: 'Demo Engineer', days: 30 };
     }
@@ -101,6 +103,8 @@ export async function demoServer(action, body) {
     case 'ping': return { ok: true, who: 'DEMO', pushAppId: '' };
     case 'inbox': return { ok: true, items: INBOX, me: new URLSearchParams(location.search).has('locked') ? { name: 'Abebe Kebede', position: 'Site Engineer', locked: true, st: 'active' } : null };
     case 'profilePut': return { ok: true, me: null };
+    case 'sigPut': return { ok: true };
+    case 'sigGet': return { ok: true, sig: '' };
     case 'photoPut': return { ok: true, id: body.id, fileId: `demo-${body.id}` };
     case 'photoGet': return { ok: false, code: 'NOT_FOUND', error: 'The demo keeps no photos in Drive.' };
     default: return { ok: false, error: `The demo does not do "${action}" yet.` };

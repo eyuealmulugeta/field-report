@@ -1,6 +1,7 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, useFake, isDemo, ApiError, APP_VERSION, deviceId } from './core/api.js';
+import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId } from './core/api.js';
+import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
@@ -66,6 +67,9 @@ function edit(fn, quiet) {
   const k = key(), r = structuredClone(report());
   fn(r);
   r.updated = Date.now();
+  // 2.4.0: one report per project and day, shared: who worked on it, in turn
+  const me = store.get().profile.name || (store.get().auth || {}).name || '';
+  if (me) { const last = (r.edits || []).at(-1); if (last && last.by === me) last.at = r.updated; else r.edits = [...(r.edits || []), { by: me, at: r.updated }].slice(-50); }
   const drafts = { ...store.get().drafts, [k]: r };
   if (quiet) store.quiet({ drafts }); else store.set({ drafts });
   draftSoon();
@@ -205,7 +209,7 @@ async function pullDraft() {
   try {
     const res = await call('draftGet', { proj: p.code });
     const how = draftChoice(res.found ? res.draft : null, report(), { today: realToday(), dev: devId() });
-    if (how === 'load') { useRemote(res.draft); toast(`Report carried on from your other phone (saved ${new Date(res.draft.at).toTimeString().slice(0, 5)}).${res.draft.photoCount ? ' Photos it has not sent stay on that phone.' : ''}`); }
+    if (how === 'load') { useRemote(res.draft); toast(`Report carried on from ${res.draft.by || 'your other phone'} (saved ${new Date(res.draft.at).toTimeString().slice(0, 5)}).${res.draft.photoCount ? ' Photos it has not sent stay on that phone.' : ''}`); }
     if (how === 'ask') { ui.remote = res.draft; ui.sheet = 'draft'; draw(); }
   } catch { /* offline: try next time */ }
 }
@@ -296,12 +300,23 @@ async function signedIn(pending) {
     const s = store.get();
     store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...s.profile, name: s.profile.name || a.name || '' } });
     applyMe(a.me);
+    ui.signup = null;
     oldAppClear();
+    sigFetch();
     await loadProjects();
     go('today');
     checkStatus(); devCheck(true); inboxCheck(true);
-  } catch (e) { ui.error = e.message; }
+  } catch (e) {
+    if (e.code === 'SIGNUP') ui.signup = { email: (e.reply && e.reply.email) || (ui.signup || {}).email || '', sent: !!(ui.signup && ui.signup.asking), msg: e.message };
+    else ui.error = e.message;
+  }
   ui.busy = false; draw();
+}
+
+/** 2.4.0: the signature kept in Drive comes to a phone that has none (a new phone, or after clearing it). */
+function sigFetch() {
+  if (demo || store.get().profile.sig) return;
+  call('sigGet', {}).then(r => { if (r.sig && !store.get().profile.sig) store.set({ profile: { ...store.get().profile, sig: r.sig } }); }).catch(() => {});
 }
 
 /** trial.2: only the Admin may see, share or download the report PDF (the script also keeps the Drive link from the others). */
@@ -627,8 +642,26 @@ const KEEP = new Set(['unit', 'captionKind', 'name', 'category', 'priority', 'te
 const ACTS = {
   go: d => go(d.to),
   signin: () => signedIn(signIn(store.get().profile.name || '')),
+  /** 2.4.0: the sign-up form: full name and phone go with the Google sign-in just made. */
+  signUp() {
+    const name = (root.querySelector('#sun') || {}).value || '', phone = (root.querySelector('#sup') || {}).value || '';
+    if (!name.trim()) return toast('Write your full name first.');
+    ui.signup = { ...(ui.signup || {}), asking: true };
+    signedIn(signUp({ name: name.trim(), phone: phone.trim() }));
+  },
+  signupBack() { ui.signup = null; draw(); },
+  /** 2.4.0: sign full screen (or choose a PNG); kept on this phone and in Drive. d.v === 'report' also signs today's report. */
+  async sigFull(d) {
+    const png = await openPad(d.v === 'report' ? 'Sign the report' : 'Your signature');
+    if (!png) return;
+    store.set({ profile: { ...store.get().profile, sig: png } });
+    if (d.v === 'report' && report()) edit(r => { r.signed = new Date().toISOString(); });
+    if (!demo) call('sigPut', { png }).catch(() => toast('Your signature is kept on this phone. It goes to the office with the next sign-in.'));
+    draw();
+  },
   saveProfile() {
     if (!store.get().profile.name.trim()) return toast('Write your name first.');
+    if (!store.get().profile.sig) return toast('Sign first: press Sign.');
     store.set({ profile: { ...store.get().profile, done: true } });
     sendProfile();
     go('today');
@@ -791,7 +824,7 @@ const ACTS = {
   },
   useSig() { edit(r => { r.signed = new Date().toISOString(); }); },
   wipeSig() { ui.sig = []; draw(); },
-  clearSig() { ui.sig = []; store.set({ profile: { ...store.get().profile, sig: '' } }); if (report()) edit(r => { r.signed = ''; }); if (route() !== 'send') go('send'); },
+  clearSig() { ACTS.sigFull({ v: report() && route() === 'send' ? 'report' : '' }); },
   toSign() { root.querySelector('#sign')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   async openPdf() {
     if (!adminRole()) return pdfRefused();

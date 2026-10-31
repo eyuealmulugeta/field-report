@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.3.1';
+export const APP_VERSION = '2.4.0';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -71,6 +71,12 @@ export async function post(action, body = {}, token = '') {
 async function signinPost(body) {
   try { const r = await post('signin', body); sendWhere(r); return r; }
   catch (e) {
+    // 2.4.0 (script 7.35.0): a Google account without access asks to join; the sign-up form sends the name and phone with the same sign-in
+    if (e.code === 'SIGNUP') {
+      sendWhere(e.reply);
+      try { if (body.accessToken) sessionStorage.setItem(SIGNUP, body.accessToken); } catch { /* the form asks to sign in again */ }
+      throw Object.assign(new ApiError(e.message, 'SIGNUP'), { reply: e.reply });
+    }
     if (e.code !== 'DEVICE') throw e;
     sendWhere(e.reply);
     throw new ApiError(e.message || 'Unauthorized user', 'DEVICE');   // 2.2.0: the script says why (waiting, refused, ...)
@@ -80,6 +86,15 @@ async function signinPost(body) {
 /** Where Google sends the phone back after sign-in: the app's own address (registered in the Google Cloud OAuth client). */
 export const backUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
 const OAUTH = 'fr2_oauth';
+const SIGNUP = 'fr2_signup';
+
+/** 2.4.0: send the sign-up form (full name, phone) with the Google sign-in just made. Answers like a sign-in. */
+export function signUp(form) {
+  let at = '';
+  try { at = sessionStorage.getItem(SIGNUP) || ''; } catch { /* below */ }
+  if (!at && !fake) return Promise.reject(new ApiError('Sign in with Google again, then send the form.', 'AUTH'));
+  return signinPost({ accessToken: at || 'demo', signup: form, ua: deviceUa() });
+}
 
 /**
  * Google sign-in, then the script's own session: { token, who, role, email, name, days }.
