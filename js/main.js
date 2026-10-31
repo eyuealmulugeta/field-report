@@ -78,7 +78,17 @@ function ensureReport() {
   const r = newReport({ ...p, defStart: prof.defStart || p.defStart, defEnd: prof.defEnd || p.defEnd }, today(), nextNo(p), lastReport(p.code, today()));
   r.crew.rows = mergeStaff([], p.staff);
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
+  syncNo(key()).catch(() => {});   // offline: checked again when it is sent
   return r;
+}
+
+/** 2.3.0: the server gives the report number (one per project and date, for everyone); the phone's own count is only a guess for offline. */
+async function syncNo(k) {
+  const r = store.get().drafts[k], p = r && store.get().projects.find(x => x.code === r.proj);
+  if (!r || !p || r.sentAt || r.nowork) return r && r.no;
+  const q = await call('reportNo', { name: pdfName(p, r.date, r.no) });
+  if (q.no && q.no !== store.get().drafts[k].no) editKey(k, x => { x.no = q.no; });
+  return q.no;
 }
 
 /** item.* and photo.* fields belong to the item or photo being edited, held in ui until saved. */
@@ -344,7 +354,7 @@ async function inboxCheck(force) {
 async function devCheck(force) {
   if (!adminRole() || (!force && Date.now() - (ui.devsAt || 0) < 60e3)) return;
   ui.devsAt = Date.now();
-  try { const r = await call('devices', {}); ui.devs = r.devices || []; draw(); } catch (e) { if (force) toast(e.message); }
+  try { const r = await call('devices', {}); ui.devs = r.devices || []; ui.refused = r.refused || []; draw(); } catch (e) { if (force) toast(e.message); }
 }
 
 /** The PDF of today's report: the one just made when nothing changed since, otherwise a new one. */
@@ -366,7 +376,11 @@ const unqueue = k => store.set({ outbox: store.get().outbox.filter(j => !(j.acti
  * Without a connection it waits in the outbox and is made again when the connection is back.
  */
 async function sendReport(k, step = () => {}) {
-  const r = store.get().drafts[k], p = store.get().projects.find(x => x.code === r.proj);
+  const p = store.get().projects.find(x => x.code === store.get().drafts[k].proj);
+  if (!store.get().drafts[k].sentAt) {
+    try { await syncNo(k); } catch (e) { if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; } throw e; }
+  }
+  const r = store.get().drafts[k];
   const name = pdfName(p, r.date, r.no), meta = reportMeta(r, p, store.get().profile);
   try { await sendPhotos(k, name, step); } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
@@ -388,6 +402,8 @@ async function sendReport(k, step = () => {}) {
     return 'sent';
   } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
+    // 2.3.0: another number was already given to this date: take it and send again (once)
+    if (e.code === 'RENUMBER' && e.reply && e.reply.no && e.reply.no !== r.no && !step.again) { editKey(k, x => { x.no = e.reply.no; }); const again = s => step(s); again.again = true; return sendReport(k, again); }
     throw e;
   }
 }
@@ -637,7 +653,6 @@ const ACTS = {
     }
     edit(r => setPath(r, d.f, d.v));
   },
-  no: d => edit(r => { r.no = Math.max(1, r.no + Number(d.d)); }),
   startDone() {
     edit(r => { r.start.done = true; });
     store.set({ lastNo: { ...store.get().lastNo, [store.get().proj]: report().no } });
@@ -683,7 +698,7 @@ const ACTS = {
     if (d.v === 'deny' && !confirm(`Deny this device of ${d.email}? It is signed out at its next connection.`)) return;
     try {
       const r = await call('devDecide', { email: d.email, device: d.dev, decision: d.v });
-      ui.devs = r.devices || []; toast(d.v === 'approve' ? 'Approved. That person can sign in on that device now.' : 'Denied. That device is signed out at its next connection.');
+      ui.devs = r.devices || []; ui.refused = r.refused || ui.refused; toast(d.v === 'approve' ? 'Approved. That person can sign in on that device now.' : 'Denied. That device is signed out at its next connection.');
     } catch (e) { toast(e.message); }
   },
   async dayPdf(d) {
@@ -1112,8 +1127,12 @@ window.addEventListener('hashchange', () => {
   if (h === 'today' || h === '') pullDraft();
 });
 window.addEventListener('online', () => { flush(); checkStatus(); });
+// 2.1.1: the office's approvals show without opening Reports: when the app comes back to the front, and every 10 minutes
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); });
+setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+try { navigator.storage?.persist?.().catch(() => {}); } catch { /* 2.2.0: asks the phone not to clear the app's data (the device id) */ }
 store.subscribe(draw);
 
 draw();

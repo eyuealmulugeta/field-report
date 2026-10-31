@@ -202,17 +202,8 @@ export function buildPdf(JsPDF, d) {
     });
   }
 
-  /* office copy: attendance by name */
-  const rows = r.crew.rows || [];
-  if (rows.length) {
-    newPage();
-    font(10, 'bold', BRAND); doc.text('ATTENDANCE · OFFICE COPY', M, y);
-    color(BRAND, 'draw'); doc.setLineWidth(1); doc.line(M, y + 4, M + CW, y + 4);
-    y += 22;
-    table([{ t: '#', w: 0.07 }, { t: 'Name', w: 0.43 }, { t: 'Trade', w: 0.22 }, { t: 'Today', w: 0.16 }, { t: 'Overtime', w: 0.12 }],
-      rows.map((x, i) => [String(i + 1), x.name, x.trade || '-', x.state[0].toUpperCase() + x.state.slice(1), x.state === 'present' && Number(x.ot) ? `${x.ot} h` : '-']));
-    para(`${t.present} present (${(r.crew.extra || []).length ? 'with day workers without names' : 'named crew'}) · ${t.manHours} man-hours`, { c: MUTED });
-  }
+  /* 2.1.1: no attendance-by-name page. The PDF can reach the client; the names go to Central Hub's attendance
+     sheet through the report file (meta.attendance) only. */
 
   /* footer on every page */
   const n = doc.getNumberOfPages();

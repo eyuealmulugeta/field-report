@@ -24,10 +24,22 @@ export function devicesBox(c) {
       : html`<div class="box">${list.map(d => {
         const mine = d.email === me && d.dev === c.devId;
         return html`<div class="li dev ${d.st}"><div class="n"><b>${d.name || d.email.split('@')[0]} · ${d.email}${mine ? ' (this phone)' : ''}</b>
-          <span>${d.ip ? `IP ${d.ip} · ${d.loc ? `${d.loc} (approximate)` : 'place not known'}` : 'IP not known'}${d.ua ? ` · ${d.ua}` : ''}</span>
+          <span>${d.mode === 'app' ? 'Installed app · ' : d.mode === 'browser' ? 'Browser · ' : ''}${d.ip ? `IP ${d.ip} · ${d.loc ? `${d.loc} (approximate)` : 'place not known'}` : 'IP not known'}${d.ua ? ` · ${d.ua}` : ''}</span>
           <span>First seen ${when(d.first)}${d.note && d.st === 'ok' ? ` · ${d.note}, kept without an alert` : d.at && d.st !== 'wait' ? ` · ${d.st === 'ok' ? 'approved' : 'denied'} by ${d.by} ${when(d.at)}` : ''}</span>
           <span class="two">${d.st !== 'ok' ? html`<button type="button" class="btn p slim" data-act="devDecide" data-email="${d.email}" data-dev="${d.dev}" data-v="approve">Approve</button>` : ''}${d.st !== 'deny' && !mine ? html`<button type="button" class="btn o slim bad" data-act="devDecide" data-email="${d.email}" data-dev="${d.dev}" data-v="deny">Deny</button>` : ''}</span></div>
           <span class="pill ${d.st === 'wait' ? 'warn' : d.st === 'ok' ? 'ok' : 'bad'}">${d.st === 'wait' ? 'Waiting' : d.st === 'ok' ? 'Approved' : 'Denied'}</span></div>`;
       })}</div>`}
-    <p class="muted tiny">A denied phone is signed out at its next connection. The place comes from the IP address and is only approximate.</p>`;
+    <p class="muted tiny">A denied phone is signed out at its next connection. The place comes from the IP address and is only approximate. On an iPhone, the installed app and the browser count as two devices.</p>
+    ${refusedBox(c)}`;
+}
+
+const WHY = { wait: 'Waiting for approval', deny: 'Phone refused', gone: 'Phone not on the list', suspended: 'Suspended', blocked: 'Blocked', nostorage: 'Browser keeps no data', oldapp: 'Old app', noaccess: 'Email has no access' };
+
+/** 2.2.0: the last refused sign-ins and why, so the Admin can tell a phone that waits from one that was refused. */
+function refusedBox(c) {
+  const list = c.ui.refused || [];
+  if (!list.length) return '';
+  return html`<div class="k">Refused sign-ins · last ${list.length}</div>
+    <div class="box">${list.map(r => html`<div class="li"><div class="n"><b>${r.name || r.email.split('@')[0]} · ${r.email}</b>
+      <span>${WHY[r.why] || r.why}${r.n > 1 ? ` · ${r.n} times` : ''} · ${when(r.at)} · ${r.mode === 'app' ? 'Installed app' : r.mode === 'browser' ? 'Browser' : 'App type not known'}${r.ua ? ` · ${r.ua}` : ''}</span></div></div>`)}</div>`;
 }

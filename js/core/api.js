@@ -2,20 +2,30 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.3.0';
 
-/** This phone's id for the Admin's new-device check (script 7.28.0): random, kept on the phone, sent with every request. */
+const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
+const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
+
+/**
+ * This phone's id for the Admin's new-device check (script 7.28.0): random, kept on the phone, sent with every request.
+ * 2.2.0: kept twice (storage and a cookie), so clearing one does not make the phone look new and wait for approval again.
+ */
 export function deviceId() {
-  try {
-    let d = localStorage.getItem('afr_devid');   // the same id as Field Report 1 on this phone (same address), so one approval covers both
-    if (!/^[A-Za-z0-9_-]{8,40}$/.test(d || '')) {
-      const a = new Uint8Array(12); crypto.getRandomValues(a);
-      d = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
-      localStorage.setItem('afr_devid', d);
-    }
-    return d;
-  } catch { return 'nostorage00'; }
+  let d = '', kept = false;
+  try { d = localStorage.getItem('afr_devid') || ''; } catch { /* no storage */ }   // the same id as Field Report 1 on this phone (same address), so one approval covers both
+  if (!DEV_RE.test(d)) d = devCookie();
+  if (!DEV_RE.test(d)) {
+    const a = new Uint8Array(12); crypto.getRandomValues(a);
+    d = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  try { if (localStorage.getItem('afr_devid') !== d) localStorage.setItem('afr_devid', d); kept = true; } catch { /* the cookie may still keep it */ }
+  try { if (devCookie() !== d) document.cookie = `afr_devid=${d}; max-age=34560000; path=${location.pathname.replace(/[^/]*$/, '')}; SameSite=Strict; Secure`; } catch { /* storage only */ }
+  return kept || devCookie() === d ? d : 'nostorage00';
 }
+
+/** 'app' when opened from the home screen, else 'browser': on an iPhone these are two separate phones to the Admin. */
+export const deviceMode = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'app' : 'browser'; } catch { return ''; } };
 
 /** "Android 13; SM-A145F · Chrome": shown to the Admin with a new device. */
 export function deviceUa() {
@@ -39,7 +49,7 @@ export const useFake = fn => { fake = fn; };
 export const isDemo = () => !!fake;
 
 export async function post(action, body = {}, token = '') {
-  const payload = { action, ...body, ...(token ? { token } : {}), dev: deviceId(), app: APP_VERSION };
+  const payload = { action, ...body, ...(token ? { token } : {}), dev: deviceId(), mode: deviceMode(), app: APP_VERSION };
   if (fake) {
     const r = await fake(action, payload);
     if (!r.ok) throw Object.assign(new ApiError(r.error || 'Failed', r.code), { reply: r });
@@ -63,7 +73,7 @@ async function signinPost(body) {
   catch (e) {
     if (e.code !== 'DEVICE') throw e;
     sendWhere(e.reply);
-    throw new ApiError('Unauthorized user', 'DEVICE');
+    throw new ApiError(e.message || 'Unauthorized user', 'DEVICE');   // 2.2.0: the script says why (waiting, refused, ...)
   }
 }
 

@@ -42,7 +42,7 @@ const sent = new Map();   // file name -> versions sent in this demo session
 
 /** Demo devices for the Admin's list (sample data, demo only). */
 const DEVICES = [
-  { email: 'abebe@example.com', dev: 'demo0001aaaa', st: 'wait', name: 'Abebe K', role: 'engineer', first: '2026-10-17T06:05:00Z', ip: '196.188.34.10', loc: 'Modjo, Oromia, Ethiopia', ua: 'Android 13; SM-A145F · Chrome' },
+  { email: 'abebe@example.com', dev: 'demo0001aaaa', st: 'wait', name: 'Abebe K', role: 'engineer', first: '2026-10-17T06:05:00Z', ip: '196.188.34.10', loc: 'Modjo, Oromia, Ethiopia', ua: 'Android 13; SM-A145F · Chrome', mode: 'app' },
   { email: 'demo@example.com', dev: 'demo0002bbbb', st: 'ok', name: 'Demo Engineer', role: 'engineer', first: '2026-10-01T05:40:00Z', ip: '196.188.1.2', loc: 'Addis Ababa, Ethiopia', ua: 'Android 14; Pixel 7 · Chrome', by: 'Demo Admin', at: '2026-10-01T06:00:00Z' },
   { email: 'dawit@example.com', dev: 'demo0003cccc', st: 'deny', name: 'Dawit T', role: 'engineer', first: '2026-10-12T15:20:00Z', ip: '102.218.50.7', loc: 'Nairobi, Kenya', ua: 'Windows NT 10.0; Win64; x64 · Chrome', by: 'Demo Admin', at: '2026-10-12T15:30:00Z' },
 ];
@@ -55,6 +55,12 @@ const INBOX = [
   { t: '2026-10-18T17:05:00Z', h: 'MISSING REPORT · Modjo Chemical Store', m: 'No report or no-work notice for 18 Oct.', c: 'miss', f: 'Field Report' },
 ];
 
+/** Demo refused sign-ins for the Admin (sample data, demo only). */
+const REFUSED = [
+  { at: '2026-10-17T06:05:00Z', email: 'abebe@example.com', name: 'Abebe K', why: 'wait', n: 3, mode: 'app', ua: 'Android 13; SM-A145F · Chrome' },
+  { at: '2026-10-12T15:20:00Z', email: 'dawit@example.com', name: 'Dawit T', why: 'deny', n: 1, mode: 'browser', ua: 'Windows NT 10.0; Win64; x64 · Chrome' },
+];
+
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 export async function demoServer(action, body) {
@@ -63,10 +69,10 @@ export async function demoServer(action, body) {
     case 'signin': {
       // demo only: ?demo&newdevice shows the refusal a new device gets; ?demo&admin signs in as the Admin
       const q = new URLSearchParams(location.search);
-      if (q.has('newdevice')) return { ok: false, code: 'DEVICE', error: 'Unauthorized user', status: 'wait', ticket: '', whereUrl: '' };
+      if (q.has('newdevice')) return { ok: false, code: 'DEVICE', error: 'This phone is new, so the Admin must approve it first. The Admin has been told. Sign in again after the approval.', status: 'wait', ticket: '', whereUrl: '' };
       return { ok: true, token: 'demo', who: 'demo', role: q.has('admin') ? 'admin' : 'engineer', email: 'demo@example.com', name: 'Demo Engineer', days: 30 };
     }
-    case 'devices': return { ok: true, devices: DEVICES };
+    case 'devices': return { ok: true, devices: DEVICES, refused: REFUSED };
     case 'devDecide': {
       const d = DEVICES.find(x => x.dev === body.device);
       if (d) Object.assign(d, { st: body.decision === 'approve' ? 'ok' : 'deny', by: 'Demo Admin', at: new Date().toISOString() });
@@ -77,6 +83,7 @@ export async function demoServer(action, body) {
     case 'getSetup': return { ok: true, proj: body.proj, setup };
     case 'attendance': return { ok: true, proj: body.proj, date: body.date, rows: (body.rows || []).length, at: new Date().toISOString() };
     case 'nowork': return { ok: true, name: `${body.date}_ETH_MJO_CHB_NW.json` };
+    case 'reportNo': return { ok: true, no: Number((/_(\d{3,4})(?:_[A-Z0-9]{2,4})?\.pdf$/.exec(body.name) || [])[1]) || 1, name: body.name };   // demo: the phone's own number
     case 'upload': {
       // demo only: ?demo&offline (or __demoOffline = true) shows the report waiting in the outbox
       if (globalThis.__demoOffline ?? new URLSearchParams(location.search).has('offline')) return { ok: false, code: 'OFFLINE', error: 'No connection. It is saved on this phone.' };

@@ -117,7 +117,7 @@ export function start(c) {
   return {
     head: stepHead('Start of day', 'Step 1 of 9 · Morning'),
     body: html`${s.carried ? html`<div class="soft flex"><span class="ic">${icon('copy')}</span><div class="small"><b>Filled in from yesterday</b><br><span class="muted">Change only what is different today.</span></div></div>` : ''}
-      <div class="lab">Report number</div>${stepper('no', c.report.no, `#${c.report.no}`)}
+      <div class="lab">Report number</div><div class="soft small"><b>No. ${c.report.no}</b> <span class="muted">· given by the office's server: one number per day for everyone</span></div>
       <div class="lab">Working hours</div>
       <div class="two"><input class="fld" type="time" data-f="start.start" value="${s.start}" aria-label="Start"><input class="fld" type="time" data-f="start.end" value="${s.end}" aria-label="End"></div>
       <div class="lab">Weather ${c.ui.wx ? html`<span class="muted thin">· ${c.ui.wx}</span>` : ''}</div>
