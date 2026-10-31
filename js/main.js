@@ -7,7 +7,7 @@ import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS } from './model/report.js';
-import { mergeStaff, attendanceRows } from './model/crew.js';
+import { mergeStaff, attendanceRows, crewPhotoState, CREW_CLOSES, CREW_ST_WORD } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
@@ -96,7 +96,7 @@ async function syncNo(k) {
 }
 
 /** item.* and photo.* fields belong to the item or photo being edited, held in ui until saved. */
-const isDraft = f => /^(item|photo|recv|delay|req)\./.test(f);
+const isDraft = f => /^(item|photo|recv|delay|req|cl)\./.test(f);
 const setDraft = (f, v) => { const [k, ...rest] = f.split('.'); setPath(ui[k], rest.join('.'), v); };
 
 const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -134,7 +134,7 @@ async function loadProjects() {
   const extra = new Map((mine.projects || []).map(p => [String(p.proj).toUpperCase(), p]));
   const projects = (cfg.projects || []).map(p => {
     const code = codesOf(p).code, m = extra.get(code) || {};
-    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '' };
+    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {} };
   });
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
@@ -584,12 +584,14 @@ function stopListening() { if (stopVoice) stopVoice(); ui.listening = false; }
 
 /* camera: one hidden file input, opened from a tap so the phone allows it */
 const cam = document.getElementById('cam');
-function camera() { cam.value = ''; cam.multiple = layout !== 'phone' && ui.camFor === 'item'; cam.click(); }
+function camera() { cam.value = ''; cam.multiple = false; cam.click(); }
 cam.addEventListener('change', () => addPhotos([...(cam.files || [])]));
 
-/** Several pictures at once: all go to the item being edited; otherwise the first opens the Photo page. */
+/** 2.5.0: report photos come from the camera only. A picture made more than a few minutes ago (from the gallery) is refused. */
+const FRESH_MS = 3 * 60000;
 async function addPhotos(files) {
-  const pics = files.filter(f => /^image\//.test(f.type));
+  const all = files.filter(f => /^image\//.test(f.type)), pics = all.filter(f => !f.lastModified || Date.now() - f.lastModified < FRESH_MS);
+  if (all.length > pics.length) toast('Only a photo taken now with the camera can go in the report.');
   if (!pics.length) return;
   if (route() === 'item' && ui.item) ui.camFor = 'item';
   if (route() === 'delivery' && ui.recv) ui.camFor = 'recv';
@@ -597,20 +599,9 @@ async function addPhotos(files) {
   await addPhoto(pics[0]);
   if (pics.length > 1) toast('One photo at a time here; drop the rest on a work item to attach them all.');
 }
-addEventListener('dragover', e => { if ([...e.dataTransfer.items].some(i => i.kind === 'file')) e.preventDefault(); });
-addEventListener('drop', e => {
-  e.preventDefault();
-  if (!store.get().auth || !project()) return;
-  ui.camFor = route() === 'item' ? 'item' : 'photo';
-  addPhotos([...e.dataTransfer.files]);
-});
-addEventListener('paste', e => {
-  const files = [...(e.clipboardData?.files || [])];
-  if (!files.length || !project()) return;
-  e.preventDefault();
-  ui.camFor = route() === 'item' ? 'item' : 'photo';
-  addPhotos(files);
-});
+// 2.5.0: no dropping or pasting pictures: report photos are taken with the camera
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); if ([...(e.dataTransfer?.files || [])].length) toast('Report photos are taken with the camera.'); });
 
 /** Shrinks and keeps a picture, then attaches it to the item being edited or opens the Photo page. */
 async function addPhoto(file) {
@@ -622,7 +613,12 @@ async function addPhoto(file) {
     if (ui.camFor === 'item' && ui.item) {
       ui.item.photos.push(id);
       edit(x => { x.photos.push({ id, at: now(), zone: ui.item.zone, captionKind: 'Progress', caption: '', itemId: ui.item.id }); });
+    } else if (ui.camFor === 'crew') {
+      edit(x => { x.photos.push({ id, at: now(), zone: '', captionKind: 'Crew', caption: 'Morning crew', itemId: '' }); });
+      crewStamp(id);
+      return;
     } else if (ui.camFor === 'recv' && ui.recv) {
+      if (!ui.recv.photos.length) ui.recv.at = now();   // 2.5.0: the first photo's time is the delivery time
       ui.recv.photos.push(id);
       edit(x => { x.photos.push({ id, at: now(), zone: '', captionKind: 'Delivery', caption: ui.recv.name ? `Delivery: ${ui.recv.name}` : 'Delivery note', itemId: '' }); });
     } else {
@@ -632,8 +628,54 @@ async function addPhoto(file) {
       ui.photoBack = route() === 'photos' ? 'photos' : 'today';
       if (location.hash.slice(1) === 'photo') draw(); else go('photo');
     }
+    upNow();
   } catch (e) { toast(`The photo could not be saved on this phone (${e.message || e}).`); }
 }
+
+/** 2.5.0: the crew photo's time (the server's when online) and place, and whether it is on time. */
+const crewClock = () => (demo && new URLSearchParams(location.search).get('t')) || now();
+const where = () => new Promise(res => {
+  if (!navigator.geolocation) return res(null);
+  navigator.geolocation.getCurrentPosition(p => res({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }), () => res(null), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+});
+async function crewStamp(id) {
+  const phone = Date.now();
+  const [geo, srv] = await Promise.all([where(), demo ? Promise.resolve(phone) : call('sync', {}).then(x => Number(x.t) || 0).catch(() => 0)]);
+  const time = demo ? crewClock() : timeIn(undefined, new Date(srv || phone));
+  const s = crewPhotoState(time, { offline: !srv, skewMin: srv ? (srv - phone) / 60000 : 0 });
+  if (s.st === 'closed') {
+    edit(x => { x.photos = x.photos.filter(p => p.id !== id); });
+    deletePhoto(id).catch(() => {});
+    return toast(`Crew photos close at ${CREW_CLOSES}. This one was not kept.`);
+  }
+  edit(x => {
+    const p = x.photos.find(y => y.id === id);
+    if (p) { p.at = time; p.crew = { st: s.st, tags: s.tags, geo, phoneAt: phone, serverAt: srv }; p.caption = `Morning crew · ${CREW_ST_WORD[s.st]} ${time}${s.tags.length ? ` · ${s.tags.join(', ')}` : ''}`; }
+  });
+  toast(`Crew photo kept: ${CREW_ST_WORD[s.st]}, ${time}.`);
+  upNow();
+}
+
+/** 2.5.0: each photo goes to Drive as soon as it is taken when there is a connection (else with the report). */
+let upping = false;
+async function upNow() {
+  const k = key(), r = report(), p = project();
+  if (upping || demo || !navigator.onLine || !r || !p || r.nowork || !(r.photos || []).some(x => !x.drive)) return;
+  upping = true;
+  try { await syncNo(k); const r2 = store.get().drafts[k]; await sendPhotos(k, pdfName(p, r2.date, r2.no), () => {}); }
+  catch { /* sent with the report */ }
+  finally { upping = false; }
+}
+
+/** 2.5.0: the crew list being written for the office, kept on the phone per project. */
+function clSync() {
+  const p = project();
+  if (!p || ui.clFor === p.code) return;
+  const kept = (store.get().crewList || {})[p.code];
+  ui.cl = kept ? structuredClone(kept) : { trades: Object.entries(p.tradeWages || {}).map(([trade, wage]) => ({ trade, wage: String(wage) })), people: [] };
+  ui.clFor = p.code;
+}
+const saveCl = () => store.quiet({ crewList: { ...(store.get().crewList || {}), [ui.clFor]: ui.cl } });
 window.__addPhoto = demo ? addPhoto : undefined;   // lets the demo check be driven without a camera
 
 /** Choices a second tap does not clear. */
@@ -698,6 +740,31 @@ const ACTS = {
   allPresent: () => edit(r => { const away = r.crew.rows.some(x => x.state !== 'present'); if (away) r.crew.rows.forEach(x => { x.state = 'present'; }); }),
   filter: d => { ui.filter = d.v; draw(); },
   addExtra: () => edit(r => { r.crew.extra.push({ trade: '', qty: 1 }); }),
+  crewPhoto() {
+    if (ui.date) return toast('The crew photo is taken on the day itself.');
+    if (crewClock() > CREW_CLOSES) return toast(`Crew photos close at ${CREW_CLOSES}. Tell the Project Manager.`);
+    ensureReport(); ui.camFor = 'crew'; camera();
+  },
+  clTrade() { ui.cl.trades.push({ trade: '', wage: '' }); saveCl(); draw(); },
+  clPerson() { ui.cl.people.push({ name: '', trade: (ui.cl.trades[0] || {}).trade || '', wage: '' }); saveCl(); draw(); },
+  clDel(d) { ui.cl[d.k].splice(Number(d.i), 1); saveCl(); draw(); },
+  async clSend() {
+    const p = project(), cl = ui.cl;
+    const people = cl.people.filter(x => String(x.name).trim());
+    if (!people.length) return toast('Write at least one name.');
+    if (people.some(x => !x.trade)) return toast('Choose the trade of each person.');
+    const trades = Object.fromEntries(cl.trades.filter(t => String(t.trade).trim() && num(t.wage) > 0).map(t => [t.trade.trim(), num(t.wage)]));
+    const noWage = people.find(x => !(num(x.wage) > 0) && !trades[x.trade]);
+    if (noWage) return toast(`Give the daily wage of ${noWage.trade} (or of ${noWage.name}).`);
+    ui.busy = true; draw();
+    try {
+      const res = await call('crewPropose', { proj: p.code, trades, people: people.map(x => ({ name: x.name.trim(), trade: x.trade, wage: num(x.wage) > 0 ? num(x.wage) : trades[x.trade] })) });
+      store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || trades } : x)) });
+      cl.people = []; saveCl();
+      toast(res.added ? `Sent ${res.added} to the office for approval.` : 'They were already sent; the office has them.');
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. The list stays here: send it again later.' : `Not sent: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
   extra: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const x = r.crew.extra[i]; x.qty = Math.max(0, x.qty + Number(d.d)); if (!x.qty && !x.trade) r.crew.extra.splice(i, 1); }); },
   async crewDone() {
     edit(r => { r.crew.done = true; r.crew.extra = r.crew.extra.filter(x => x.qty > 0); });
@@ -870,13 +937,14 @@ const ACTS = {
   eqQty: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const e = r.equipment[i]; e.qty = Math.max(0, e.qty + Number(d.d)); if (!e.qty && confirm(`Take ${e.name} off today's list?`)) r.equipment.splice(i, 1); else if (!e.qty) e.qty = 1; }); },
   eqHrs: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const e = r.equipment[i]; e.hrs = Math.max(0, Math.min(24, (Number(e.hrs) || 0) + Number(d.d))); }); },
   eqState: d => edit(r => { r.equipment[Number(d.i)].status = d.v; }),
-  newRecv() { openRecv(); },
-  logDelivery() { ui.sheet = ''; openRecv(); },
+  newRecv() { openRecv(); ui.camFor = 'recv'; camera(); },   // 2.5.0: a delivery starts with its photo
+  logDelivery() { ui.sheet = ''; openRecv(); ui.camFor = 'recv'; camera(); },
   openRecv: d => openRecv(d.v),
   recvQty: d => { ui.recv.qty = Math.max(0, (num(ui.recv.qty) || 0) + Number(d.d)); draw(); },
   recvPhoto() { ui.camFor = 'recv'; camera(); },
   saveRecv(d) {
     const x = ui.recv;
+    if (!x.photos.length) return toast('Take the photo of the delivery first: its time is the delivery time.');
     if (!String(x.name || '').trim()) return toast('Write or pick the material first.');
     x.name = x.name.trim(); x.qty = num(x.qty);
     edit(r => { const i = r.received.findIndex(y => y.id === x.id); if (i >= 0) r.received[i] = x; else r.received.push(x); r.done.materials = false; });
@@ -1045,6 +1113,7 @@ function route() {
 }
 
 function draw() {
+  clSync();
   const r = route(), c = context();
   const setup = r === 'signin' || r === 'profile' || r === 'choose';
   const wide = layout !== 'phone' && !setup;
@@ -1097,11 +1166,11 @@ root.addEventListener('input', e => {
   const f = el.dataset.f;
   if (!f) return;
   if (f.startsWith('profile.')) { store.quiet({ profile: { ...store.get().profile, [f.slice(8)]: el.value } }); return; }
-  if (isDraft(f)) { setDraft(f, el.value); return; }
+  if (isDraft(f)) { setDraft(f, el.value); if (f.startsWith('cl.')) saveCl(); return; }
   const v = f === 'start.tempC' ? (num(el.value) ?? el.value) : el.value;
   edit(r => setPath(r, f, v), true);
 });
-root.addEventListener('change', e => { const f = e.target.dataset.f; if (f && !f.startsWith('profile.') && !isDraft(f)) draw(); });
+root.addEventListener('change', e => { const f = e.target.dataset.f; if (f && !f.startsWith('profile.') && (!isDraft(f) || f.startsWith('cl.'))) draw(); });
 
 /* keyboard (computer): N log now, 1–9 open a step, Esc close or go back, Ctrl+S the main button; on attendance ↑ ↓ and P A S L */
 addEventListener('keydown', e => {
@@ -1160,7 +1229,7 @@ window.addEventListener('hashchange', () => {
   if (h !== 'me') sendProfile();
   if (h === 'today' || h === '') pullDraft();
 });
-window.addEventListener('online', () => { flush(); checkStatus(); });
+window.addEventListener('online', () => { flush(); checkStatus(); upNow(); });
 // 2.1.1: the office's approvals show without opening Reports: when the app comes back to the front, and every 10 minutes
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);

@@ -6,7 +6,8 @@ import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND } from '../model/report.js';
-import { totals, STATES, STATE_LETTER, initials } from '../model/crew.js';
+import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, CREW_ON_TIME, CREW_CLOSES } from '../model/crew.js';
+import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
 
 /** 2.4.0: the saved signature, or a button to sign full screen (or choose a PNG). */
@@ -141,8 +142,8 @@ export function start(c) {
       ${chips('start.cond', WEATHER, s.cond)}
       <div class="two"><input class="fld" inputmode="decimal" data-f="start.tempC" value="${s.tempC}" placeholder="°C" aria-label="Temperature in °C"><input class="fld" data-f="start.wind" value="${s.wind}" placeholder="Wind, rain…" aria-label="Weather note"></div>
       <div class="lab">Ground</div>${chips('start.ground', GROUND, s.ground)}
-      <label class="lab" for="loc">Location</label>
-      <div class="fld-ic">${icon('pin')}<input id="loc" class="fld" data-f="start.location" value="${s.location}"></div>`,
+      <div class="lab">Location</div>
+      <div class="soft small flex"><span class="ic">${icon('pin')}</span><div><b>${c.project.location || s.location || 'Not set yet'}</b><br><span class="muted">Set by the office in Central Hub</span></div></div>`,
     foot: html`<button type="button" class="btn p" data-act="startDone">${icon('check')}Looks right</button>`,
   };
 }
@@ -160,6 +161,7 @@ export function crew(c) {
   return {
     head: stepHead('Attendance and crew', 'Step 2 of 9 · Morning'),
     body: html`<div class="kpis">${kpi(t.present, 'Present')}${kpi(t.away, 'Not here', t.away ? 'warn' : '')}${kpi(html`${t.manHours}<small>h</small>`, 'Man-hours')}</div>
+      ${crewPhotoBox(c)}
       ${cr.rows.length ? html`
       <button type="button" class="box pad tog" data-act="allPresent"><b>Everyone present</b><span class="sw ${t.away ? '' : 'on'}"></span></button>
       <div class="chips"><button type="button" class="chip ${f ? '' : 'on'}" data-act="filter" data-v="">All ${cr.rows.length}</button>${trades.map(tr => html`<button type="button" class="chip ${f === tr ? 'on' : ''}" data-act="filter" data-v="${tr}">${tr} ${cr.rows.filter(r => (r.trade || 'Other') === tr).length}</button>`)}</div>
@@ -171,9 +173,41 @@ export function crew(c) {
       : html`<p class="callout warn">The office has not sent a crew list for this project yet. Add day workers below, or ask the office to add the crew in Central Hub.</p>`}
       <div class="k">Day workers without names</div>
       <div class="box">${cr.extra.map((x, i) => html`<div class="li"><input class="fld slim" data-f="crew.extra.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">${stepper('extra', x.qty, x.qty, i)}</div>`)}
-        <button type="button" class="li" data-act="addExtra"><span class="ic">${icon('plus')}</span><div class="n"><b>Add day workers</b><span>Trade and count</span></div></button></div>`,
+        <button type="button" class="li" data-act="addExtra"><span class="ic">${icon('plus')}</span><div class="n"><b>Add day workers</b><span>Trade and count</span></div></button></div>
+      ${crewListBox(c)}`,
     foot: html`<button type="button" class="btn p" data-act="crewDone">Done · ${t.present} present</button>${c.ui.attNote ? html`<div class="center muted small">${c.ui.attNote}</div>` : ''}`,
   };
+}
+
+/** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
+function crewPhotoBox(c) {
+  const list = (c.report.photos || []).filter(p => p.captionKind === 'Crew');
+  return html`<div class="k">Morning crew photo</div>
+    <div class="box pad">${list.length ? html`<div class="thumbs">${list.map(p => thumb(p, 'sm'))}</div>
+      <ul class="plain small">${list.map(p => html`<li><b>${p.at}</b> · ${p.crew ? html`<span class="pill ${p.crew.st === 'ontime' ? 'ok' : 'warn'}">${CREW_ST_WORD[p.crew.st]}</span>${p.crew.tags.map(x => html` <span class="pill warn">${x}</span>`)}${p.crew.geo ? ' · location kept' : ' · no location'}` : html`<span class="muted">checking the time…</span>`}</li>`)}</ul>` : ''}
+      <button type="button" class="btn s" data-act="crewPhoto">${icon('cam')}Take crew photo</button>
+      <p class="muted tiny">On time until ${CREW_ON_TIME}, late attendance until ${CREW_CLOSES}, closed after. The office's clock decides.</p></div>`;
+}
+
+/** 2.5.0: names, trades and daily wages by trade, sent for the office to approve as the crew of this project. */
+function crewListBox(c) {
+  const cl = c.ui.cl || { trades: [], people: [] }, wait = c.project.crewWait || [];
+  const names = [...new Set([...cl.trades.map(x => x.trade).filter(Boolean), ...c.report.crew.rows.map(r => r.trade).filter(Boolean)])];
+  return html`<div class="k">Crew list for the office</div>
+    <div class="box pad"><p class="muted small">Add the people who work here. The office approves them as the crew of this project in Central Hub; then they are on the attendance list.</p>
+      <div class="lab">Daily wage by trade</div>
+      ${cl.trades.map((x, i) => html`<div class="two"><input class="fld slim" data-f="cl.trades.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">
+        <div class="flex"><input class="fld slim" inputmode="decimal" data-f="cl.trades.${i}.wage" value="${x.wage}" placeholder="Daily wage" aria-label="Daily wage of ${x.trade || 'the trade'}"><button type="button" class="mini" data-act="clDel" data-k="trades" data-i="${i}" aria-label="Remove">✕</button></div></div>`)}
+      <button type="button" class="btn t slim" data-act="clTrade">${icon('plus')}Add a trade</button>
+      <div class="lab">People</div>
+      ${cl.people.map((x, i) => html`<div class="cl-row"><input class="fld slim" data-f="cl.people.${i}.name" value="${x.name}" placeholder="Full name" aria-label="Name">
+        <select class="fld slim" data-f="cl.people.${i}.trade" aria-label="Trade of ${x.name || 'the person'}"><option value="">Trade…</option>${names.map(n => html`<option ${n === x.trade ? 'selected' : ''}>${n}</option>`)}</select>
+        <input class="fld slim" inputmode="decimal" data-f="cl.people.${i}.wage" value="${x.wage}" placeholder="${(cl.trades.find(t => t.trade === x.trade) || {}).wage || 'Wage'}" aria-label="Daily wage of ${x.name || 'the person'}">
+        <button type="button" class="mini" data-act="clDel" data-k="people" data-i="${i}" aria-label="Remove">✕</button>
+        ${wageDiffers(x, cl.trades) ? html`<span class="pill warn">Not the trade wage: the office will check it</span>` : ''}</div>`)}
+      <button type="button" class="btn t slim" data-act="clPerson">${icon('plus')}Add a person</button>
+      ${cl.people.length ? html`<button type="button" class="btn p" data-act="clSend" ${c.ui.busy ? 'disabled' : ''}>Send ${cl.people.length} to the office</button>` : ''}
+      ${wait.length ? html`<div class="lab">Waiting for the office</div><ul class="plain small">${wait.map(x => html`<li>${x.name} <span class="muted">· ${x.trade || 'no trade'}</span></li>`)}</ul>` : ''}</div>`;
 }
 
 /** On a computer: one table per trade, side by side, overtime always at hand; arrows and P A S L work from the keyboard. */

@@ -83,6 +83,8 @@ export async function demoServer(action, body) {
     case 'getconfig': return { ok: true, rev: 1, projects: [project] };
     case 'myProjects': return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff }] };
     case 'getSetup': return { ok: true, proj: body.proj, setup };
+    case 'sync': return { ok: true, t: Date.now(), build: 'demo' };
+    case 'crewPropose': return { ok: true, added: (body.people || []).length, crewWait: (body.people || []).map(x => ({ name: x.name, trade: x.trade })), tradeWages: body.trades || {} };
     case 'attendance': return { ok: true, proj: body.proj, date: body.date, rows: (body.rows || []).length, at: new Date().toISOString() };
     case 'nowork': return { ok: true, name: `${body.date}_ETH_MJO_CHB_NW.json` };
     case 'reportNo': return { ok: true, no: Number((/_(\d{3,4})(?:_[A-Z0-9]{2,4})?\.pdf$/.exec(body.name) || [])[1]) || 1, name: body.name };   // demo: the phone's own number

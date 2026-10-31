@@ -340,3 +340,7 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .sigfull-top { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .sigfull-pad { flex: 1; width: 100%; min-height: 200px; background: #fff; border: 2px dashed var(--line, #c9d1dc); border-radius: 12px; touch-action: none; }
 .sigfull-bar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+/* 2.5.0: the crew list for the office */
+.cl-row { display: grid; grid-template-columns: 1fr 1fr 90px auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+.cl-row .pill { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 420px) { .cl-row { grid-template-columns: 1fr 1fr; } }

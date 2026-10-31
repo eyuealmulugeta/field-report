@@ -49,7 +49,9 @@ export function delivery(c) {
   const names = materialChoices(c.project.setup, seen).slice(0, 14);
   return {
     head: stepHead('Delivery', `${editing ? 'Edit' : 'New'} · ${x.at}`, 'materials'),
-    body: html`<div class="lab">Material</div>
+    body: html`<div class="lab">Photo of the delivery <span class="muted thin">· its time is the delivery time</span></div>
+      <div class="thumbs big">${x.photos.map(p => thumb(p))}${camTile('recvPhoto')}</div>
+      <div class="lab">Material</div>
       ${names.length ? chips('recv.name', names, x.name) : ''}
       <input class="fld" data-f="recv.name" value="${x.name}" placeholder="Material, e.g. Roof sheet 0.5 mm" aria-label="Material">
       <div class="lab">Amount</div>
@@ -58,8 +60,6 @@ export function delivery(c) {
         ${chips('recv.unit', MATERIAL_UNITS, x.unit)}</div>
       <label class="lab" for="rn">Note</label>
       <input id="rn" class="fld" data-f="recv.note" value="${x.note}" placeholder="Supplier, delivery note number, condition">
-      <div class="lab">Photo of the delivery note</div>
-      <div class="thumbs big">${x.photos.map(p => thumb(p))}${camTile('recvPhoto')}</div>
       ${editing ? html`<button type="button" class="btn t danger" data-act="deleteRecv">Delete this delivery</button>` : ''}`,
     foot: html`<div class="two"><button type="button" class="btn o" data-act="saveRecv" data-v="again">Save, add another</button><button type="button" class="btn p" data-act="saveRecv">${icon('check')}Save</button></div>`,
   };

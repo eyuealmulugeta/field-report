@@ -62,3 +62,22 @@ export const attendanceRows = crew => (crew && crew.rows || []).map(r => ({
 }));
 
 export const initials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+/** 2.5.0: the morning crew photo. Until 8:00 it is on time, until 8:15 late attendance, after that the camera is closed.
+ *  The server's clock decides when there is a connection; without one the phone's clock is used and the photo says so.
+ *  A phone clock more than 5 minutes away from the server's makes the time doubtful. No limit on how many. */
+export const CREW_ON_TIME = '08:00', CREW_CLOSES = '08:15', DOUBT_MIN = 5;
+export const CREW_ST_WORD = { ontime: 'On time', late: 'Late attendance', closed: 'Closed' };
+export function crewPhotoState(time, { offline = false, skewMin = 0 } = {}) {
+  const st = time <= CREW_ON_TIME ? 'ontime' : time <= CREW_CLOSES ? 'late' : 'closed';
+  const tags = [];
+  if (offline) tags.push('Taken offline');
+  if (Math.abs(skewMin) > DOUBT_MIN) tags.push('Time doubtful');
+  return { st, tags };
+}
+
+/** 2.5.0: a wage typed for one person that is not the daily wage of their trade: Central Hub flags it for review. */
+export function wageDiffers(person, trades) {
+  const t = (trades || []).find(x => x.trade === person.trade);
+  return Number(person.wage) > 0 && !!t && Number(t.wage) > 0 && Number(person.wage) !== Number(t.wage);
+}
