@@ -16,7 +16,8 @@ export const REVIEW_TABS = [
   { id: 'crewrev', title: 'Crew', icon: 'users' },
   { id: 'me', title: 'Me', icon: 'user' },
 ];
-export const tabsFor = kind => (kind && kind !== 'reporter' ? REVIEW_TABS : TABS);
+/** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
+export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : kind === 'reviewer' ? [...TABS.slice(0, 3), REVIEW_TABS[0], TABS[3]] : TABS);
 
 export const nav = (on, badges = {}, kind = 'reporter') => html`<nav class="nav">${tabsFor(kind).map(t => html`
   <button type="button" class="${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}

@@ -66,7 +66,8 @@ export function dayMeta(r) {
   return {
     equipment: (r.equipment || []).filter(e => e.name && e.qty > 0).map(e => ({ name: e.name, qty: e.qty, hrs: num(e.hrs) ?? 0, status: e.status })),
     received: (r.received || []).filter(x => String(x.name || '').trim()).map(x => ({ name: x.name.trim(), qty: num(x.qty) ?? 0, unit: x.unit || '', note: String(x.note || '').trim() })),
-    safety: { status: s.incident ? s.kind || 'Incident' : 'None', toolboxTalk: !!s.toolbox, notes: s.incident && String(s.note || '').trim() ? [s.note.trim()] : [] },
+    attention: (r.attention || []).map(x => String(x.text || '').trim()).filter(Boolean),   // 2.7.0
+    safety: { status: s.incident ? s.kind || 'Incident' : 'None', toolboxTalk: !!s.toolbox, ppe: [...((r.start || {}).ppe || [])], notes: s.incident && String(s.note || '').trim() ? [s.note.trim()] : [] },
     delays: delays.map(d => ({ k: d.cause, h: num(d.hours) ?? 0 })),
     delayItems: delays.map(d => ({
       cause: d.cause, party: d.party || '', ...(d.taskId ? { taskId: d.taskId } : {}), hours: num(d.hours) ?? 0,

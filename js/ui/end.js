@@ -8,6 +8,7 @@ import { isDemo } from '../core/api.js';
 import { REQUEST_TYPES, PRIORITIES, REQUEST_UNITS, requestReady, requestLine, planReady, planLine, unfinishedWork, checks, canSend, summary, byZone } from '../model/end.js';
 import { materialChoices } from '../model/day.js';
 import { zonesOf } from '../model/items.js';
+import { offlineLine } from '../model/follow.js';
 import { stepHead, chips, kpi } from './parts.js';
 import { canPdf } from './view.js';
 
@@ -86,6 +87,7 @@ function sentCard(c) {
   const stepsDone = [['Prepared', t(r.created)], ['Sent', t(r.sentAt)], ['With the office', s.status === 'submitted' || s.status === 'approved' || s.status === 'changes' ? 'waiting for review' : ''], ['Approved', s.status === 'approved' ? 'done' : '']];
   return html`<div class="box pad"><div class="spread"><b>${s.unchanged ? 'Already sent, no changes' : 'Sent to the office'}</b><span class="pill ok">Version ${s.version || 1}</span></div>
     <ol class="tl">${stepsDone.map(([k, v]) => html`<li class="${v ? 'on' : ''}"><b>${k}</b><span>${v || '–'}</span></li>`)}</ol>
+    ${offlineLine(r.pressedAt, r.sentAt) ? html`<p class="callout warn small">${offlineLine(r.pressedAt, r.sentAt)}</p>` : ''}
     <div class="muted tiny">${s.name || ''}</div></div>`;
 }
 

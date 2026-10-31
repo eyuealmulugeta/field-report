@@ -5,8 +5,8 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
-import { doneCount, WEATHER, GROUND } from '../model/report.js';
-import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, CREW_ON_TIME, CREW_CLOSES } from '../model/crew.js';
+import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
+import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses } from '../model/crew.js';
 import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
 
@@ -21,7 +21,8 @@ export function inboxBox(c) {
   if (!items.length) return '';
   const shown = c.ui.inboxAll ? items : items.slice(0, 3);
   return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><button type="button" class="btn t slim" data-act="inboxClear">Clear</button></div>
-    <div class="box">${shown.map(x => html`<div class="li inbox"><span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div></div>`)}
+    <div class="box">${shown.map(x => { const inner = html`<span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div>`;
+      return x.l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${x.l}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<div class="li inbox">${inner}</div>`; })}
     ${items.length > 3 ? html`<button type="button" class="li more" data-act="inboxMore">${c.ui.inboxAll ? 'Show fewer' : `Show all ${items.length}`}</button>` : ''}</div>`;
 }
 
@@ -99,9 +100,9 @@ export function today(c) {
       tab: 'today', fab: true,
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
       body: html`${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
-        ${c.evening ? html`<p class="callout warn">It is after 17:00. Finish steps 8 and 9 and send today's report.</p>` : ''}
-        ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${dayList(r, READY)}
-        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button></div>`,
+        ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
+        ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
+        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
     };
   }
   return {
@@ -117,17 +118,35 @@ export function today(c) {
         <button type="button" class="box pad tile" data-act="startCrew"><b>Attendance</b><span class="muted small">Take it now</span></button>
         <button type="button" class="box pad tile" data-act="noWork"><b>No work today</b><span class="muted small">Give the reason</span></button>
       </div>
+      <button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight: share an observation</button>
+      <button type="button" class="btn o bad-t" data-act="attOpen">${icon('alert')}Attention: a serious issue for the client</button>
       <div class="k">This week</div>${weekStrip(c)}
       <div class="k">Needs you</div>${needsBox(c)}
       <div class="muted tiny center">File name: ${pdfName(p, c.today, no)}</div>`,
   };
 }
 
-/** Reports the office sent back, newest first; each opens the day to correct it. */
+/** 2.7.0: today's Attention items, in red, on Today. */
+const attBox = r => ((r.attention || []).length ? html`<button type="button" class="callout bad li" data-act="attOpen"><span class="ic bad">${icon('alert')}</span><div class="n"><b>Attention · ${r.attention.length} for the client</b><span>${r.attention[0].text}</span></div></button>` : '');
+
+/** 2.7.0: an Attention item: a serious issue the client must know about. It goes in the report's red box and to Central Hub. */
+export function attention(c) {
+  const list = c.report.attention || [];
+  return {
+    head: stepHead('Attention', 'A serious issue for the client'),
+    body: html`<p class="muted small">Only for a serious issue that needs the client's urgent attention (for example a safety risk, a design problem, or work stopped by the client). It is printed in a red box at the top of the report, and Central Hub lists it under Needs attention.</p>
+      ${list.length ? html`<div class="box">${list.map(x => html`<div class="li"><span class="ic bad">${icon('alert')}</span><div class="n"><b>${x.text}</b><span>${x.at}</span></div>
+        <button type="button" class="btn t" data-act="attDrop" data-v="${x.id}" aria-label="Remove">Remove</button></div>`)}</div>` : ''}
+      <textarea class="fld" rows="3" data-ui="attText" placeholder="What is the issue, and what must the client do?">${c.ui.attText || ''}</textarea>
+      <button type="button" class="btn p" data-act="attAdd">${icon('alert')}Add to the report</button>`,
+  };
+}
+
+/** Reports the office sent back or commented on, newest first; each opens the day, with the comment and a reply box. */
 function needsBox(c) {
   if (!c.needs.length) return html`<div class="box pad muted small">Nothing from the office.</div>`;
-  return html`<div class="box">${c.needs.map(x => html`<button type="button" class="li" data-act="openPast" data-v="${x.date}"><span class="ic bad">${icon('alert')}</span>
-    <div class="n"><b>Report #${x.no} sent back · ${dayLabel(x.date)}</b><span>${x.comment ? `${x.comment.by || 'Office'}: ${x.comment.text}` : 'Open it to see what to fix'}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`;
+  return html`<div class="box">${c.needs.map(x => html`<button type="button" class="li" data-act="openDay" data-v="${x.date}"><span class="ic bad">${icon('alert')}</span>
+    <div class="n"><b>Report #${x.no} ${x.kind === 'changes' ? 'sent back' : 'has a comment'} · ${dayLabel(x.date)}</b><span>${x.comment ? `${x.comment.by || 'Office'}: ${x.comment.text}` : 'Open it to see what to fix'}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`;
 }
 
 export function start(c) {
@@ -139,9 +158,11 @@ export function start(c) {
       <div class="lab">Working hours</div>
       <div class="two"><input class="fld" type="time" data-f="start.start" value="${s.start}" aria-label="Start"><input class="fld" type="time" data-f="start.end" value="${s.end}" aria-label="End"></div>
       <div class="lab">Weather ${c.ui.wx ? html`<span class="muted thin">· ${c.ui.wx}</span>` : ''}</div>
-      ${chips('start.cond', WEATHER, s.cond)}
+      <div class="chips wx" role="group">${WEATHER.map(w => html`<button type="button" class="chip pic ${w === s.cond ? 'on' : ''}" data-act="pick" data-f="start.cond" data-v="${w}" aria-pressed="${w === s.cond}"><span class="big" aria-hidden="true">${WEATHER_PIC[w]}</span>${w}</button>`)}</div>
       <div class="two"><input class="fld" inputmode="decimal" data-f="start.tempC" value="${s.tempC}" placeholder="°C" aria-label="Temperature in °C"><input class="fld" data-f="start.wind" value="${s.wind}" placeholder="Wind, rain…" aria-label="Weather note"></div>
       <div class="lab">Ground</div>${chips('start.ground', GROUND, s.ground)}
+      <div class="lab">Safety gear checked on the crew <span class="muted thin">· tick each one you saw</span></div>
+      <div class="chips" role="group">${PPE.map(g => { const on = (s.ppe || []).includes(g); return html`<button type="button" class="chip ${on ? 'on' : ''}" data-act="ppe" data-v="${g}" aria-pressed="${on}">${on ? '✓ ' : ''}${g}</button>`; })}</div>
       <div class="lab">Location</div>
       <div class="soft small flex"><span class="ic">${icon('pin')}</span><div><b>${c.project.location || s.location || 'Not set yet'}</b><br><span class="muted">Set by the office in Central Hub</span></div></div>`,
     foot: html`<button type="button" class="btn p" data-act="startDone">${icon('check')}Looks right</button>`,
@@ -186,7 +207,7 @@ function crewPhotoBox(c) {
     <div class="box pad">${list.length ? html`<div class="thumbs">${list.map(p => thumb(p, 'sm'))}</div>
       <ul class="plain small">${list.map(p => html`<li><b>${p.at}</b> · ${p.crew ? html`<span class="pill ${p.crew.st === 'ontime' ? 'ok' : 'warn'}">${CREW_ST_WORD[p.crew.st]}</span>${p.crew.tags.map(x => html` <span class="pill warn">${x}</span>`)}${p.crew.geo ? ' · location kept' : ' · no location'}` : html`<span class="muted">checking the time…</span>`}</li>`)}</ul>` : ''}
       <button type="button" class="btn s" data-act="crewPhoto">${icon('cam')}Take crew photo</button>
-      <p class="muted tiny">On time until ${CREW_ON_TIME}, late attendance until ${CREW_CLOSES}, closed after. The office's clock decides.</p></div>`;
+      <p class="muted tiny">On time until ${c.project.defStart || '08:00'}, late attendance until ${crewCloses(c.project.defStart || '08:00')}, closed after. The office's clock decides.</p></div>`;
 }
 
 /** 2.5.0: names and trades sent for approval as the crew of this project. 2.6.0: only a reviewer sees and gives wages. */

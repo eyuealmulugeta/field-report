@@ -97,6 +97,16 @@ export function buildPdf(JsPDF, d) {
     font(7.5, 'normal', MUTED); doc.text(label.toUpperCase(), x + fw / 2, y + 32, { align: 'center' });
   });
   y += 52;
+  /* 2.7.0: Attention, a serious issue for the client, in a red box */
+  const att = (r.attention || []).map(x => String(x.text || '').trim()).filter(Boolean);
+  if (att.length) {
+    const body = att.flatMap(t => lines(`• ${t}`, CW - 20)), h = 24 + body.length * 12;
+    room(h + 8);
+    color([253, 236, 234], 'fill'); color([180, 35, 24], 'draw'); doc.setLineWidth(1.2); doc.roundedRect(M, y, CW, h, 5, 5, 'FD');
+    font(9.5, 'bold', [180, 35, 24]); doc.text('ATTENTION', M + 10, y + 15);
+    font(9.5, 'normal', [120, 20, 14]); body.forEach((ln, i) => doc.text(ln, M + 10, y + 28 + i * 12));
+    y += h + 10;
+  }
   if (r.safety.incident) para(`Safety: ${s.safety}${r.safety.note ? ` - ${r.safety.note}` : ''}`, { style: 'bold', c: [180, 35, 24] });
 
   /* information */
@@ -142,6 +152,7 @@ export function buildPdf(JsPDF, d) {
 
   /* safety and delays */
   section('Safety and delays');
+  para(`Safety gear checked: ${((r.start || {}).ppe || []).join(', ') || 'none ticked'}`);
   para(`Toolbox talk: ${r.safety.toolbox ? 'held' : 'not held'}  ·  ${r.safety.incident ? `${s.safety}: ${r.safety.note || 'no description'}` : 'No incidents'}`);
   if (r.delays.length) {
     table([{ t: 'Time', w: 0.1 }, { t: 'Cause', w: 0.2 }, { t: 'Responsible', w: 0.17 }, { t: 'Hours', w: 0.1 }, { t: 'Idle', w: 0.18 }, { t: 'Details', w: 0.25 }],

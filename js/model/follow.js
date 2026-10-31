@@ -50,7 +50,22 @@ export function monthDays(today, project, drafts, known = {}) {
 }
 
 /** The office sent these back and they were not sent again since. */
+/** 2.7.0: a send that waited for a connection: '' when it went at once (within 2 minutes). */
+export function offlineLine(pressed, arrived) {
+  const p = Number(pressed) || Date.parse(pressed), a = Number(arrived) || Date.parse(arrived);
+  if (!p || !a || a - p < 2 * 60e3) return '';
+  const t = x => new Date(x).toTimeString().slice(0, 5), d = x => new Date(x).toISOString().slice(0, 10);
+  return `Sent offline at ${t(p)}${d(p) !== d(a) ? ` (${d(p)})` : ''} · reached the office at ${t(a)}${d(p) !== d(a) ? ` (${d(a)})` : ''}`;
+}
 export const sentBack = rows => rows.filter(x => x.kind === 'changes' && !x.changed);
+/** 2.7.0: what needs the site: reports sent back, and office comments not answered yet (the last word is the office's). */
+export function needsYou(rows, known = {}) {
+  return rows.filter(x => {
+    if (x.kind === 'changes' && !x.changed) return true;
+    const cm = (x.name && known[x.name] && known[x.name].comments) || [], last = cm[cm.length - 1];
+    return x.kind !== 'approved' && !!last && last.kind === 'comment';
+  });
+}
 
 /** Reports worth asking the office about: sent in the last weeks and not approved yet. */
 export const toCheck = (rows, known, now = Date.now(), every = 10 * 60e3) => rows.filter(x => x.name && x.report && x.report.sentAt && x.kind !== 'approved'
@@ -79,6 +94,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['alert', 'One account, Attention, Spotlight (2.7.0)', 'The PM and GM write reports in the same account and have Review. Attention puts a serious issue for the client in a red box on the report. Spotlight sends a note with photos or videos to Central Hub. Weather in 8 terms with pictures, safety gear ticks, working hours per project (late = start + 15 min), replies to the office, notifications open their item, and a report sent offline shows both times.'],
   ['acc', 'Reviewer and reporter accounts (2.6.0)', 'The Project engineer account opens on Review: approve, send back or comment, and the answer goes to the person who sent the report only. Crew: give the wages of the people the site sent and approve them. The site sends names and trades only. To write a report, a manager uses a separate reporter account.'],
   ['cam', 'Crew photo, crew list, camera only (2.5.0)', 'Take the morning crew photo on Attendance: on time until 8:00, late until 8:15. Send your crew list with daily wages for the office to approve. Report photos come from the camera only; a delivery starts with its photo.'],
   ['user', 'Sign up and sign full screen (2.4.0)', 'A new person signs up and waits for the office. Sign full screen, or choose a PNG; your signature follows you to a new phone. One report per project and day, shared by everyone on it.'],

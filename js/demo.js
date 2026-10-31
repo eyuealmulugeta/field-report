@@ -49,7 +49,7 @@ const DEVICES = [
 
 /** Demo notifications for Today (sample data, demo only). */
 const INBOX = [
-  { t: '2026-10-20T14:10:00Z', h: 'Changes requested · Modjo Chemical Store', m: 'Report No. 41 (19 Oct)\nAdd the crane hours, please.', c: 'rev-1', f: 'Demo Admin' },
+  { t: '2026-10-20T14:10:00Z', h: 'Changes requested · Modjo Chemical Store', m: 'Report No. 41 (19 Oct)\nAdd the crane hours, please.', c: 'rev-1', l: '#go=day/2026-10-19/MJO/99', f: 'Demo Admin' },
   { t: '2026-10-20T09:02:00Z', h: 'Test from Demo Engineer', m: 'Sent by Demo Engineer (demo) at 12:02. Notifications work on this phone.', c: 'test-demo', f: 'Demo Engineer' },
   { t: '2026-10-19T16:30:00Z', h: 'Approved · Modjo Chemical Store', m: 'Report No. 40 (18 Oct)', c: 'rev-0', f: 'Demo Admin' },
   { t: '2026-10-18T17:05:00Z', h: 'MISSING REPORT · Modjo Chemical Store', m: 'No report or no-work notice for 18 Oct.', c: 'miss', f: 'Field Report' },
@@ -89,7 +89,10 @@ export async function demoServer(action, body) {
     }
     case 'getconfig': return { ok: true, rev: 1, projects: [project] };
     case 'myProjects': { const pm = new URLSearchParams(location.search).has('pm');   // 2.6.0: a reviewer sees the crew waiting with their wages
-      return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff, ...(pm ? { crewApprove: true, tradeWages: { Mason: 450 }, crewWait: CREW_WAIT.filter(x => !x.ok) } : {}) }] }; }
+      return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff, ...(pm ? { crewApprove: true, hoursEdit: true, tradeWages: { Mason: 450 }, crewWait: CREW_WAIT.filter(x => !x.ok) } : {}) }] }; }
+    case 'spotMedia': return { ok: true, fileId: 'demo' };
+    case 'spotPut': return { ok: true, note: { id: body.id } };
+    case 'hoursPut': Object.assign(project, { defStart: body.defStart, defEnd: body.defEnd, remindAt: body.remindAt, nwDow: body.nwDow }); return { ok: true, project: { code: body.proj } };
     case 'crewOk': { let n = 0; for (const x of CREW_WAIT) if (body.wages[x.id]) { x.ok = true; x.wage = body.wages[x.id]; n++; } return { ok: true, approved: n, crewWait: CREW_WAIT.filter(x => !x.ok), tradeWages: { Mason: 450 } }; }
     case 'list': return { ok: true, reports: REVIEW, events: [] };
     case 'review': { const r = REVIEW.find(x => x.name === body.name); if (r) { r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; r.reviewedBy = 'Demo Project Engineer'; r.reviewedAt = new Date().toISOString(); } return { ok: true, report: r || {} }; }

@@ -7,7 +7,7 @@ import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS } from './model/report.js';
-import { mergeStaff, attendanceRows, crewPhotoState, CREW_CLOSES, CREW_ST_WORD } from './model/crew.js';
+import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
@@ -21,9 +21,11 @@ import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta } from './model/end.js';
 import { buildPdf, loadPdfLib, photoCaption } from './pdf.js';
 import * as F from './ui/follow.js';
-import { monthDays, sentBack, toCheck, draftChoice } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice } from './model/follow.js';
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
+import * as SP from './ui/spot.js';
+import { newSpot, spotMissing, mediaKind, SPOT_MAX } from './model/spot.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 
@@ -44,8 +46,9 @@ const SCREENS = {
   end: E.end, request: E.request, send: E.send,
   reports: F.reports, requests: F.requests, view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
+  spot: SP.spot, attention: S.attention,              // 2.7.0
 };
-const NEEDS_REPORT = new Set(['start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
+const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
 
 /* ---------- state helpers ---------- */
 
@@ -54,6 +57,9 @@ const key = () => draftKey(store.get().proj, today());
 const report = () => store.get().drafts[key()] || null;
 const working = () => { const r = report(); return r && r.start ? r : null; };
 /** 2.6.0: reporter, reviewer or viewer, from the role the script gives at sign-in. */
+/** 2.7.0: the project's working hours. */
+const remindAt = () => (project() || {}).remindAt || '17:00';
+const crewStart = () => (project() || {}).defStart || '08:00';
 const kind = () => kindOf((store.get().auth || {}).role || 'engineer');
 
 function lastReport(code, before) {
@@ -139,7 +145,7 @@ async function loadProjects() {
   const extra = new Map((mine.projects || []).map(p => [String(p.proj).toUpperCase(), p]));
   const projects = (cfg.projects || []).map(p => {
     const code = codesOf(p).code, m = extra.get(code) || {};
-    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove };
+    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove, hoursEdit: !!m.hoursEdit };
   });
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
@@ -261,10 +267,10 @@ function oneSignal(appId, who) {
   });
 }
 
-/** 17:00: a reminder when today's report is not sent (on the phone, while the app is open or in the background). */
+/** The project's reminder time (2.7.0, set by the PM or GM; 17:00 when none): a reminder when today's report is not sent (on the phone, while the app is open or in the background). */
 function remindTick() {
   const s = store.get(), r = s.drafts[draftKey(s.proj, realToday())];
-  if (s.profile.remind === false || !s.proj || now() < '17:00' || s.remindedOn === realToday()) return;
+  if (s.profile.remind === false || !s.proj || now() < remindAt() || s.remindedOn === realToday()) return;
   if (r && (r.sentAt || r.nowork)) return;
   store.quiet({ remindedOn: realToday() });
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && navigator.serviceWorker) {
@@ -403,6 +409,9 @@ async function sendReport(k, step = () => {}) {
   }
   const r = store.get().drafts[k];
   const name = pdfName(p, r.date, r.no), meta = reportMeta(r, p, store.get().profile);
+  // 2.7.0: when Send was pressed on the phone (earlier than the arrival when it waited for a connection)
+  const pressed = r.queuedAt || Date.now();
+  meta.pressedAt = new Date(pressed).toISOString();
   try { await sendPhotos(k, name, step); } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
     throw e;
@@ -415,7 +424,7 @@ async function sendReport(k, step = () => {}) {
   try {
     const res = await call('upload', { name, folderId: '', data, meta });
     const at = Date.now();
-    editKey(k, x => { x.sentAt = at; x.updated = at; x.queuedAt = 0; x.sendError = ''; x.sent = { name, version: res.version || 1, status: res.status || 'submitted', unchanged: !!res.unchanged, hash: meta.hash }; });
+    editKey(k, x => { x.sentAt = at; x.pressedAt = pressed; x.updated = at; x.queuedAt = 0; x.sendError = ''; x.sent = { name, version: res.version || 1, status: res.status || 'submitted', unchanged: !!res.unchanged, hash: meta.hash }; });
     if (ui.pdf && ui.pdf.key === k) ui.pdf.at = at;
     unqueue(k);
     if (k === draftKey(p.code, realToday()) && !demo) call('draftDel', { proj: p.code }).catch(() => {});
@@ -512,7 +521,8 @@ async function fetchWeather() {
     const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.siteLa}&longitude=${p.siteLo}&current=temperature_2m,weather_code,wind_speed_10m`;
     const cur = (await (await fetch(u)).json()).current;
     const code = cur.weather_code;
-    const cond = cur.wind_speed_10m >= 30 ? 'Windy' : code >= 51 ? 'Rain' : code >= 2 ? 'Cloudy' : 'Clear';
+    // 2.7.0: the WMO weather code in the owner's 8 terms
+    const cond = cur.wind_speed_10m >= 30 ? 'Windy' : (code >= 63 && code <= 67) || code >= 81 ? 'Heavy Rain' : code >= 51 ? 'Light Rain' : code >= 45 ? 'Foggy / Hazy' : code === 3 ? 'Cloudy / Overcast' : code >= 1 ? 'Partly Cloudy' : 'Sunny';
     edit(r => { if (!r.start.done) { r.start.cond = cond; r.start.tempC = Math.round(cur.temperature_2m); } });
     ui.wx = `fetched for ${p.location || p.name}`;
     draw();
@@ -647,11 +657,11 @@ async function crewStamp(id) {
   const phone = Date.now();
   const [geo, srv] = await Promise.all([where(), demo ? Promise.resolve(phone) : call('sync', {}).then(x => Number(x.t) || 0).catch(() => 0)]);
   const time = demo ? crewClock() : timeIn(undefined, new Date(srv || phone));
-  const s = crewPhotoState(time, { offline: !srv, skewMin: srv ? (srv - phone) / 60000 : 0 });
+  const s = crewPhotoState(time, { offline: !srv, skewMin: srv ? (srv - phone) / 60000 : 0, start: crewStart() });
   if (s.st === 'closed') {
     edit(x => { x.photos = x.photos.filter(p => p.id !== id); });
     deletePhoto(id).catch(() => {});
-    return toast(`Crew photos close at ${CREW_CLOSES}. This one was not kept.`);
+    return toast(`Crew photos close at ${crewCloses(crewStart())}. This one was not kept.`);
   }
   edit(x => {
     const p = x.photos.find(y => y.id === id);
@@ -670,6 +680,49 @@ async function upNow() {
   try { await syncNo(k); const r2 = store.get().drafts[k]; await sendPhotos(k, pdfName(p, r2.date, r2.no), () => {}); }
   catch { /* sent with the report */ }
   finally { upping = false; }
+}
+
+/* 2.7.0: Spotlight. Photos and videos wait in the phone's photo store; each goes up alone, then the note. */
+const spotCam = document.getElementById('spotCam'), spotPick = document.getElementById('spotPick');
+const spotIn = el => { el.value = ''; el.click(); };
+const spotFiles = async files => {
+  const s = ui.spot || (ui.spot = newSpot());
+  for (const f of files) {
+    if (s.media.length >= SPOT_MAX) { toast(`At most ${SPOT_MAX} photos or videos.`); break; }
+    const k = mediaKind(f);
+    if (k.refused) { toast(k.refused); continue; }
+    try {
+      const id = uid(), blob = k.kind === 'photo' ? await shrink(f) : f;
+      await putPhoto(id, blob);
+      if (k.kind === 'photo') await photoUrl(id);
+      s.media.push({ id, kind: k.kind, type: k.kind === 'photo' ? 'image/jpeg' : f.type });
+    } catch (e) { toast(`Could not keep it on this phone (${e.message || e}).`); }
+  }
+  draw();
+};
+spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
+spotPick.addEventListener('change', () => spotFiles([...(spotPick.files || [])]));
+const spotSet = (id, fn) => store.set({ spots: (store.get().spots || []).map(x => { if (x.id !== id) return x; const y = structuredClone(x); fn(y); return y; }) });
+let spotting = false;
+async function flushSpots() {
+  const waiting = (store.get().spots || []).filter(x => !x.sent);
+  if (spotting || !waiting.length || !store.get().auth || !navigator.onLine) return;
+  spotting = true;
+  try {
+    for (const x of waiting.reverse()) {
+      for (const [n, m] of x.media.entries()) {
+        if (m.up) continue;
+        const blob = await getPhoto(m.id);
+        if (blob) await call('spotMedia', { proj: x.proj, id: x.id, n, type: m.type, data: await toDataUrl(blob) });
+        spotSet(x.id, y => { y.media[n].up = true; });
+      }
+      await call('spotPut', { proj: x.proj, id: x.id, about: x.about, tone: x.tone, cat: x.cat, note: x.note, madeAt: `${x.date}T${x.time}` });
+      spotSet(x.id, y => { y.sent = true; y.sentAt = Date.now(); });
+      x.media.forEach(m => deletePhoto(m.id).catch(() => {}));
+      toast(`Spotlight sent: ${x.cat} · ${x.about}.`);
+    }
+  } catch (e) { if (e.code !== 'OFFLINE') toast(`Spotlight not sent yet: ${e.message}`); }
+  finally { spotting = false; }
 }
 
 /** 2.5.0: the crew list being written for the office, kept on the phone per project. */
@@ -726,7 +779,13 @@ const ACTS = {
   async revLoad() {
     const rv = ui.rv || (ui.rv = {});
     rv.busy = true; draw();
-    try { const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || []; }
+    try {
+      const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || [];
+      // 2.7.0: opened from a notification: straight to that report
+      const w = rv.want; rv.want = null;
+      const hit = w && rv.list.find(x => x.date === w.d && String(Number(x.no)) === String(Number(w.no)));
+      if (hit) { rv.busy = false; return ACTS.revOpen({ v: hit.name }); }
+    }
     catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Could not get the reports: ${e.message}`); }
     finally { rv.busy = false; draw(); }
   },
@@ -753,6 +812,63 @@ const ACTS = {
       toast({ approve: 'Approved.', changes: 'Sent back.', reopen: 'Reopened for the site.', comment: 'Comment sent.' }[d.v] + ` ${x.preparedBy || x.uploadedBy || 'The sender'} is told.`);
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
     finally { rv.busy = false; draw(); }
+  },
+  /** 2.7.0: a reviewer sets the project's working hours (script hoursPut). */
+  hrDay(d) { const p = project(), h = ui.hr || (ui.hr = { off: [...(p.nwDow || [0])] }), n = Number(d.v), i = h.off.indexOf(n); if (i > -1) h.off.splice(i, 1); else h.off.push(n); draw(); },
+  async hoursSend() {
+    const p = project(), h = ui.hr || {}, start = ui.hrStart || p.defStart || '08:00', end = ui.hrEnd || p.defEnd || '17:00', remind = ui.hrRemind || p.remindAt || end;
+    const off = h.off || p.nwDow || [0];
+    if (end <= start) return toast('The end must be after the start.');
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    if (!confirm(`Set the working hours of ${p.name}?\n\nStart ${start} (late attendance until ${crewCloses(start)})\nEnd ${end}\nReminder ${remind}\nDays off: ${off.length ? off.slice().sort().map(n => days[n]).join(', ') : 'none'}`)) return;
+    ui.busy = true; draw();
+    try {
+      await call('hoursPut', { proj: p.code, defStart: start, defEnd: end, remindAt: remind, nwDow: off });
+      store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, defStart: start, defEnd: end, remindAt: remind, nwDow: off.slice() } : x)) });
+      ui.hr = null; ui.hrStart = ui.hrEnd = ui.hrRemind = '';
+      toast('Working hours saved. The site sees them on its next check.');
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was saved.' : `Not saved: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
+  attOpen() { if (ui.date) return toast('Attention is added on the day itself.'); ensureReport(); go('attention'); },
+  attAdd() {
+    const text = String(ui.attText || '').trim();
+    if (!text) return toast('Write the issue first.');
+    edit(r => { (r.attention ||= []).push({ id: uid(), text: text.slice(0, 400), at: now() }); });
+    ui.attText = '';
+    toast('Added. It goes in the red box of today\'s report.');
+  },
+  attDrop(d) { if (confirm('Remove this Attention item from the report?')) edit(r => { r.attention = (r.attention || []).filter(x => x.id !== d.v); }); },
+  /** 2.7.0: the site answers the office's comment; it goes to the person who wrote it. */
+  async replySend(d) {
+    const text = String(ui.replyText || '').trim();
+    if (!text) return toast('Write the reply first.');
+    ui.busy = true; draw();
+    try {
+      const res = await call('review', { name: d.v, decision: 'reply', text });
+      const k = store.get().known[d.v] || {};
+      store.set({ known: { ...store.get().known, [d.v]: { ...k, comments: (res.report && res.report.comments) || [...(k.comments || []), { by: store.get().profile.name, at: new Date().toISOString(), kind: 'reply', text }] } } });
+      ui.replyText = ''; ui.sheet = '';
+      toast('Reply sent. The office is told.');
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
+  inboxGo(d) { location.hash = d.v; },
+  spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
+  spotTone(d) { ui.spot.tone = d.v; draw(); },
+  spotCat(d) { ui.spot.cat = d.v; draw(); },
+  spotCam() { spotIn(spotCam); },
+  spotGallery() { spotIn(spotPick); },
+  spotDrop(d) { const [m] = ui.spot.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
+  spotSave() {
+    const s = { ...ui.spot, about: ui.spotAbout || 'The project', note: String(ui.spotNote || '').trim() }, why = spotMissing(s);
+    if (why) return toast(why);
+    const p = project(), keep = { id: uid(), proj: p.code, date: realToday(), time: now(), about: s.about, tone: s.tone, cat: s.cat, note: s.note, media: s.media, sent: false };
+    const old = store.get().spots || [];
+    store.set({ spots: [keep, ...old.filter(x => !x.sent), ...old.filter(x => x.sent).slice(0, 20)] });
+    ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = '';
+    toast(navigator.onLine ? 'Sending to Central Hub…' : 'Kept on this phone. It goes when there is a connection.');
+    flushSpots();
   },
   crewPick(d, el) { const rv = ui.rv || (ui.rv = {}); (rv.picks ||= {})[d.v] = !!el.checked; },
   /** A reviewer gives the wages and approves the ticked people (script crewOk). */
@@ -786,6 +902,7 @@ const ACTS = {
     }
     edit(r => setPath(r, d.f, d.v));
   },
+  ppe(d) { edit(r => { const l = r.start.ppe || (r.start.ppe = []); const i = l.indexOf(d.v); if (i > -1) l.splice(i, 1); else l.push(d.v); }); },
   startDone() {
     edit(r => { r.start.done = true; });
     store.set({ lastNo: { ...store.get().lastNo, [store.get().proj]: report().no } });
@@ -799,7 +916,7 @@ const ACTS = {
   addExtra: () => edit(r => { r.crew.extra.push({ trade: '', qty: 1 }); }),
   crewPhoto() {
     if (ui.date) return toast('The crew photo is taken on the day itself.');
-    if (crewClock() > CREW_CLOSES) return toast(`Crew photos close at ${CREW_CLOSES}. Tell the Project Manager.`);
+    if (crewClock() > crewCloses(crewStart())) return toast(`Crew photos close at ${crewCloses(crewStart())}. Tell the Project Manager.`);
     ensureReport(); ui.camFor = 'crew'; camera();
   },
   clTrade() { ui.cl.trades.push({ trade: '', wage: '' }); saveCl(); draw(); },
@@ -1138,20 +1255,31 @@ let layout = D.layoutOf(innerWidth);
 addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
 
 /** The open step's tab in the menu. */
-const TAB_OF = { reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'crewrev' };
+const TAB_OF = { reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 
 function context() {
   const s = store.get(), p = project();
   const r = report(), t = now();
-  const needs = p ? sentBack(monthDays(realToday(), p, s.drafts, s.known)) : [];
+  const needs = p ? needsYou(monthDays(realToday(), p, s.drafts, s.known), s.known) : [];
   return {
     s, ui, kind: kind(), devId: devId(), wide: layout !== 'phone', now: t, today: today(), realToday: realToday(), past: !!ui.date, project: p, report: r, nextNo: p ? nextNo(p) : 1,
     dayOff: p ? (p.nwDow || [0]).includes(weekday(today())) : false, needs,
     fileName: p && r && r.no ? pdfName(p, r.date, r.no) : '',
-    evening: !ui.date && !!r && !!r.start && !r.sentAt && t >= '17:00' && s.profile.remind !== false,
+    evening: !ui.date && !!r && !!r.start && !r.sentAt && t >= remindAt() && s.profile.remind !== false,
   };
+}
+
+/** 2.7.0: a notification's link (#go=what/date/project/no) opens its item: the day of a report, a report to review, the crew. */
+function openLink(h) {
+  const [what, d, code, no] = decodeURIComponent(h.slice(3)).split('/'), s = store.get();
+  if (!s.auth || !s.profile.done) return false;
+  if (code && code !== s.proj && s.projects.some(p => p.code === code)) store.set({ proj: code });
+  if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
+  else if (what === 'review' && kind() !== 'reporter') { (ui.rv ||= {}).want = { d, no }; ui.rv.f = ''; go('review'); ACTS.revLoad(); }
+  else go(['crew', 'crewrev', 'spot'].includes(what) ? what : 'today');
+  return true;
 }
 
 function route() {
@@ -1161,7 +1289,7 @@ function route() {
   if (!project()) return 'choose';
   const h = location.hash.slice(1) || 'today';
   // 2.6.0: a reviewer or viewer account writes no report: it opens on Review
-  if (kind() !== 'reporter' && (h === 'today' || h === 'reports' || h === 'requests' || NEEDS_REPORT.has(h))) return 'review';
+  if (kind() === 'viewer' && (h === 'today' || h === 'reports' || h === 'requests' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'review';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';
@@ -1206,7 +1334,7 @@ function draw() {
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
   bindSig();
-  if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+  if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* a time field has no caret */ } } }
 }
 
 const escText = s => String(s).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[ch]);
@@ -1275,6 +1403,7 @@ addEventListener('keydown', e => {
 });
 
 window.addEventListener('hashchange', () => {
+  if (location.hash.startsWith('#go=') && openLink(location.hash.slice(1))) return;
   ui.filter = ''; ui.q = ''; ui.ot = null; ui.sheet = ''; ui.cur = null;
   const h = location.hash.slice(1);
   if (h !== 'item') { stopListening(); ui.item = null; }
@@ -1289,14 +1418,16 @@ window.addEventListener('hashchange', () => {
   if (h !== 'me') sendProfile();
   if (h === 'today' || h === '') pullDraft();
 });
-window.addEventListener('online', () => { flush(); checkStatus(); upNow(); });
+window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flushSpots(); });
 // 2.1.1: the office's approvals show without opening Reports: when the app comes back to the front, and every 10 minutes
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 try { navigator.storage?.persist?.().catch(() => {}); } catch { /* 2.2.0: asks the phone not to clear the app's data (the device id) */ }
 store.subscribe(draw);
+// 2.7.0: the app opened from a notification
+if (location.hash.startsWith('#go=')) setTimeout(() => { if (!openLink(location.hash.slice(1))) go('today'); }, 300);
 
 draw();
 const back = signInReturn();

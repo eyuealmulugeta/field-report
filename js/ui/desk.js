@@ -21,7 +21,7 @@ export function rail(c, on) {
     <div class="brand"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="wide-only"><b>Field Report</b><span>Amistad Prefab</span></div></div>
     <button type="button" class="proj wide-only" data-act="go" data-to="me" title="Change project"><div><b>${p.name}</b><span>${p.code}${p.location ? ` · ${p.location}` : ''}</span></div></button>
     ${tabsFor(c.kind).map(t => html`<button type="button" class="navi ${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
-    ${c.kind !== 'reporter' ? '' : html`<button type="button" class="log" data-act="fab" title="Log now (N)">${icon('plus')}<span class="wide-only">Log now</span><kbd class="wide-only">N</kbd></button>`}
+    ${c.kind === 'viewer' ? '' : html`<button type="button" class="log" data-act="fab" title="Log now (N)">${icon('plus')}<span class="wide-only">Log now</span><kbd class="wide-only">N</kbd></button>`}
     <div class="rail-foot wide-only">${time ? html`<span><b>● Saved</b> on this computer · ${time}</span>` : ''}<span>${c.s.profile.name}${c.s.profile.position ? ` · ${c.s.profile.position}` : ''}</span>${isDemo() ? html`<span class="pill warn">Demo</span>` : ''}</div>
   </aside>`;
 }
@@ -42,7 +42,7 @@ export function glance(c) {
   const items = [...r.items].reverse();
   return {
     head: html`<header class="hd"><div class="hd-t"><b>Today at a glance</b><span>Everything logged so far · the office sees it when the report is sent</span></div>
-      <div class="r row-btns"><button type="button" class="btn o sm" data-act="noWork">No work today</button><button type="button" class="btn s sm" data-act="go" data-to="crew">Attendance</button></div></header>`,
+      <div class="r row-btns"><button type="button" class="btn o sm" data-act="spotOpen">Spotlight</button><button type="button" class="btn o sm" data-act="noWork">No work today</button><button type="button" class="btn s sm" data-act="go" data-to="crew">Attendance</button></div></header>`,
     body: html`<div class="kpis five">${kpi(t.present, 'Present')}${kpi(t.away, 'Not here', t.away ? 'warn' : '')}${kpi(html`${t.manHours}<small>h</small>`, 'Man-hours')}${kpi(r.items.length, 'Work items')}${kpi(r.photos.length, 'Photos')}</div>
       ${plannedBox(r)}
       <div class="grid2 top">

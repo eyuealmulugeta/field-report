@@ -23,7 +23,14 @@ export const STEPS = [
   { id: 'send', phase: 'end', title: 'Review and send' },
 ];
 
-export const WEATHER = ['Clear', 'Cloudy', 'Rain', 'Windy', 'Hot'];
+/** 2.7.0: the owner's 8 weather terms, each with a picture tapped instead of read. */
+export const WEATHER = ['Clear', 'Sunny', 'Partly Cloudy', 'Cloudy / Overcast', 'Foggy / Hazy', 'Light Rain', 'Heavy Rain', 'Windy'];
+export const WEATHER_PIC = { Clear: '🌤️', Sunny: '☀️', 'Partly Cloudy': '⛅', 'Cloudy / Overcast': '☁️', 'Foggy / Hazy': '🌫️', 'Light Rain': '🌦️', 'Heavy Rain': '🌧️', Windy: '💨' };
+const OLD_WEATHER = { Cloudy: 'Cloudy / Overcast', Rain: 'Light Rain', Hot: 'Sunny' };
+/** An older weather word moved to the nearest of the 8 terms. */
+export const weatherTerm = v => (WEATHER.includes(v) ? v : OLD_WEATHER[v] || '');
+/** 2.7.0: the safety gear checked on the crew each morning. */
+export const PPE = ['Helmet', 'Vest', 'Boots', 'Gloves', 'Glasses', 'Harness'];
 export const GROUND = ['Dry', 'Wet', 'Muddy'];
 
 /**
@@ -46,10 +53,11 @@ export function newReport(project, date, no, prev) {
     start: {
       start,
       end,
-      cond: ps.cond || '',
+      cond: weatherTerm(ps.cond),
       tempC: ps.tempC ?? '',
       wind: '',
       ground: ps.ground || 'Dry',
+      ppe: [],   // 2.7.0: ticked again every morning
       location: ps.location || project.siteName || project.location || project.address || '',
       carried: !!prev,
       done: false,
@@ -60,6 +68,7 @@ export function newReport(project, date, no, prev) {
     // yesterday's machines are usually still on site (slice 3)
     equipment: carryEquipment(prev, hoursBetween(start, end) || 8),
     safety: { done: false, incident: false, kind: '', note: '', toolbox: false },
+    attention: [],   // 2.7.0: a serious issue for the client: the report's red box and Central Hub's Needs attention
     done: {},
   };
 }

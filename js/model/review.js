@@ -3,7 +3,7 @@
 // decide the rest on the script.
 
 export const kindOf = role => (role === 'coordinator' || role === 'admin' ? 'reviewer' : role === 'viewer' || role === 'exec' ? 'viewer' : 'reporter');
-export const KIND_WORD = { reporter: 'Reporter account', reviewer: 'Reviewer account', viewer: 'View-only account' };
+export const KIND_WORD = { reporter: 'Site', reviewer: 'Approve, send back, comment', viewer: 'View only' };
 
 export const REVIEW_FILTERS = [['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['', 'All']];
 /** The reports of one project, newest first, filtered by status. */

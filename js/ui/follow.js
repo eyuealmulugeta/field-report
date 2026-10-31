@@ -44,6 +44,8 @@ export function daySheet(c) {
     ${comments.length ? html`<div class="box">${comments.slice(-3).reverse().map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
       <div class="n"><b>${m.text || (m.kind === 'approve' ? 'Approved' : m.kind)}</b><span>${m.by || 'Office'} · ${when(m.at)}</span></div></div>`)}</div>` : ''}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
+    ${x.name && comments.length && x.kind !== 'approved' ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="Reply to the office">${c.ui.replyText || ''}</textarea>
+      <button type="button" class="btn o" data-act="replySend" data-v="${x.name}">${icon('send')}Send the reply</button>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
     ${canWrite && x.date !== c.realToday ? html`<button type="button" class="btn p" data-act="openPast" data-v="${x.date}">${icon('doc')}${x.report && x.report.start ? 'Open and correct' : 'Write this report'}</button>` : ''}
     ${x.date === c.realToday ? html`<button type="button" class="btn p" data-act="go" data-to="today">Open today</button>` : ''}

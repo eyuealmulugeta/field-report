@@ -63,13 +63,21 @@ export const attendanceRows = crew => (crew && crew.rows || []).map(r => ({
 
 export const initials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
-/** 2.5.0: the morning crew photo. Until 8:00 it is on time, until 8:15 late attendance, after that the camera is closed.
+/** 2.5.0: the morning crew photo. Until the start hour it is on time, until 15 minutes after it late attendance, after that
+ *  the camera is closed (2.7.0: the start hour is the project's, set by the PM or GM; 08:00 when none).
  *  The server's clock decides when there is a connection; without one the phone's clock is used and the photo says so.
  *  A phone clock more than 5 minutes away from the server's makes the time doubtful. No limit on how many. */
-export const CREW_ON_TIME = '08:00', CREW_CLOSES = '08:15', DOUBT_MIN = 5;
+export const CREW_ON_TIME = '08:00', LATE_MIN = 15, DOUBT_MIN = 5;
+/** The last minute of late attendance: the start hour + 15 minutes. */
+export function crewCloses(start = CREW_ON_TIME) {
+  const [h, m] = String(/^\d{2}:\d{2}$/.test(start) ? start : CREW_ON_TIME).split(':').map(Number), t = Math.min(h * 60 + m + LATE_MIN, 1439);
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+export const CREW_CLOSES = crewCloses();
 export const CREW_ST_WORD = { ontime: 'On time', late: 'Late attendance', closed: 'Closed' };
-export function crewPhotoState(time, { offline = false, skewMin = 0 } = {}) {
-  const st = time <= CREW_ON_TIME ? 'ontime' : time <= CREW_CLOSES ? 'late' : 'closed';
+export function crewPhotoState(time, { offline = false, skewMin = 0, start = CREW_ON_TIME } = {}) {
+  const on = /^\d{2}:\d{2}$/.test(start) ? start : CREW_ON_TIME;
+  const st = time <= on ? 'ontime' : time <= crewCloses(on) ? 'late' : 'closed';
   const tags = [];
   if (offline) tags.push('Taken offline');
   if (Math.abs(skewMin) > DOUBT_MIN) tags.push('Time doubtful');
