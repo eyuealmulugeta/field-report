@@ -25,7 +25,10 @@ const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking |
  * The days from the first of the month (or the last 31 days early in a month) to today, newest first:
  * [{ date, no, kind, status, version, comment, report, name }]. `known` is the office's answers by file name.
  */
-export function monthDays(today, project, drafts, known = {}) {
+/** 2.9.0: `others`: the reports of this project sent from any phone (script projectDays): a day this phone has not sent shows them. */
+export function monthDays(today, project, drafts, known = {}, others = []) {
+  const sent = new Map();
+  for (const o of others || []) if (o && o.date && (!sent.has(o.date) || Number(o.no) > Number(sent.get(o.date).no))) sent.set(o.date, o);
   const first = today.slice(0, 8) + '01';
   // days before the first report on this phone are left out: their reports may have come from the old app
   const mine = Object.keys(drafts).filter(k => k.startsWith(project.code + '|')).map(k => k.split('|')[1]).sort()[0] || today;
@@ -44,6 +47,10 @@ export function monthDays(today, project, drafts, known = {}) {
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
+    const o = sent.get(d);
+    if (o && ['today', 'draft', 'missing', 'off'].includes(row.kind)) {
+      Object.assign(row, { kind: o.status === 'approved' || o.status === 'changes' ? o.status : 'submitted', no: Number(o.no) || o.no, name: o.name, version: o.version || 1, by: o.by || '', other: true });
+    }
     out.push(row);
   }
   return out;
@@ -106,6 +113,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Sent from any phone (2.9.0)', 'A report sent from another phone of the project shows as Submitted (or Approved) on every phone, in Reports and on Today.'],
   ['user', 'Me at the top right, the day at a glance (2.8.0)', 'Me is the round button at the top right. Today starts with steps, crew in, what needs you and Attention. Long-press the app icon for Report, Attendance, Spotlight and Attention. Review and Reports list your projects. The signature pad turns sideways to sign. The report reminder is set with the project\'s working hours. Trades are picked from a list, with Add for a new one. Log: Activity photo.'],
   ['cam', 'Spotlight: Photo, Video and the gallery (2.7.1)', 'Photo and Video open the camera straight away. A video bigger than 20 MB is made smaller on the phone instead of being refused: keep the screen open while it runs.'],
   ['alert', 'One account, Attention, Spotlight (2.7.0)', 'The PM and GM write reports in the same account and have Review. Attention puts a serious issue for the client in a red box on the report. Spotlight sends a note with photos or videos to Central Hub. Weather in 8 terms with pictures, safety gear ticks, working hours per project (late = start + 15 min), replies to the office, notifications open their item, and a report sent offline shows both times.'],

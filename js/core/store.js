@@ -12,6 +12,7 @@ const blank = () => ({
   lastNo: {},          // 'MJO' -> last report number used
   siteZones: {},       // 'MJO' -> zones the site added to the office's list
   known: {},           // file name -> the office's answer { status, version, comments, checked }
+  others: {},          // 2.9.0: project code -> the reports sent from any phone [{ date, no, status, version, by, name }]
   knownAt: 0,          // when the office was last asked
   dev: '',             // this phone's id, so a draft saved here is not offered back to it
   seenNew: '',         // the version whose "What's new" was seen

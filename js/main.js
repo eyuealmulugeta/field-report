@@ -193,10 +193,18 @@ async function flush() {
 /* ---------- the office's answers, drafts on other phones, notifications ---------- */
 
 /** Asks the office (script `status`) about the reports sent and not approved yet. force = all of them now. */
+/** 2.9.0: the reports of the project sent from any phone, so this one shows "Submitted" for them too. */
+async function teamDays(p) {
+  try {
+    const res = await call('projectDays', { proj: p.code });
+    store.set({ others: { ...(store.get().others || {}), [p.code]: res.days || [] } });
+  } catch { /* an older script or offline: this phone's own reports only */ }
+}
 async function checkStatus(force) {
   const p = project();
   if (!p || !token() || ui.checking) return;
-  const s = store.get(), rows = monthDays(realToday(), p, s.drafts, s.known);
+  await teamDays(p);   // 2.9.0
+  const s = store.get(), rows = monthDays(realToday(), p, s.drafts, s.known, (s.others || {})[p.code]);
   const list = force ? rows.filter(x => x.name && x.report && x.report.sentAt) : toCheck(rows, s.known);
   if (!list.length) return;
   ui.checking = true; draw();
@@ -1286,10 +1294,11 @@ const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 function context() {
   const s = store.get(), p = project();
   const r = report(), t = now();
-  const needs = p ? needsYou(monthDays(realToday(), p, s.drafts, s.known), s.known) : [];
+  const needs = p ? needsYou(monthDays(realToday(), p, s.drafts, s.known).filter(x => !x.other), s.known) : [];
+  const sentToday = p ? ((s.others || {})[p.code] || []).filter(x => x.date === realToday()).sort((a, b) => Number(b.no) - Number(a.no))[0] || null : null;   // 2.9.0
   return {
     s, ui, kind: kind(), devId: devId(), wide: layout !== 'phone', now: t, today: today(), realToday: realToday(), past: !!ui.date, project: p, report: r, nextNo: p ? nextNo(p) : 1,
-    dayOff: p ? (p.nwDow || [0]).includes(weekday(today())) : false, needs,
+    dayOff: p ? (p.nwDow || [0]).includes(weekday(today())) : false, needs, sentToday,
     fileName: p && r && r.no ? pdfName(p, r.date, r.no) : '',
     evening: !ui.date && !!r && !!r.start && !r.sentAt && t >= remindAt() && s.profile.remind !== false,
   };

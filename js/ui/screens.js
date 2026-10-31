@@ -101,6 +101,9 @@ export function widget(c) {
   return html`<div class="wdg">${k(r && r.sentAt ? '✓' : r && r.nowork ? '–' : `${steps}/9`, r && r.sentAt ? 'Sent' : 'Steps')}${k(rows.length ? `${here}/${rows.length}` : '–', 'Crew in')}${k(c.needs.length, 'Needs you', c.needs.length ? 'bad' : '')}${k(att, 'Attention', att ? 'bad' : '')}</div>`;
 }
 
+/** 2.9.0: today's report was already sent from another phone of the project. */
+const sentBox = c => (c.sentToday && !(c.report && c.report.sentAt) ? html`<p class="callout ok">${icon('check')} Report No. ${Number(c.sentToday.no) || c.sentToday.no} for today was sent by ${c.sentToday.by || 'another phone'} · ${c.sentToday.status === 'approved' ? 'Approved' : c.sentToday.status === 'changes' ? 'Sent back' : 'Submitted'}.</p>` : '');
+
 export function today(c) {
   const p = c.project, r = c.report, no = r ? r.no : c.nextNo;
   const n = r && !r.nowork ? doneCount(r) : 0;
@@ -109,7 +112,7 @@ export function today(c) {
     return {
       tab: 'today', fab: true,
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
-      body: html`${widget(c)}${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
+      body: html`${widget(c)}${sentBox(c)}${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
         <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
@@ -118,7 +121,7 @@ export function today(c) {
   return {
     tab: 'today',
     head: head(p.name, sub, p.code),
-    body: html`${widget(c)}${inboxBox(c)}<div class="soft">
+    body: html`${widget(c)}${sentBox(c)}${inboxBox(c)}<div class="soft">
         <div class="spread"><b class="big-t">Today · ${dayLabel(c.today)}</b><span class="k brand">Report #${no}</span></div>
         <div class="bar gap"><i style="width:0%"></i></div>
         <div class="muted small">${r && r.nowork ? `No work today: ${r.nowork.reason}` : c.dayOff ? 'A day off for this project · you can still report' : 'Not started · about 6 minutes in all'}</div>

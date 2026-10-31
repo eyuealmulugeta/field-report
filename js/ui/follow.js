@@ -12,7 +12,7 @@ const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `$
 const pill = kind => html`<span class="pill ${STATUS[kind].cls}">${STATUS[kind].label}</span>`;
 
 export function reports(c) {
-  const rows = monthDays(c.realToday, c.project, c.s.drafts, c.s.known);
+  const rows = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]);
   const n = counts(rows), f = c.ui.rf || '';
   const list = rows.filter(x => !f || x.kind === f);
   return {
@@ -24,7 +24,7 @@ export function reports(c) {
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
         <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
-          <span>${x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') :x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}</span></div>
+          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') :x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}</span></div>
         ${pill(x.kind)}</button>`)}</div>`
         : html`<div class="box pad muted small">Nothing here.</div>`}
       <p class="muted tiny center">The office's answers are checked when the app opens and every 10 minutes${c.s.knownAt ? ` · last ${new Date(c.s.knownAt).toTimeString().slice(0, 5)}` : ''}.</p>`,
@@ -33,7 +33,7 @@ export function reports(c) {
 
 /** One day: status, the office's comments and history, and what can be done. */
 export function daySheet(c) {
-  const x = monthDays(c.realToday, c.project, c.s.drafts, c.s.known).find(y => y.date === c.ui.daySel);
+  const x = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).find(y => y.date === c.ui.daySel);
   if (!x) return '';
   const k = (x.name && c.s.known[x.name]) || {};
   const comments = k.comments || [];

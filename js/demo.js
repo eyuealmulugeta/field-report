@@ -95,6 +95,7 @@ export async function demoServer(action, body) {
     case 'hoursPut': Object.assign(project, { defStart: body.defStart, defEnd: body.defEnd, remindAt: body.remindAt, nwDow: body.nwDow }); return { ok: true, project: { code: body.proj } };
     case 'crewOk': { let n = 0; for (const x of CREW_WAIT) if (body.wages[x.id]) { x.ok = true; x.wage = body.wages[x.id]; n++; } return { ok: true, approved: n, crewWait: CREW_WAIT.filter(x => !x.ok), tradeWages: { Mason: 450 } }; }
     case 'list': return { ok: true, reports: REVIEW, events: [] };
+    case 'projectDays': return { ok: true, days: REVIEW.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name })) };
     case 'review': { const r = REVIEW.find(x => x.name === body.name); if (r) { r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; r.reviewedBy = 'Demo Project Engineer'; r.reviewedAt = new Date().toISOString(); } return { ok: true, report: r || {} }; }
     case 'getSetup': return { ok: true, proj: body.proj, setup };
     case 'sync': return { ok: true, t: Date.now(), build: 'demo' };
