@@ -378,7 +378,8 @@ const unqueue = k => store.set({ outbox: store.get().outbox.filter(j => !(j.acti
 async function sendReport(k, step = () => {}) {
   const p = store.get().projects.find(x => x.code === store.get().drafts[k].proj);
   if (!store.get().drafts[k].sentAt) {
-    try { await syncNo(k); } catch (e) { if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; } throw e; }
+    // 2.3.1: a script older than 7.34.0 has no reportNo: the phone's own number is used, as before
+    try { await syncNo(k); } catch (e) { if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; } }
   }
   const r = store.get().drafts[k];
   const name = pdfName(p, r.date, r.no), meta = reportMeta(r, p, store.get().profile);
