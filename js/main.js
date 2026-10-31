@@ -151,6 +151,16 @@ async function loadProjects() {
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
   store.set({ projects, proj: projects.some(p => p.code === s.proj) ? s.proj : projects.length === 1 ? projects[0].code : '' });
+  // 2.8.1: today's report, when not sent yet, takes in the crew the office added or removed since it was started
+  const drafts = { ...store.get().drafts }, t = realToday();
+  let changed = false;
+  for (const p of projects) {
+    const k = draftKey(p.code, t), r = drafts[k];
+    if (!r || r.sentAt || r.nowork || !r.crew || !p.staff.length) continue;
+    const rows = mergeStaff(r.crew.rows, p.staff);
+    if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) { drafts[k] = { ...r, crew: { ...r.crew, rows }, updated: Date.now() }; changed = true; }
+  }
+  if (changed) store.set({ drafts });
   await loadSetup();
 }
 
@@ -866,7 +876,7 @@ const ACTS = {
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
     finally { ui.busy = false; draw(); }
   },
-  inboxGo(d) { location.hash = d.v; },
+  inboxGo(d) { if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.8.1: the same link twice opens again
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   spotCat(d) { ui.spot.cat = d.v; draw(); },
@@ -1293,7 +1303,7 @@ function openLink(h) {
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
   else if (what === 'review' && kind() !== 'reporter') { (ui.rv ||= {}).want = { d, no }; ui.rv.f = ''; go('review'); ACTS.revLoad(); }
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
-  else go(['crew', 'crewrev', 'spot'].includes(what) ? what : 'today');
+  else go(['crew', 'crewrev', 'spot', 'reports'].includes(what) ? what : 'today');
   return true;
 }
 

@@ -57,6 +57,18 @@ export function offlineLine(pressed, arrived) {
   const t = x => new Date(x).toTimeString().slice(0, 5), d = x => new Date(x).toISOString().slice(0, 10);
   return `Sent offline at ${t(p)}${d(p) !== d(a) ? ` (${d(p)})` : ''} · reached the office at ${t(a)}${d(p) !== d(a) ? ` (${d(a)})` : ''}`;
 }
+const MON = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+/** 2.8.1: where a notification opens: its own link, else read from its id or its text ("Report No. 41 (19 Oct)"). '' when nowhere. */
+export function inboxLink(x, year = new Date().getFullYear()) {
+  if (x.l) return x.l;
+  const m = /^(rep|rpl|rev)-(\d{4}-\d{2}-\d{2})-([A-Z0-9]+)-(\d+)$/.exec(String(x.c || ''));
+  if (m) return `#go=${m[1] === 'rev' ? 'day' : 'review'}/${m[2]}/${m[3]}/${m[4]}`;
+  const k = /^(crew|crewok)-([A-Z0-9]+)$/.exec(String(x.c || ''));
+  if (k) return `#go=${k[1] === 'crew' ? 'crewrev' : 'crew'}//${k[2]}`;
+  const d = /No\.\s*(\d+)\s*\((\d{1,2}) (\w{3})\)/.exec(`${x.h || ''} ${x.m || ''}`);
+  if (d && MON[d[3]]) return `#go=day/${year}-${MON[d[3]]}-${d[2].padStart(2, '0')}//${d[1]}`;
+  return /report|approv|changes|comment/i.test(`${x.h || ''}`) ? '#go=reports' : '';
+}
 export const sentBack = rows => rows.filter(x => x.kind === 'changes' && !x.changed);
 /** 2.7.0: what needs the site: reports sent back, and office comments not answered yet (the last word is the office's). */
 export function needsYou(rows, known = {}) {

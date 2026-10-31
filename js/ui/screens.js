@@ -6,6 +6,7 @@ import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
+import { inboxLink } from '../model/follow.js';
 import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses } from '../model/crew.js';
 import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
@@ -22,7 +23,8 @@ export function inboxBox(c) {
   const shown = c.ui.inboxAll ? items : items.slice(0, 3);
   return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><button type="button" class="btn t slim" data-act="inboxClear">Clear</button></div>
     <div class="box">${shown.map(x => { const inner = html`<span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div>`;
-      return x.l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${x.l}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<div class="li inbox">${inner}</div>`; })}
+      const l = inboxLink(x);   // 2.8.1: older notifications open too
+      return l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${l}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<div class="li inbox">${inner}</div>`; })}
     ${items.length > 3 ? html`<button type="button" class="li more" data-act="inboxMore">${c.ui.inboxAll ? 'Show fewer' : `Show all ${items.length}`}</button>` : ''}</div>`;
 }
 
