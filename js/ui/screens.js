@@ -115,7 +115,7 @@ export function today(c) {
       body: html`${widget(c)}${sentBox(c)}${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
-        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
+        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
     };
   }
   return {
@@ -193,7 +193,7 @@ export function crew(c) {
   const q = (c.ui.q || '').toLowerCase();
   const list = cr.rows.map((r, i) => ({ r, i })).filter(({ r }) => (!f || (r.trade || 'Other') === f) && (!q || r.name.toLowerCase().includes(q)));
   return {
-    head: stepHead('Attendance and crew', 'Step 2 of 9 · Morning'),
+    head: stepHead('Office attendance', 'Step 2 of 9 · Morning'),
     body: html`<div class="kpis">${kpi(t.present, 'Present')}${kpi(t.away, 'Not here', t.away ? 'warn' : '')}${kpi(html`${t.manHours}<small>h</small>`, 'Man-hours')}</div>
       ${crewPhotoBox(c)}
       ${cr.rows.length ? html`
@@ -213,6 +213,30 @@ export function crew(c) {
   };
 }
 
+/**
+ * 2.10.0: Office attendance, its own tab. The list is the crew allocated to the project in Central Hub (asked again
+ * each time the tab opens); labour found on site is sent from here for approval and joins the list once approved.
+ */
+export function att(c) {
+  const staff = c.project.staff || [], started = c.report && c.report.start && !c.report.nowork;
+  const sub = `${c.project.name || c.project.code} · crew from Central Hub${c.ui.attAt ? ` · checked ${c.ui.attAt}` : ''}`;
+  if (started) {
+    const v = crew(c);
+    // the tab bar stays: Done sits at the end of the page
+    return { tab: 'att', head: head('Office attendance', sub), body: html`${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
+  }
+  return {
+    tab: 'att',
+    head: head('Office attendance', sub),
+    body: html`${refreshRow(c)}
+      ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => html`<div class="li"><span class="av">${initials(x.name)}</span><div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}</span></div></div>`)}</div>`
+        : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
+      ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}
+      ${crewListBox(c)}`,
+  };
+}
+const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
+
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
 function crewPhotoBox(c) {
   const list = (c.report.photos || []).filter(p => p.captionKind === 'Crew');
@@ -227,7 +251,7 @@ function crewPhotoBox(c) {
 export const TRADES = ['Foreman', 'Site supervision', 'Site Technician', 'Welder / fitter', 'Rigger / erector', 'Crane operator', 'Mason', 'Carpenter', 'Steel fixer', 'Electrician', 'Plumber', 'Painter', 'Driver', 'Labourer'];
 /** A trade picked from the list; "Add a trade not listed" turns it into a box to type a new one. */
 function tradeField(c, v, path) {
-  const list = [...new Set([...TRADES, ...Object.keys(c.project.tradeWages || {}), ...(c.report.crew.rows || []).map(r => r.trade).filter(Boolean)])];
+  const list = [...new Set([...TRADES, ...Object.keys(c.project.tradeWages || {}), ...((c.report && c.report.crew && c.report.crew.rows) || []).map(r => r.trade).filter(Boolean)])];
   if (v === '+' || (v && !list.includes(v))) return html`<input class="fld slim" data-f="${path}" value="${v === '+' ? '' : v}" placeholder="New trade" aria-label="New trade" autofocus>`;
   return html`<select class="fld slim" data-f="${path}" aria-label="Trade"><option value="">Trade…</option>${list.map(n => html`<option ${n === v ? 'selected' : ''}>${n}</option>`)}<option value="+">+ Add a trade not listed</option></select>`;
 }
@@ -235,16 +259,15 @@ function tradeField(c, v, path) {
 /** 2.5.0: names and trades sent for approval as the crew of this project. 2.6.0: only a reviewer sees and gives wages. */
 function crewListBox(c) {
   const cl = c.ui.cl || { trades: [], people: [] }, wait = c.project.crewWait || [], paid = c.kind === 'reviewer';
-  const names = [...new Set([...cl.trades.map(x => x.trade).filter(Boolean), ...c.report.crew.rows.map(r => r.trade).filter(Boolean)])];
-  return html`<div class="k">Crew list for the office</div>
-    <div class="box pad"><p class="muted small">Add the people who work here, with their trade. The Project engineer gives the wages and approves them as the crew of this project; then they are on the attendance list.</p>
+  return html`<div class="k">Add labour on site for approval</div>
+    <div class="box pad"><p class="muted small">People working here who are not on the list: their name and trade go to the Project engineer and Central Hub. Once approved they are on this attendance list. Until then count them under Day workers without names.</p>
       <div class="lab">${paid ? 'Daily wage by trade' : 'Trades'}</div>
       ${cl.trades.map((x, i) => html`<div class="two">${tradeField(c, x.trade, `cl.trades.${i}.trade`)}
         <div class="flex">${paid ? html`<input class="fld slim" inputmode="decimal" data-f="cl.trades.${i}.wage" value="${x.wage}" placeholder="Daily wage" aria-label="Daily wage of ${x.trade || 'the trade'}">` : ''}<button type="button" class="mini" data-act="clDel" data-k="trades" data-i="${i}" aria-label="Remove">✕</button></div></div>`)}
       <button type="button" class="btn t slim" data-act="clTrade">${icon('plus')}Add a trade</button>
       <div class="lab">People</div>
       ${cl.people.map((x, i) => html`<div class="cl-row"><input class="fld slim" data-f="cl.people.${i}.name" value="${x.name}" placeholder="Full name" aria-label="Name">
-        <select class="fld slim" data-f="cl.people.${i}.trade" aria-label="Trade of ${x.name || 'the person'}"><option value="">Trade…</option>${names.map(n => html`<option ${n === x.trade ? 'selected' : ''}>${n}</option>`)}</select>
+        ${tradeField(c, x.trade, `cl.people.${i}.trade`)}
         ${paid ? html`<input class="fld slim" inputmode="decimal" data-f="cl.people.${i}.wage" value="${x.wage}" placeholder="${(cl.trades.find(t => t.trade === x.trade) || {}).wage || 'Wage'}" aria-label="Daily wage of ${x.name || 'the person'}">` : html`<span></span>`}
         <button type="button" class="mini" data-act="clDel" data-k="people" data-i="${i}" aria-label="Remove">✕</button>
         ${paid && wageDiffers(x, cl.trades) ? html`<span class="pill warn">Not the trade wage: the office will check it</span>` : ''}</div>`)}

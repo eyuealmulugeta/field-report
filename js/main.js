@@ -42,7 +42,7 @@ const today = () => ui.date || realToday();
 const now = () => timeIn();
 
 const SCREENS = {
-  today: S.today, start: S.start, crew: S.crew, me: S.me, work: W.work, item: W.item, photo: W.photo,
+  today: S.today, start: S.start, crew: S.crew, att: S.att, me: S.me, work: W.work, item: W.item, photo: W.photo,
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
   end: E.end, request: E.request, send: E.send,
   reports: F.reports, requests: F.requests, view: V.view,
@@ -922,7 +922,16 @@ const ACTS = {
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Not approved: ${e.message}`); }
     finally { ui.busy = false; draw(); }
   },
-  startCrew() { ensureReport(); go('crew'); },
+  startCrew() { ensureReport(); go('att'); },
+  /** 2.10.0: the crew allocated in Central Hub, asked again (a report not sent yet takes in the changes). */
+  async attRefresh(quiet) {
+    if (ui.attBusy) return;
+    if (demo) { ui.attAt = now(); return quiet ? draw() : toast('Demo: the list is the sample crew.'); }
+    ui.attBusy = true; draw();
+    try { await loadProjects(); ui.attAt = now(); if (!quiet) toast('The crew list is up to date.'); }
+    catch (e) { if (!quiet) toast(e.code === 'OFFLINE' ? 'No connection: the list is the one last received.' : e.message); }
+    finally { ui.attBusy = false; draw(); }
+  },
   pick(d) {
     if (d.f.startsWith('ui.')) { ui[d.f.slice(3)] = d.v; return draw(); }
     if (isDraft(d.f)) {
@@ -1287,7 +1296,7 @@ let layout = D.layoutOf(innerWidth);
 addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
 
 /** The open step's tab in the menu. */
-const TAB_OF = { reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
+const TAB_OF = { att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 
@@ -1312,7 +1321,7 @@ function openLink(h) {
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
   else if (what === 'review' && kind() !== 'reporter') { (ui.rv ||= {}).want = { d, no }; ui.rv.f = ''; go('review'); ACTS.revLoad(); }
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
-  else go(['crew', 'crewrev', 'spot', 'reports'].includes(what) ? what : 'today');
+  else go(['crew', 'att', 'crewrev', 'spot', 'reports'].includes(what) ? (what === 'crew' ? 'att' : what) : 'today');
   return true;
 }
 
@@ -1321,9 +1330,10 @@ function route() {
   if (!s.auth) return 'signin';
   if (!s.profile.done) return 'profile';
   if (!project()) return 'choose';
-  const h = location.hash.slice(1) || 'today';
+  let h = location.hash.slice(1) || 'today';
+  if (h === 'crew') h = 'att';   // 2.10.0: the day's Attendance step is the Office attendance tab
   // 2.6.0: a reviewer or viewer account writes no report: it opens on Review
-  if (kind() === 'viewer' && (h === 'today' || h === 'reports' || h === 'requests' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'review';
+  if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'reports' || h === 'requests' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'review';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';
@@ -1422,7 +1432,7 @@ addEventListener('keydown', e => {
     if (S.READY.has(step.id)) go(step.id); else toast('This part comes in the next build.');
     return;
   }
-  if (r === 'crew') {
+  if (r === 'att' && working()) {
     const rows = report().crew.rows;
     if (!rows.length) return;
     const order = [...root.querySelectorAll('[data-row]')].map(x => Number(x.dataset.row));
@@ -1437,6 +1447,7 @@ addEventListener('keydown', e => {
 });
 
 window.addEventListener('hashchange', () => {
+  if (route() === 'att' && Date.now() - (ui.attTried || 0) > 120e3) { ui.attTried = Date.now(); ACTS.attRefresh(true); }   // 2.10.0
   if (location.hash.startsWith('#go=') && openLink(location.hash.slice(1))) return;
   ui.filter = ''; ui.q = ''; ui.ot = null; ui.sheet = ''; ui.cur = null;
   const h = location.hash.slice(1);

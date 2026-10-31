@@ -44,7 +44,7 @@
     {
       "name": "Attendance",
       "short_name": "Attendance",
-      "url": "./#go=crew",
+      "url": "./#go=att",
       "icons": [
         {
           "src": "icon-192.png",

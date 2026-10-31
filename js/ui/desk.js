@@ -42,7 +42,7 @@ export function glance(c) {
   const items = [...r.items].reverse();
   return {
     head: html`<header class="hd"><div class="hd-t"><b>Today at a glance</b><span>Everything logged so far · the office sees it when the report is sent</span></div>
-      <div class="r row-btns"><button type="button" class="btn o sm" data-act="spotOpen">Spotlight</button><button type="button" class="btn o sm" data-act="noWork">No work today</button><button type="button" class="btn s sm" data-act="go" data-to="crew">Attendance</button></div></header>`,
+      <div class="r row-btns"><button type="button" class="btn o sm" data-act="spotOpen">Spotlight</button><button type="button" class="btn o sm" data-act="noWork">No work today</button><button type="button" class="btn s sm" data-act="go" data-to="att">Office attendance</button></div></header>`,
     body: html`<div class="kpis five">${kpi(t.present, 'Present')}${kpi(t.away, 'Not here', t.away ? 'warn' : '')}${kpi(html`${t.manHours}<small>h</small>`, 'Man-hours')}${kpi(r.items.length, 'Work items')}${kpi(r.photos.length, 'Photos')}</div>
       ${plannedBox(r)}
       <div class="grid2 top">

@@ -40,7 +40,7 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .ft { padding: 10px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-2); background: #fff; display: flex; flex-direction: column; gap: 6px; }
 .ft + .nav, .ft ~ .nav { display: none; }
 .bd:has(+ .ft) { padding-bottom: 16px; }
-.nav { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); padding: 6px 4px calc(10px + env(safe-area-inset-bottom)); background: #fff; }
+.nav { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;   /* 2.10.0: 4 or 5 tabs */ border-top: 1px solid var(--line); padding: 6px 4px calc(10px + env(safe-area-inset-bottom)); background: #fff; }
 .nav button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; font-size: 11px; font-weight: 600; color: var(--muted); }
 .nav .on { color: var(--brand); }
 .nav svg { width: 22px; height: 22px; }
@@ -362,3 +362,5 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .thumb.vid { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--soft, #eef1f6); color: var(--muted, #667); font-size: 10px; }
 /* 2.7.0: the Attention button reads in red */
 .btn.bad-t { color: var(--bad); border-color: var(--bad); }
+/* 2.10.0: Done at the end of the Office attendance tab */
+.att-done { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 6px; }

@@ -5,6 +5,7 @@ import { PHASES, STEPS, stepStatus } from '../model/report.js';
 
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
+  { id: 'att', title: 'Office attendance', icon: 'users' },   // 2.10.0
   { id: 'reports', title: 'Reports', icon: 'doc' },
   { id: 'requests', title: 'Requests', icon: 'box' },
 ];   // 2.8.0: Me is the person button at the top right (`head`)

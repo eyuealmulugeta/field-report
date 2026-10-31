@@ -113,6 +113,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['user', 'Office attendance (2.10.0)', 'Attendance has its own tab, Office attendance. The list is the crew the office allocated in Central Hub and is checked again each time you open it. People working on site who are not on the list: Add labour on site for approval; once approved they join the list.'],
   ['check', 'Sent from any phone (2.9.0)', 'A report sent from another phone of the project shows as Submitted (or Approved) on every phone, in Reports and on Today.'],
   ['user', 'Me at the top right, the day at a glance (2.8.0)', 'Me is the round button at the top right. Today starts with steps, crew in, what needs you and Attention. Long-press the app icon for Report, Attendance, Spotlight and Attention. Review and Reports list your projects. The signature pad turns sideways to sign. The report reminder is set with the project\'s working hours. Trades are picked from a list, with Add for a new one. Log: Activity photo.'],
   ['cam', 'Spotlight: Photo, Video and the gallery (2.7.1)', 'Photo and Video open the camera straight away. A video bigger than 20 MB is made smaller on the phone instead of being refused: keep the screen open while it runs.'],
