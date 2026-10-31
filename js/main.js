@@ -25,7 +25,8 @@ import { monthDays, needsYou, toCheck, draftChoice } from './model/follow.js';
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
-import { newSpot, spotMissing, mediaKind, SPOT_MAX } from './model/spot.js';
+import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM } from './model/spot.js';
+import { shrinkVideo } from './core/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 
@@ -683,7 +684,7 @@ async function upNow() {
 }
 
 /* 2.7.0: Spotlight. Photos and videos wait in the phone's photo store; each goes up alone, then the note. */
-const spotCam = document.getElementById('spotCam'), spotPick = document.getElementById('spotPick');
+const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid'), spotPick = document.getElementById('spotPick');
 const spotIn = el => { el.value = ''; el.click(); };
 const spotFiles = async files => {
   const s = ui.spot || (ui.spot = newSpot());
@@ -692,15 +693,24 @@ const spotFiles = async files => {
     const k = mediaKind(f);
     if (k.refused) { toast(k.refused); continue; }
     try {
-      const id = uid(), blob = k.kind === 'photo' ? await shrink(f) : f;
+      let blob = k.kind === 'photo' ? await shrink(f) : f;
+      // 2.7.1: a video too big (or of another type) is made smaller here instead of being refused
+      if (k.shrink) {
+        ui.spotWork = 'Making the video smaller… 0%. Keep this screen open.'; draw();
+        blob = await shrinkVideo(f, VIDEO_AIM, p => { const t = `Making the video smaller… ${Math.round(p * 100)}%. Keep this screen open.`; if (t !== ui.spotWork) { ui.spotWork = t; draw(); } });
+      }
+      const id = uid();
       await putPhoto(id, blob);
       if (k.kind === 'photo') await photoUrl(id);
-      s.media.push({ id, kind: k.kind, type: k.kind === 'photo' ? 'image/jpeg' : f.type });
-    } catch (e) { toast(`Could not keep it on this phone (${e.message || e}).`); }
+      s.media.push({ id, kind: k.kind, type: k.kind === 'photo' ? 'image/jpeg' : blob.type || f.type });
+      if (k.shrink) toast(`Video ready: ${(blob.size / 1048576).toFixed(1)} MB.`);
+    } catch (e) { toast(k.shrink ? e.message || String(e) : `Could not keep it on this phone (${e.message || e}).`); }
+    finally { ui.spotWork = ''; }
   }
   draw();
 };
 spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
+spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
 spotPick.addEventListener('change', () => spotFiles([...(spotPick.files || [])]));
 const spotSet = (id, fn) => store.set({ spots: (store.get().spots || []).map(x => { if (x.id !== id) return x; const y = structuredClone(x); fn(y); return y; }) });
 let spotting = false;
@@ -858,6 +868,7 @@ const ACTS = {
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   spotCat(d) { ui.spot.cat = d.v; draw(); },
   spotCam() { spotIn(spotCam); },
+  spotVid() { spotIn(spotVid); },
   spotGallery() { spotIn(spotPick); },
   spotDrop(d) { const [m] = ui.spot.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
   spotSave() {

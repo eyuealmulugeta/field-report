@@ -18,8 +18,10 @@ export function spot(c) {
       <div class="chips">${SPOT_CATS.map(k => html`<button type="button" class="chip ${s.cat === k ? 'on' : ''}" data-act="spotCat" data-v="${k}">${k}</button>`)}</div>
       <textarea class="fld" rows="3" data-ui="spotNote" placeholder="What did you see?">${c.ui.spotNote || ''}</textarea>
       ${s.media.length ? html`<div class="thumbs">${s.media.map((m, i) => html`<button type="button" class="tb" data-act="spotDrop" data-v="${i}" aria-label="Remove">${m.kind === 'video' ? html`<span class="thumb sm vid">${icon('cam')}<small>video</small></span>` : thumb(m.id, 'sm')}</button>`)}</div><p class="muted tiny">Tap one to remove it.</p>` : ''}
-      ${s.media.length < SPOT_MAX ? html`<div class="two"><button type="button" class="btn o" data-act="spotCam">${icon('cam')}Camera</button><button type="button" class="btn o" data-act="spotGallery">${icon('doc')}Gallery</button></div>` : ''}
-      <button type="button" class="btn p" data-act="spotSave" ${c.ui.busy ? 'disabled' : ''}>Send to Central Hub</button>
+      ${s.media.length < SPOT_MAX ? html`<div class="two"><button type="button" class="btn o" data-act="spotCam" ${c.ui.spotWork ? 'disabled' : ''}>${icon('cam')}Photo</button><button type="button" class="btn o" data-act="spotVid" ${c.ui.spotWork ? 'disabled' : ''}>${icon('cam')}Video</button></div>
+        <button type="button" class="btn t" data-act="spotGallery" ${c.ui.spotWork ? 'disabled' : ''}>${icon('doc')}From the gallery</button>` : ''}
+      ${c.ui.spotWork ? html`<p class="callout warn small">${c.ui.spotWork}</p>` : ''}
+      <button type="button" class="btn p" data-act="spotSave" ${c.ui.busy || c.ui.spotWork ? 'disabled' : ''}>Send to Central Hub</button>
       ${mine.length ? html`<div class="k">Your notes on this phone</div><div class="box">${mine.map(x => html`<div class="li"><span class="ic ${x.tone === 'neg' ? 'bad' : 'ok'}">${icon(x.tone === 'neg' ? 'alert' : 'check')}</span>
         <div class="n"><b>${x.cat} · ${x.about}</b><span>${dayLabel(x.date)} ${x.time} · ${x.sent ? 'sent' : 'waiting for a connection'}${x.media.length ? ` · ${x.media.length} file${x.media.length > 1 ? 's' : ''}` : ''}</span></div></div>`)}</div>` : ''}`,
   };

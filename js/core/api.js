@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.7.0';
+export const APP_VERSION = '2.7.1';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };

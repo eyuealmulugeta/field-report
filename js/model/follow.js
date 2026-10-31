@@ -94,6 +94,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['cam', 'Spotlight: Photo, Video and the gallery (2.7.1)', 'Photo and Video open the camera straight away. A video bigger than 20 MB is made smaller on the phone instead of being refused: keep the screen open while it runs.'],
   ['alert', 'One account, Attention, Spotlight (2.7.0)', 'The PM and GM write reports in the same account and have Review. Attention puts a serious issue for the client in a red box on the report. Spotlight sends a note with photos or videos to Central Hub. Weather in 8 terms with pictures, safety gear ticks, working hours per project (late = start + 15 min), replies to the office, notifications open their item, and a report sent offline shows both times.'],
   ['acc', 'Reviewer and reporter accounts (2.6.0)', 'The Project engineer account opens on Review: approve, send back or comment, and the answer goes to the person who sent the report only. Crew: give the wages of the people the site sent and approve them. The site sends names and trades only. To write a report, a manager uses a separate reporter account.'],
   ['cam', 'Crew photo, crew list, camera only (2.5.0)', 'Take the morning crew photo on Attendance: on time until 8:00, late until 8:15. Send your crew list with daily wages for the office to approve. Report photos come from the camera only; a delivery starts with its photo.'],

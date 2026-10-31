@@ -17,13 +17,14 @@ export function spotMissing(s) {
   return '';
 }
 
-/** A picked file: a photo (shrunk later), a video within the size limit, or why it is refused. */
+/** A picked file: a photo (shrunk later), a video (made smaller on the phone when too big or of another type), or why it is refused. */
 export function mediaKind(file) {
   if (/^image\//.test(file.type)) return { kind: 'photo' };
-  if (!VIDEO_TYPES.includes(file.type)) return { refused: 'This video type cannot be sent. Use MP4.' };
-  if (file.size > VIDEO_MAX_MB * 1024 * 1024) return { refused: `A video can be at most ${VIDEO_MAX_MB} MB. Record a shorter one.` };
-  return { kind: 'video' };
+  if (!/^video\//.test(file.type)) return { refused: 'Only photos and videos can be added.' };
+  return { kind: 'video', shrink: !VIDEO_TYPES.includes(file.type) || file.size > VIDEO_MAX_MB * 1024 * 1024 };
 }
+/** 2.7.1: the size a made-smaller video aims for (under the limit, with room to spare). */
+export const VIDEO_AIM = 15 * 1024 * 1024;
 
 /** The people a note can be about: the project, then the crew list of the project. */
 export const aboutList = staff => [PROJECT_ABOUT, ...(staff || []).filter(s => s && s.name && s.active !== false).map(s => s.name)];
