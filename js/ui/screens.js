@@ -235,7 +235,8 @@ export function att(c) {
       ${crewListBox(c)}`,
   };
 }
-const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
+const formLink = c => (c.kind === 'reviewer' || /engineer|manager/i.test((c.s.profile || {}).position || '') ? html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>` : '');   // 2.10.1
+const refreshRow = c => html`${formLink(c)}<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
 
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
 function crewPhotoBox(c) {
