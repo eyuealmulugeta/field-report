@@ -3,7 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
-import { head } from './parts.js';
+import { head, projPick } from './parts.js';
 import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -19,7 +19,7 @@ export function reports(c) {
     tab: 'reports',
     head: head('Reports', `${c.project.name} · this month`, c.ui.checking ? 'Checking…' : ''),
     // 2.1.1: the button sits at the top; a footer hides the bottom bar (Home, Today…) on a tab page
-    body: html`<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Checking with the office…' : 'Check again'}</button>
+    body: html`${projPick(c)}<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Checking with the office…' : 'Check again'}</button>
       <div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>

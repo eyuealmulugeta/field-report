@@ -271,7 +271,7 @@ function oneSignal(appId, who) {
 /** The project's reminder time (2.7.0, set by the PM or GM; 17:00 when none): a reminder when today's report is not sent (on the phone, while the app is open or in the background). */
 function remindTick() {
   const s = store.get(), r = s.drafts[draftKey(s.proj, realToday())];
-  if (s.profile.remind === false || !s.proj || now() < remindAt() || s.remindedOn === realToday()) return;
+  if (!s.proj || now() < remindAt() || s.remindedOn === realToday()) return;   // 2.8.0: one reminder per project, no switch in Me
   if (r && (r.sentAt || r.nowork)) return;
   store.quiet({ remindedOn: realToday() });
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && navigator.serviceWorker) {
@@ -777,6 +777,9 @@ const ACTS = {
     go('today');
   },
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); },
+  // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
+  projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
+  revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
     try { await loadProjects(); toast('Lists updated from the office.'); } catch (e) { toast(e.message); }
   },
@@ -1289,6 +1292,7 @@ function openLink(h) {
   if (code && code !== s.proj && s.projects.some(p => p.code === code)) store.set({ proj: code });
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
   else if (what === 'review' && kind() !== 'reporter') { (ui.rv ||= {}).want = { d, no }; ui.rv.f = ''; go('review'); ACTS.revLoad(); }
+  else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else go(['crew', 'crewrev', 'spot'].includes(what) ? what : 'today');
   return true;
 }

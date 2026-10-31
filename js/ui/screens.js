@@ -91,6 +91,14 @@ export function weekStrip(c) {
   })}</div>`;
 }
 
+/** 2.8.0: the day at a glance, at the top of Today: steps done, crew present, what needs you, Attention items. */
+export function widget(c) {
+  const r = c.report, rows = r && !r.nowork ? r.crew.rows || [] : [];
+  const steps = r && !r.nowork ? doneCount(r) : 0, here = rows.filter(x => x.state === 'present').length, att = (r && r.attention || []).length;
+  const k = (v, t, cls = '') => html`<div class="kpi ${cls}"><b>${v}</b><span>${t}</span></div>`;
+  return html`<div class="wdg">${k(r && r.sentAt ? '✓' : r && r.nowork ? '–' : `${steps}/9`, r && r.sentAt ? 'Sent' : 'Steps')}${k(rows.length ? `${here}/${rows.length}` : '–', 'Crew in')}${k(c.needs.length, 'Needs you', c.needs.length ? 'bad' : '')}${k(att, 'Attention', att ? 'bad' : '')}</div>`;
+}
+
 export function today(c) {
   const p = c.project, r = c.report, no = r ? r.no : c.nextNo;
   const n = r && !r.nowork ? doneCount(r) : 0;
@@ -99,7 +107,7 @@ export function today(c) {
     return {
       tab: 'today', fab: true,
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
-      body: html`${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
+      body: html`${widget(c)}${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
         <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="crew">Attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
@@ -108,7 +116,7 @@ export function today(c) {
   return {
     tab: 'today',
     head: head(p.name, sub, p.code),
-    body: html`${inboxBox(c)}<div class="soft">
+    body: html`${widget(c)}${inboxBox(c)}<div class="soft">
         <div class="spread"><b class="big-t">Today · ${dayLabel(c.today)}</b><span class="k brand">Report #${no}</span></div>
         <div class="bar gap"><i style="width:0%"></i></div>
         <div class="muted small">${r && r.nowork ? `No work today: ${r.nowork.reason}` : c.dayOff ? 'A day off for this project · you can still report' : 'Not started · about 6 minutes in all'}</div>
@@ -210,6 +218,15 @@ function crewPhotoBox(c) {
       <p class="muted tiny">On time until ${c.project.defStart || '08:00'}, late attendance until ${crewCloses(c.project.defStart || '08:00')}, closed after. The office's clock decides.</p></div>`;
 }
 
+/** 2.8.0: the usual trades on site; the project's own (wages, crew) are added to them. */
+export const TRADES = ['Foreman', 'Site supervision', 'Site Technician', 'Welder / fitter', 'Rigger / erector', 'Crane operator', 'Mason', 'Carpenter', 'Steel fixer', 'Electrician', 'Plumber', 'Painter', 'Driver', 'Labourer'];
+/** A trade picked from the list; "Add a trade not listed" turns it into a box to type a new one. */
+function tradeField(c, v, path) {
+  const list = [...new Set([...TRADES, ...Object.keys(c.project.tradeWages || {}), ...(c.report.crew.rows || []).map(r => r.trade).filter(Boolean)])];
+  if (v === '+' || (v && !list.includes(v))) return html`<input class="fld slim" data-f="${path}" value="${v === '+' ? '' : v}" placeholder="New trade" aria-label="New trade" autofocus>`;
+  return html`<select class="fld slim" data-f="${path}" aria-label="Trade"><option value="">Trade…</option>${list.map(n => html`<option ${n === v ? 'selected' : ''}>${n}</option>`)}<option value="+">+ Add a trade not listed</option></select>`;
+}
+
 /** 2.5.0: names and trades sent for approval as the crew of this project. 2.6.0: only a reviewer sees and gives wages. */
 function crewListBox(c) {
   const cl = c.ui.cl || { trades: [], people: [] }, wait = c.project.crewWait || [], paid = c.kind === 'reviewer';
@@ -217,7 +234,7 @@ function crewListBox(c) {
   return html`<div class="k">Crew list for the office</div>
     <div class="box pad"><p class="muted small">Add the people who work here, with their trade. The Project engineer gives the wages and approves them as the crew of this project; then they are on the attendance list.</p>
       <div class="lab">${paid ? 'Daily wage by trade' : 'Trades'}</div>
-      ${cl.trades.map((x, i) => html`<div class="two"><input class="fld slim" data-f="cl.trades.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">
+      ${cl.trades.map((x, i) => html`<div class="two">${tradeField(c, x.trade, `cl.trades.${i}.trade`)}
         <div class="flex">${paid ? html`<input class="fld slim" inputmode="decimal" data-f="cl.trades.${i}.wage" value="${x.wage}" placeholder="Daily wage" aria-label="Daily wage of ${x.trade || 'the trade'}">` : ''}<button type="button" class="mini" data-act="clDel" data-k="trades" data-i="${i}" aria-label="Remove">✕</button></div></div>`)}
       <button type="button" class="btn t slim" data-act="clTrade">${icon('plus')}Add a trade</button>
       <div class="lab">People</div>
@@ -255,7 +272,7 @@ export function noWorkSheet(c) {
 }
 
 export function logSheet(c) {
-  const acts = [['check', 'Work done', '', 'logWork'], ['cam', 'Photo', '', 'logPhoto'], ['clock', 'Delay', 'warn', 'logDelay'], ['truck', 'Delivery', '', 'logDelivery'], ['box', 'Request', '', 'logReq'], ['alert', 'Incident', 'bad', 'logIncident']];
+  const acts = [['check', 'Work done', '', 'logWork'], ['cam', 'Activity photo', '', 'logPhoto'], ['clock', 'Delay', 'warn', 'logDelay'], ['truck', 'Delivery', '', 'logDelivery'], ['box', 'Request', '', 'logReq'], ['alert', 'Incident', 'bad', 'logIncident']];
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Log now">
     <div class="grab"></div><b class="big-t">Log now <span class="muted thin small">· ${c.now}</span></b>
     <div class="grid3">${acts.map(([ic, t, cls, act]) => html`<button type="button" class="act" data-act="${act}"><span class="ic ${cls}">${icon(ic)}</span>${t}</button>`)}</div>
@@ -284,7 +301,7 @@ export function me(c) {
         <label class="small">End<input class="fld" type="time" data-f="profile.defEnd" value="${p.defEnd || (pr && pr.defEnd) || '17:00'}"></label></div>
       <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
       <div class="k">Reminders and look</div>
-      ${tog('flipPref', 'remind', p.remind !== false, 'Reminder at 17:00', "When today's report is not sent yet")}
+      <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Review, Crew and working hours): ${(pr && pr.remindAt) || '17:00'}.</p>
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}

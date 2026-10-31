@@ -48,12 +48,15 @@ export function openPad(title = 'Your signature') {
         <button type="button" class="btn o slim" data-k="clear">Clear</button><button type="button" class="btn p slim" data-k="apply">Apply</button></div>`;
     box.querySelector('b').textContent = title;
     box.setAttribute('aria-label', title);
+    // 2.8.0: a phone held upright gets the pad turned to landscape (wide to sign, Clear and Apply at the side)
+    const rot = innerHeight > innerWidth && innerWidth < 700;
+    if (rot) box.classList.add('rot');
     document.body.append(box);
     const cv = box.querySelector('canvas'), g = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
-    const r0 = cv.getBoundingClientRect();
-    cv.width = Math.round(r0.width * dpr); cv.height = Math.round(r0.height * dpr);
+    cv.width = Math.round(cv.offsetWidth * dpr); cv.height = Math.round(cv.offsetHeight * dpr);
     g.lineWidth = 3 * dpr; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#1b2430';
-    const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; };
+    // turned a quarter clockwise: the pad's x runs down the screen, its y from right to left
+    const at = e => { const r = cv.getBoundingClientRect(); return rot ? [(e.clientY - r.top) * dpr, (r.right - e.clientX) * dpr] : [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; };
     let down = false;
     cv.addEventListener('pointerdown', e => { down = true; cv.setPointerCapture(e.pointerId); g.beginPath(); g.moveTo(...at(e)); g.lineTo(...at(e)); g.stroke(); });
     cv.addEventListener('pointermove', e => { if (down) { g.lineTo(...at(e)); g.stroke(); } });

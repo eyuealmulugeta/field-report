@@ -3,7 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
-import { head, stepHead } from './parts.js';
+import { head, stepHead, projPick } from './parts.js';
 import { STATUS, offlineLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
@@ -18,6 +18,7 @@ function hoursBox(c) {
     <div class="two"><label class="small">Start<input class="fld" type="time" data-ui="hrStart" value="${start}" ${dis}></label>
       <label class="small">End<input class="fld" type="time" data-ui="hrEnd" value="${end}" ${dis}></label></div>
     <label class="small">Reminder to send the report<input class="fld" type="time" data-ui="hrRemind" value="${rem}" ${dis}></label>
+    <p class="muted tiny">Everyone on this project is reminded at this time when today's report is not sent (it was "Reminder at 17:00" in Me).</p>
     <div class="small">Days off</div><div class="chips">${DAYS.map((d, i) => html`<button type="button" class="chip ${off.includes(i) ? 'on' : ''}" data-act="hrDay" data-v="${i}" ${dis}>${d}</button>`)}</div>
     <p class="muted tiny">Crew photo: on time until ${start}, late attendance until ${crewCloses(start)}, closed after.</p>
     ${may ? html`<button type="button" class="btn p" data-act="hoursSend" ${c.ui.busy ? 'disabled' : ''}>Save the working hours</button>` : html`<p class="muted small">Setting the working hours is not yours to do.</p>`}</div>`;
@@ -31,7 +32,7 @@ export function review(c) {
   return {
     tab: 'review',
     head: head('Review', `${c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
-    body: html`<button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
+    body: html`${projPick(c, 'revProj', true)}<div class="k">Reports of ${c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
