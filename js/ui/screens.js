@@ -312,7 +312,7 @@ function crewAdmin(c, started) {
 function staffRow(c, x) {
   const mine = x.fromSite && c.ui.live === 'on' && crewBoss(c), del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
   const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the PM or GM</span>`}</div>` : '';
-  if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><input class="fld slim" data-ui="ceTrade" value="${c.ui.ceTrade ?? x.trade}" placeholder="Trade" aria-label="Trade"></div>
+  if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${[...new Set([...TRADES, x.trade].filter(Boolean))].map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
     ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
@@ -410,7 +410,7 @@ export function me(c) {
     tab: 'me',
     head: head('Me', a.email || ''),
     body: html`<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
-      <label class="lab" for="mp">Position</label><input id="mp" class="fld" data-f="profile.position" value="${p.position}" ${p.locked ? 'readonly' : ''}>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : ''}
+      <label class="lab" for="mp">Position</label><input id="mp" class="fld" value="${p.position}" readonly>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : html`<p class="muted tiny">Your position is set by the office in Central Hub (2.20.0).</p>`}
       <div class="k">Signature</div>
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
         : sigLine(p)}
