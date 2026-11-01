@@ -60,7 +60,31 @@ export function daySheet(c) {
     <button type="button" class="btn t" data-act="closeSheet">Close</button></div>`;
 }
 
+/** 2.14.0: the words and colours of a shared request's state (Central Hub's approval). */
+export const REQ_WORD = { draft: 'Draft', requested: 'Waiting for approval', approved: 'Approved', arranging: 'Being arranged', fulfilled: 'Delivered', rejected: 'Rejected', cancelled: 'Cancelled', deleted: 'Deleted' };
+const REQ_TONE = { draft: 'warn', requested: 'info', approved: 'ok', arranging: 'info', fulfilled: 'ok', rejected: 'bad' };
+
+/** 2.14.0: the project's requests from every phone, each with who did what and when. */
+function sharedRequests(c) {
+  const me = String((c.s.auth || {}).email || '').toLowerCase();
+  const list = c.ui.liveReqs.filter(d => d.status !== 'deleted' && d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
+  return {
+    tab: 'requests',
+    head: head('Requests', `${list.length} on this project`, `${list.filter(d => d.status === 'draft').length} draft`),
+    body: html`${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
+        <span class="time ${d.fr.priority === 'Urgent' ? 'urgent' : ''}">${d.fr.priority === 'Urgent' ? 'Urgent' : String(d.fr.date || '').slice(5)}</span>
+        <div class="n"><b>${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
+          ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
+        <span class="pill ${REQ_TONE[d.status] || ''}">${REQ_WORD[d.status] || d.status}</span>
+        ${d.status === 'draft' ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
+        ${d.status === 'requested' && d.by === me ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
+      : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
+      <p class="muted tiny">Drafts are shared with every phone of this project and go to the office with the day's report. Central Hub's answers show here.</p>`,
+  };
+}
+
 export function requests(c) {
+  if (c.ui.liveReqs) return sharedRequests(c);
   const list = allRequests(c.project.code, c.s.drafts);
   const late = list.filter(q => lateRequest(q, c.realToday)).length;
   return {

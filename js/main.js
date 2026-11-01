@@ -19,7 +19,7 @@ import * as D from './ui/desk.js';
 import * as Y from './ui/day.js';
 import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
-import { newRequest, newPlanLine, unfinishedWork, reportMeta } from './model/end.js';
+import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { buildPdf, loadPdfLib, photoCaption, weatherFile } from './pdf.js';
 
 import * as F from './ui/follow.js';
@@ -253,8 +253,21 @@ async function goLive(at = '') {
     },
     onTeam: team => { ui.team = team; ui.teamOf = p.code; draw(); },
     onPhotos: m => { ui.photos = m; draw(); },
+    onRequests: list => liveRequests(list),
   });
   ui.liveWhy = L.liveWhy();
+  draw();
+}
+
+/** 2.14.0: the project's shared requests: shown on Requests, and today's drafts kept in today's report. */
+function liveRequests(list) {
+  ui.liveReqs = list;
+  const p = project();
+  const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
+  if (r && !r.sentAt) {
+    const cur = r.requests || [], next = mergeRequests(cur, list, r.date);
+    if (JSON.stringify(next) !== JSON.stringify(cur)) editKey(k, x => { x.requests = next; });
+  }
   draw();
 }
 
@@ -553,6 +566,8 @@ async function sendReport(k, step = () => {}) {
     if (k === draftKey(p.code, realToday()) && !demo) call('draftDel', { proj: p.code }).catch(() => {});
     store.set({ known: { ...store.get().known, [name]: { status: res.status || 'submitted', version: res.version || 1, comments: (store.get().known[name] || {}).comments || [], checked: Date.now() } } });
     L.now('reports', { proj: p.code });   // 2.13.0: Central Hub takes it now, not on its next run
+    // 2.14.0: the day's shared requests go to the office with the report
+    for (const q of (store.get().drafts[k] || {}).requests || []) if (q.live) L.requestStatus(q.id, 'requested', { byName: (store.get().profile || {}).name || '', note: `With report ${name}` }).catch(() => {});
     return 'sent';
   } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
@@ -686,7 +701,9 @@ function openRecv(id) {
 function openReq(id) {
   const r = ensureReport();
   const found = id && (r.requests || []).find(x => x.id === id);
-  ui.req = found ? structuredClone(found) : newRequest(now());
+  const shared = !found && id && (ui.liveReqs || []).find(d => d.fr && d.fr.id === id && d.status === 'draft');   // 2.14.0
+  ui.req = found ? structuredClone(found) : shared ? fromLive(shared) : newRequest(now());
+  ui.reqDate = shared ? shared.fr.date : '';
   if (location.hash.slice(1) === 'request') draw(); else go('request');
 }
 
@@ -1228,6 +1245,10 @@ const ACTS = {
     const q = ui.req;
     if (!String(q.text || '').trim()) return toast('Write what is needed first.');
     q.text = q.text.trim(); q.qty = num(q.qty);
+    // 2.14.0: shared with the project's phones and Central Hub (a draft until the report is sent)
+    const by = { date: ui.reqDate || report().date, byName: (store.get().profile || {}).name || '' };
+    if (L.liveOn()) { q.live = true; L.saveRequest(q, by).catch(e => toast(`Not shared: ${e.message}`)); }
+    if (ui.reqDate && ui.reqDate !== report().date) { toast('Request saved.'); return go('requests'); }
     edit(r => { r.requests = r.requests || []; const i = r.requests.findIndex(y => y.id === q.id); if (i >= 0) r.requests[i] = q; else r.requests.push(q); r.done.end = false; });
     toast(q.priority === 'Urgent' ? 'Urgent request saved.' : 'Request saved.');
     if (d.v === 'again') openReq(); else go('end');
@@ -1235,8 +1256,15 @@ const ACTS = {
   deleteReq() {
     if (!confirm('Delete this request?')) return;
     const id = ui.req.id;
-    edit(r => { r.requests = r.requests.filter(y => y.id !== id); });
+    if (ui.req.live) L.requestStatus(id, 'deleted', { byName: (store.get().profile || {}).name || '' }).catch(e => toast(`Not deleted for the others: ${e.message}`));   // 2.14.0
+    if (ui.reqDate && ui.reqDate !== report().date) return go('requests');
+    edit(r => { r.requests = (r.requests || []).filter(y => y.id !== id); });
     go('end');
+  },
+  async reqCancel(d) {
+    if (!confirm('Withdraw this request? The office is told.')) return;
+    try { await L.requestStatus(d.v, 'cancelled', { byName: (store.get().profile || {}).name || '', note: 'Withdrawn on site' }); toast('Withdrawn.'); }
+    catch (e) { toast(`Not withdrawn: ${e.message}`); }
   },
   copyPlan() {
     const add = unfinishedWork(report(), project().setup || {});

@@ -120,6 +120,7 @@ export function reportMeta(r, project, profile = {}) {
       priority: q.priority, text: q.text.trim(), category: q.category,
       ...(num(q.qty) != null ? { qty: num(q.qty) } : {}), ...(q.unit && num(q.qty) != null ? { unit: q.unit } : {}),
       ...(q.neededBy ? { neededBy: q.neededBy } : {}), ...(q.location ? { location: q.location } : {}),
+      ...(q.live ? { live: true } : {}),   // 2.14.0: already under Requests in Central Hub
     })),
     work: work.work, milestones: work.milestones, items: work.items,
     attendance: attendanceRows(r.crew), crewFrom: 'attendance',
@@ -155,4 +156,15 @@ export function byZone(items) {
     m.get(z).push([what, i.text.trim()].filter(Boolean).join(': ') || itemLine(i));
   }
   return [...m].map(([zone, lines]) => ({ zone, lines }));
+}
+
+/** 2.14.0: a shared request record (Central Hub) as the phone's request. */
+export const fromLive = d => { const f = d.fr || {}; return { id: f.id, at: f.at || '', category: f.category || 'Material', text: f.text || '', qty: f.qty ?? null, unit: f.unit || '', neededBy: f.neededBy || '', priority: f.priority || 'Normal', location: f.location || '', live: true }; };
+
+/** 2.14.0: today's requests as the shared drafts say: changed and new ones from other phones in, deleted ones out. */
+export function mergeRequests(cur, list, date) {
+  const mine = list.filter(d => d.fr && d.fr.date === date);
+  const want = mine.filter(d => d.status === 'draft').map(fromLive);
+  const gone = new Set(mine.filter(d => d.status === 'deleted').map(d => d.fr.id));
+  return [...cur.filter(q => !gone.has(q.id)).map(q => want.find(w => w.id === q.id) || q), ...want.filter(w => !cur.some(q => q.id === w.id))];
 }

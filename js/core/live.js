@@ -71,7 +71,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   try {
     const { F, auth, db } = await load();
@@ -95,6 +95,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => onPing(d.data() || {}), () => {}));
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
     stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
+    // 2.14.0: the project's site requests, drafts included, from every phone
+    stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
     return 'on';
   } catch (e) { fail(e, 'Access'); return 'error'; }
 }
@@ -129,4 +131,35 @@ export async function crewLink({ projectName = '', byName = '', now: t = Date.no
   const by = auth.currentUser.email.toLowerCase();
   await F.setDoc(F.doc(db, 'company', 'main', 'crewlinks', id), { id, kind: 'crew', name: '', email: '', projectId: pid, projectName, by, byName, at: new Date(t).toISOString(), untilMs: t + 3 * 864e5, status: 'open' });
   return `https://hub.amistadprefab.com/crew.html?l=${id}`;
+}
+
+/** 2.14.0: live writes are possible (signed in to Central Hub, project found). */
+export const liveOn = () => !!signedIn();
+const KIND = { Material: 'material', Manpower: 'manpower', Equipment: 'equipment' };
+
+/**
+ * 2.14.0: a request written on this phone, shared as a draft with the project's other phones and Central Hub
+ * (projects/<id>/requests/fr_<id>, Central Hub's own request shape). It goes to the office when the day's report is sent.
+ */
+export async function saveRequest(q, { date, byName = '' }) {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString(), id = `fr_${q.id}`;
+  const ref = F.doc(db, 'projects', pid, 'requests', id), old = await F.getDoc(ref);
+  if (old.exists() && old.data().status !== 'draft') throw new Error('the office has it already; ask them to change it');
+  const fr = { id: q.id, at: q.at || '', date, category: q.category || 'Material', text: String(q.text || '').trim(), qty: q.qty ?? null, unit: q.unit || '', neededBy: q.neededBy || '', priority: q.priority || 'Normal', location: q.location || '' };
+  const base = { id, kind: KIND[fr.category] || 'material', priority: fr.priority === 'Urgent' ? 'urgent' : 'normal', status: 'draft', date, neededBy: fr.neededBy, taskId: '',
+    purpose: fr.location ? `Where on site: ${fr.location}` : '', lines: [{ id: `${id}_1`, description: fr.text, qty: Number(fr.qty) || 0, unit: fr.unit, note: '' }],
+    projectId: pid, site: true, fr, editedBy: byName || email, editedAt: at };
+  const entry = { at, by: email, byName: byName || email, status: 'draft', note: old.exists() ? 'Changed on site' : 'Written on site' };
+  if (old.exists()) await F.updateDoc(ref, { ...base, log: F.arrayUnion(entry) });
+  else await F.setDoc(ref, { ...base, number: `SITE-${String(q.id).slice(-4).toUpperCase()}`, by: email, byName: byName || email, byTitle: 'Field Report', log: [entry] });
+  return true;
+}
+
+/** 2.14.0: a request deleted (draft), sent with the report (requested) or withdrawn (cancelled), with who and when. */
+export async function requestStatus(qid, status, { byName = '', note = '' } = {}) {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
+  await F.updateDoc(F.doc(db, 'projects', pid, 'requests', `fr_${qid}`), { status, editedBy: byName || email, editedAt: at, log: F.arrayUnion({ at, by: email, byName: byName || email, status, note }) });
+  return true;
 }
