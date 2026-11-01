@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.11.0';
+export const APP_VERSION = '2.12.0';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -86,6 +86,9 @@ async function signinPost(body) {
 /** Where Google sends the phone back after sign-in: the app's own address (registered in the Google Cloud OAuth client). */
 export const backUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
 const OAUTH = 'fr2_oauth';
+let googleAt = '';
+/** 2.12.0: the Google access token of the sign-in just made, once, for the Firebase sign-in (js/core/live.js). */
+export const takeGoogleToken = () => { const t = googleAt; googleAt = ''; return t; };
 const SIGNUP = 'fr2_signup';
 
 /** 2.4.0: send the sign-up form (full name, phone) with the Google sign-in just made. Answers like a sign-in. */
@@ -122,5 +125,6 @@ export function signInReturn() {
   try { saved = JSON.parse(localStorage.getItem(OAUTH) || 'null'); localStorage.removeItem(OAUTH); } catch { /* no storage */ }
   if (!saved || saved.state !== h.get('state') || Date.now() - saved.at > 15 * 60e3) return Promise.reject(new ApiError('Google sign-in did not complete. Try again.', 'AUTH'));
   if (!h.get('access_token')) return Promise.reject(new ApiError('Google sign-in was closed. Try again.', 'AUTH'));
-  return signinPost({ accessToken: h.get('access_token'), name: saved.name || '', ua: deviceUa() });
+  googleAt = h.get('access_token');
+  return signinPost({ accessToken: googleAt, name: saved.name || '', ua: deviceUa() });
 }

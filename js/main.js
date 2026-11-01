@@ -1,6 +1,7 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId } from './core/api.js';
+import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, takeGoogleToken } from './core/api.js';
+import * as L from './core/live.js';
 import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
@@ -222,6 +223,26 @@ async function checkStatus(force) {
   store.set({ known, knownAt: Date.now() });
 }
 
+/**
+ * 2.12.0 (Phase E1): live reads. When the Admin set the data route to "read", the phone signs in to Central Hub's
+ * database with the Google sign-in just made (at) and listens to its project's reports: approvals and comments land
+ * in `known` at once. Anything that fails leaves the normal refresh (checkStatus) in charge.
+ */
+async function goLive(at = '') {
+  if (demo) return;
+  ui.liveRoute = await L.routeOf();
+  if (ui.liveRoute !== 'read') { ui.live = ''; await L.stop(); return; }
+  if (at) await L.connect(at);
+  const p = project(), a = store.get().auth;
+  if (!p || !a) return;
+  ui.live = await L.listen({
+    code: p.code, email: a.email,
+    onKnown: list => { store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } }); inboxCheck(); },
+    onChange: st => { ui.live = st; draw(); },
+  });
+  draw();
+}
+
 const devId = () => deviceId();   // trial.2: the same id the script's device check knows
 
 /** Today's report as text in the script, so another phone can carry on (photos stay on this phone). */
@@ -354,6 +375,7 @@ async function signedIn(pending) {
     await loadProjects();
     go('today');
     checkStatus(); devCheck(true); inboxCheck(true);
+    goLive(takeGoogleToken());
   } catch (e) {
     if (e.code === 'SIGNUP') ui.signup = { email: (e.reply && e.reply.email) || (ui.signup || {}).email || '', sent: !!(ui.signup && ui.signup.asking), msg: e.message };
     else ui.error = e.message;
@@ -816,7 +838,8 @@ const ACTS = {
     sendProfile();
     go('today');
   },
-  pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); },
+  pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); goLive(); },
+  liveConnect: () => signedIn(signIn(store.get().profile.name || '')),   // 2.12.0: the Google sign-in again, for live updates
   // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
@@ -825,6 +848,7 @@ const ACTS = {
   },
   signout() {
     if (!confirm('Sign out? Reports not yet sent stay on this phone.')) return;
+    L.stop(); ui.live = '';
     store.set({ auth: null }); go('');
   },
   startDay() { ensureReport(); go('start'); fetchWeather(); },
@@ -1500,7 +1524,7 @@ if (location.hash.startsWith('#go=')) setTimeout(() => { if (!openLink(location.
 draw();
 const back = signInReturn();
 if (back) signedIn(back);
-else if (store.get().auth) { flush(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
+else if (store.get().auth) { flush(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); goLive(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
 oldAppClear();
 cleanPhotos();
 if (route() === 'me') pushPreload();
