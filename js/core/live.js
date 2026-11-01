@@ -117,7 +117,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
 }
 
 /** 2.13.0: only what a phone needs of a team member (no wages or levels); 2.17.0 a delete asked. */
-const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite, dropAsk: m.dropAsk || null });
+const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite, dropAsk: m.dropAsk || null, dropOk: m.dropOk || null });
 
 /** 2.17.0: one report of the project for the Reports list, from Central Hub: the same status as Review, with its times. */
 export function dayOf(rec) {

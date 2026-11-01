@@ -152,7 +152,8 @@ async function loadProjects() {
   const extra = new Map((mine.projects || []).map(p => [String(p.proj).toUpperCase(), p]));
   const projects = (cfg.projects || []).map(p => {
     const code = codesOf(p).code, m = extra.get(code) || {};
-    return { ...p, code, staff: (m.staff || []).map(x => ({ ...x, trade: normTrade(x.trade) })), location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove, hoursEdit: !!m.hoursEdit };
+    return { ...p, code, staff: (m.staff || []).map(x => ({ ...x, trade: normTrade(x.trade) })), location: m.location || p.siteName || '', crewWait: (m.crewWait || []).map(x => ({ ...x, trade: normTrade(x.trade) })),   // 2.17.1
+      tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove, hoursEdit: !!m.hoursEdit };
   });
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
@@ -1259,7 +1260,8 @@ const ACTS = {
   },
   // 2.17.0: delete from the crew list: the site asks, the PM or the GM confirms (the server takes them off in Central Hub too)
   async crewOff(d) {
-    const boss = kind() === 'reviewer' || P.isGM({ s: store.get() });
+    // 2.17.1: the Site engineer, the PM and the GM delete at once (with who and when); anyone else asks them
+    const boss = kind() === 'reviewer' || P.isGM({ s: store.get() }) || /site engineer|\bse\b/i.test((store.get().profile || {}).position || '');
     if (boss) return ACTS.crewDropOk(d);
     if (!confirm(`Ask the PM or the GM to delete ${d.n} from this project?`)) return;
     try { await L.editTeam(d.v, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString() } }); toast(`Asked. ${d.n} stays until the PM or the GM confirms.`); }
@@ -1267,7 +1269,7 @@ const ACTS = {
   },
   async crewDropOk(d) {
     const p = project();
-    if (!p || !confirm(`Delete ${d.n} from ${p.name}? They leave the crew list here and in Central Hub; their record stays.`)) return;
+    if (!p || !confirm(`Delete ${d.n} from ${p.name}? They leave the crew list here and in Central Hub; their record stays, with who deleted them and when.`)) return;
     ui.busy = true; draw();
     try { await L.now('crewOff', { proj: p.code, id: d.v, byName: myName() }); toast(`${d.n} is deleted from this project.`); }
     catch (e) { toast(`Not deleted: ${e.message}`); }

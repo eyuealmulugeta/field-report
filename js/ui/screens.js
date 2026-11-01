@@ -227,7 +227,7 @@ export function att(c) {
   if (started) {
     const v = crew(c);
     // the tab bar stays: Done sits at the end of the page
-    return { tab: 'att', head: head('Attendance', sub), body: html`${attTabs(c)}${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
+    return { tab: 'att', head: head('Attendance', sub), body: html`${attTabs(c)}${refreshRow(c)}${v.body}${crewAdmin(c, true)}<div class="att-done">${v.foot}</div>` };
   }
   return {
     tab: 'att',
@@ -235,6 +235,7 @@ export function att(c) {
     body: html`${attTabs(c)}${refreshRow(c)}
       ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
         : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
+      ${crewAdmin(c, false)}
       ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}
       ${crewListBox(c)}`,
   };
@@ -294,7 +295,15 @@ const stampAt = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLoca
 const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
 /** 2.13.0: crew the site added can be corrected or taken off from here (live updates on). */
 // 2.17.0: delete from the list: anyone of the site asks, the PM or the GM confirms
-const dropOk = c => c.kind === 'reviewer' || isGM(c);
+const dropOk = c => c.kind === 'reviewer' || isGM(c) || /site engineer|\bse\b/i.test((c.s.profile || {}).position || '');   // 2.17.1: SE too
+/** 2.17.1: Office: the project's crew with Delete, and who was deleted, by whom and when (last 30 days). */
+function crewAdmin(c, started) {
+  const staff = c.project.staff || [], since = Date.now() - 30 * 864e5;
+  const gone = (c.ui.teamOf === c.project.code ? c.ui.team || [] : []).filter(m => m.active === false && m.dropOk && Date.parse(m.dropOk.at) > since)
+    .sort((a, b) => String(b.dropOk.at).localeCompare(String(a.dropOk.at)));
+  return html`${started && staff.length ? html`<div class="k">Crew on this project · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>` : ''}
+    ${gone.length ? html`<div class="k">Deleted from this project</div><div class="box">${gone.map(m => html`<div class="li"><div class="n"><b>${m.name}</b><span>${m.role || 'No trade'} · deleted by ${m.dropOk.byName || m.dropOk.by} · ${stampAt(m.dropOk.at)}${m.dropOk.asked ? ` · asked by ${m.dropOk.asked.byName || m.dropOk.asked.by}` : ''}</span></div></div>`)}</div>` : ''}`;
+}
 function staffRow(c, x) {
   const mine = x.fromSite && c.ui.live === 'on' && crewBoss(c), del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
   const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the PM or GM</span>`}</div>` : '';
