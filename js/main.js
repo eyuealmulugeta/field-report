@@ -2,7 +2,8 @@
 
 import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, takeGoogleToken } from './core/api.js';
 import * as L from './core/live.js';
-import * as P from './ui/parts.js';   // 2.16.1
+import * as P from './ui/parts.js';
+import { partOf } from './model/rating.js';   // 2.18.0   // 2.16.1
 import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
@@ -88,6 +89,7 @@ function edit(fn, quiet) {
   // 2.4.0: one report per project and day, shared: who worked on it, in turn
   const me = store.get().profile.name || (store.get().auth || {}).name || '';
   if (me) { const last = (r.edits || []).at(-1); if (last && last.by === me) last.at = r.updated; else r.edits = [...(r.edits || []), { by: me, at: r.updated }].slice(-50); }
+  if (r.date === today()) { const pt = partOf(now()); if (pt && !(r.seen || {})[pt]) r.seen = { ...(r.seen || {}), [pt]: r.updated }; }   // 2.18.0
   const drafts = { ...store.get().drafts, [k]: r };
   if (quiet) store.quiet({ drafts }); else store.set({ drafts });
   draftSoon();
@@ -1036,9 +1038,10 @@ const ACTS = {
   /** 2.17.0: a sent report off this device's list (Central Hub keeps it). */
   dayHide(d) {
     const p = project();
-    if (!p || !confirm(`Remove the report of ${d.v} from this device? Central Hub keeps it.`)) return;
+    const r = store.get().drafts[`${p.code}|${d.v}`];
+    if (!p || !confirm(r && r.start && !r.sentAt ? `Remove the report of ${d.v} from this phone? It is not sent yet: it stays saved and comes back when opened from Today.` : `Remove the report of ${d.v} from this phone? Central Hub keeps it.`)) return;
     store.set({ hidden: { ...(store.get().hidden || {}), [`${p.code}|${d.v}`]: Date.now() } });
-    ui.sheet = ''; toast('Removed from this device.'); draw();
+    ui.sheet = ''; toast('Removed from this phone.'); draw();
   },
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },

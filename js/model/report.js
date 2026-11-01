@@ -19,7 +19,7 @@ export const STEPS = [
   { id: 'materials', phase: 'day', title: 'Materials received' },
   { id: 'safety', phase: 'day', title: 'Safety and delays' },
   { id: 'photos', phase: 'day', title: 'Photos' },
-  { id: 'end', phase: 'end', title: 'Requests and tomorrow' },
+  { id: 'end', phase: 'day', title: 'Requests and tomorrow' },   // 2.18.0: During the day (owner, 1 Nov)
   { id: 'send', phase: 'end', title: 'Review and send' },
 ];
 

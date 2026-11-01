@@ -325,7 +325,7 @@ function crewPhotoBox(c) {
   return html`<div class="k">Morning crew photo</div>
     <div class="box pad">${list.length ? html`<div class="thumbs">${list.map(p => thumb(p, 'sm'))}</div>
       <ul class="plain small">${list.map(p => html`<li><b>${p.at}</b> · ${p.crew ? html`<span class="pill ${p.crew.st === 'ontime' ? 'ok' : 'warn'}">${CREW_ST_WORD[p.crew.st]}</span>${p.crew.tags.map(x => html` <span class="pill warn">${x}</span>`)}${p.crew.geo ? ' · location kept' : ' · no location'}` : html`<span class="muted">checking the time…</span>`}</li>`)}</ul>` : ''}
-      <button type="button" class="btn s" data-act="crewPhoto">${icon('cam')}Take crew photo</button>
+      <button type="button" class="btn s" data-act="crewPhoto">${icon('cam')}Take attendance photo</button>
       <p class="muted tiny">On time until ${c.project.defStart || '08:00'}, late attendance until ${crewCloses(c.project.defStart || '08:00')}, closed after. The office's clock decides.</p></div>`;
 }
 

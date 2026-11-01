@@ -12,6 +12,7 @@ import { offlineLine } from '../model/follow.js';
 import { stepHead, chips, kpi } from './parts.js';
 import { canPdf } from './view.js';
 import { fitLine } from '../pdf.js';
+import { rateReport, rateLine } from '../model/rating.js';
 
 const STEP_NAMES = { start: 'Start of day', crew: 'Attendance', work: 'Work done', equipment: 'Equipment', materials: 'Materials', safety: 'Safety', photos: 'Photos', end: 'Tomorrow', me: 'Me', sign: 'Signature' };
 
@@ -21,7 +22,7 @@ export function end(c) {
   const copy = unfinishedWork(r, setup);
   const zones = zonesOf(setup, c.s.siteZones[c.project.code], r.items);
   return {
-    head: stepHead('Requests and tomorrow', 'Step 8 of 9 · End of day'),
+    head: stepHead('Requests and tomorrow', 'Step 8 of 9 · During the day'),
     body: html`<div class="k">Requests to the office</div>
       ${reqs.length ? html`<div class="box">${reqs.map(q => html`<button type="button" class="li item" data-act="openReq" data-v="${q.id}">
         <span class="time ${q.priority === 'Urgent' ? 'urgent' : ''}">${q.priority === 'Urgent' ? 'Urgent' : q.at}</span><div class="n"><b>${q.text || 'No item written'}</b><span>${requestLine(q)}</span></div></button>`)}</div>`
@@ -111,6 +112,7 @@ export function send(c) {
           <span class="ic ${x.level === 'need' ? 'bad' : 'warn'}">${icon('alert')}</span><div class="n"><b>${x.text}</b><span>${STEP_NAMES[x.step] || ''}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`
         : html`<div class="soft small"><b>Everything is in.</b> <span class="muted">Sign and send.</span></div>`}
       ${fitLine(c.ui.fit) && r.photos.length ? html`<p class="soft small"><b>${fitLine(c.ui.fit)}</b> <button type="button" class="btn t slim" data-act="go" data-to="photos">Photos</button></p>` : ''}
+      <p class="soft small"><b>${rateLine(rateReport(r))}</b></p>   <!-- 2.18.0 -->
       <div class="k">The report</div>
       <div class="box pad prev">
         <div class="spread"><b>Report #${r.no} · ${dayLabel(r.date)}</b><span class="muted small">${p.name}</span></div>
