@@ -3,7 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
-import { head, stepHead, projPick } from './parts.js';
+import { head, stepHead } from './parts.js';
 import { STATUS, offlineLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
@@ -32,7 +32,7 @@ export function review(c) {
   return {
     tab: 'review',
     head: head('Review', `${c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
-    body: html`${projPick(c, 'revProj', true)}<div class="k">Reports of ${c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
+    body: html`<div class="k">Reports of ${c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">

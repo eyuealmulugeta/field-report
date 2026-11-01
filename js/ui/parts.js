@@ -17,7 +17,13 @@ export const REVIEW_TABS = [
   { id: 'crewrev', title: 'Crew', icon: 'users' },
 ];
 /** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
-export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : kind === 'reviewer' ? [...TABS, REVIEW_TABS[0]] : TABS);
+// 2.16.1: Review before Quick (owner, 1 Nov)
+export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : kind === 'reviewer' ? [...TABS.filter(t => t.id !== 'quick'), REVIEW_TABS[0], TABS.find(t => t.id === 'quick')] : TABS);
+
+/** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
+export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
+export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'review']);
+export const projTop = c => html`<div class="proj-top"><select data-proj aria-label="Project">${c.s.projects.map(x => html`<option value="${x.code}" ${x.code === c.s.proj ? 'selected' : ''}>${x.name} · ${x.code}</option>`)}</select></div>`;
 
 export const nav = (on, badges = {}, kind = 'reporter') => html`<nav class="nav">${tabsFor(kind).map(t => html`
   <button type="button" class="${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}

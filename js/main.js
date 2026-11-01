@@ -2,6 +2,7 @@
 
 import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, takeGoogleToken } from './core/api.js';
 import * as L from './core/live.js';
+import * as P from './ui/parts.js';   // 2.16.1
 import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
@@ -990,6 +991,14 @@ const ACTS = {
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); goLive(); },
   liveConnect: () => signedIn(signIn(store.get().profile.name || '')),   // 2.12.0: the Google sign-in again, for live updates
   // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
+  // 2.16.1: the GM's project list at the top: every page follows the project chosen
+  projTop(d) {
+    if (!d.v || d.v === store.get().proj) return;
+    store.set({ proj: d.v }); loadSetup(); goLive();
+    ui.reg = null; ui.regEdit = null; ui.regAt = ''; ui.empUrl = '';
+    if (route() === 'review') { ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); }
+    draw();
+  },
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
@@ -1640,6 +1649,7 @@ function draw() {
   let v = r === 'signin' ? S.signin(c) : r === 'profile' ? S.profile(c) : r === 'choose' ? S.chooseProject(c)
     : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);
   if (ui.date && (r === 'today' || NEEDS_REPORT.has(r))) v = { ...v, body: html`${F.pastBand(c)}${v.body}` };
+  if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c)}` };   // 2.16.1
   document.documentElement.dataset.theme = c.s.profile.dark ? 'dark' : '';
   const scroll = root.querySelector('.bd')?.scrollTop || 0;
   const same = root.dataset.screen === r;
@@ -1689,7 +1699,7 @@ root.addEventListener('input', e => {
   const v = f === 'start.tempC' ? (num(el.value) ?? el.value) : el.value;
   edit(r => setPath(r, f, v), true);
 });
-root.addEventListener('change', e => { const f = e.target.dataset.f; if (f && !f.startsWith('profile.') && (!isDraft(f) || f.startsWith('cl.'))) draw(); });
+root.addEventListener('change', e => { if (e.target.dataset.proj != null) return ACTS.projTop({ v: e.target.value }); const f = e.target.dataset.f; if (f && !f.startsWith('profile.') && (!isDraft(f) || f.startsWith('cl.'))) draw(); });
 
 /* keyboard (computer): N log now, 1–9 open a step, Esc close or go back, Ctrl+S the main button; on attendance ↑ ↓ and P A S L */
 addEventListener('keydown', e => {

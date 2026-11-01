@@ -407,3 +407,7 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .emp-bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .emp-bar span { flex: 1; font-size: 12px; color: var(--muted); }
 .emp-box iframe { flex: 1; border: 0; width: 100%; }
+
+/* 2.16.1: the GM's project list at the top */
+.proj-top { padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.proj-top select { width: 100%; font-size: 14px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
