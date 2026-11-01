@@ -71,7 +71,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   try {
     const { F, auth, db } = await load();
@@ -99,6 +99,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}), () => {}));
     // 2.14.0: the project's site requests, drafts included, from every phone
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
+    // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
+    stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'attendance'), snap => onFixes(snap.docs.map(x => x.data())), () => {}));
     return 'on';
   } catch (e) { fail(e, 'Access'); return 'error'; }
 }
@@ -133,6 +135,40 @@ export async function crewLink({ projectName = '', byName = '', now: t = Date.no
   const by = auth.currentUser.email.toLowerCase();
   await F.setDoc(F.doc(db, 'company', 'main', 'crewlinks', id), { id, kind: 'crew', name: '', email: '', projectId: pid, projectName, by, byName, at: new Date(t).toISOString(), untilMs: t + 3 * 864e5, status: 'open' });
   return `https://hub.amistadprefab.com/crew.html?l=${id}`;
+}
+
+/**
+ * 2.16.0: Crew attendance: what Central Hub's attendance sheet is made of, read once: the project (pay period,
+ * calendar), its reports of the period `periodOf(project)` gives, its corrections and its team.
+ */
+export async function sheetData(periodOf) {
+  if (!signedIn()) throw new Error('Live updates are off.');
+  const { F, db } = fb;
+  const pd = await F.getDoc(F.doc(db, 'projects', pid));
+  const project = { id: pid, ...(pd.data() || {}) }, { from, to } = periodOf(project);
+  const [reps, att, team] = await Promise.all([
+    F.getDocs(F.query(F.collection(db, 'projects', pid, 'reports'), F.where('date', '>=', from), F.where('date', '<=', to))),
+    F.getDocs(F.collection(db, 'projects', pid, 'attendance')),
+    F.getDocs(F.collection(db, 'projects', pid, 'team')),
+  ]);
+  return { project, ws: { reports: reps.docs.map(x => x.data()), attendance: att.docs.map(x => x.data()), team: team.docs.map(x => ({ id: x.id, ...pick(x.data()) })) } };
+}
+
+/** 2.16.0: a site correction of the attendance sheet; it counts once the office accepts it (Central Hub v0.42.0). */
+export async function siteFix(rec) {
+  if (!signedIn()) throw new Error('Live updates are off.');
+  const { F, db, auth } = fb;
+  await F.setDoc(F.doc(db, 'projects', pid, 'attendance', rec.id), { ...rec, byEmail: auth.currentUser.email.toLowerCase() });
+}
+
+/** 2.16.0: Employee data: a 12-hour link of this project for the crew form filled in on this device (kind 'site'). */
+export async function siteLink({ projectName = '', byName = '', now: t = Date.now() } = {}) {
+  if (!signedIn()) throw new Error('Live updates are off.');
+  const { F, db, auth } = fb;
+  const id = [...crypto.getRandomValues(new Uint8Array(20))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const until = t + 12 * 36e5;
+  await F.setDoc(F.doc(db, 'company', 'main', 'crewlinks', id), { id, kind: 'site', name: '', email: '', projectId: pid, projectName, by: auth.currentUser.email.toLowerCase(), byName, at: new Date(t).toISOString(), untilMs: until, status: 'open' });
+  return { id, until, url: `https://hub.amistadprefab.com/crew.html?l=${id}` };
 }
 
 /** 2.14.0: live writes are possible (signed in to Central Hub, project found). */

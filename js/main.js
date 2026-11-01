@@ -242,6 +242,7 @@ async function goLive(at = '') {
       store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } });
       liveReview(list);   // 2.12.2: the reviewer's list too
       inboxCheck();
+      regSoon();   // 2.16.0
     },
     onChange: st => { ui.live = st; ui.liveWhy = L.liveWhy(); draw(); },
     // 2.13.0: Central Hub sent new lists or decided on crew: reload them at once
@@ -249,13 +250,14 @@ async function goLive(at = '') {
       const seen = ui.pingSeen; ui.pingSeen = d;
       if (!seen) return;
       if (d.lists && d.lists !== seen.lists) loadSetup();
-      if (d.crew && d.crew !== seen.crew) ACTS.attRefresh(true);
+      if (d.crew && d.crew !== seen.crew) crewSoon();   // 2.16.0: now and again a little later
     },
     onTeam: team => { ui.team = team; ui.teamOf = p.code; crewFollow(); draw(); },
     onDay: marks => { ui.marks = marks; ui.marksOf = p.code; crewFollow(); draw(); },
     day: realToday(),
     onPhotos: m => { ui.photos = m; draw(); },
     onRequests: list => liveRequests(list),
+    onFixes: list => regFixes(list),   // 2.16.0
   });
   ui.liveWhy = L.liveWhy();
   draw();
@@ -265,6 +267,62 @@ async function goLive(at = '') {
  * 2.15.0: today's report (not sent yet) follows Central Hub's crew and the marks made on the project's other devices
  * at once: nobody presses "Check the office list".
  */
+/** 2.16.0: crew decided in Central Hub: the office list asked now and again a little later, on every device. */
+function crewSoon() { ACTS.attRefresh(true); for (const t of [15e3, 45e3]) setTimeout(() => ACTS.attRefresh(true), t); }
+
+// 2.16.0: Crew attendance: Central Hub's own attendance sheet (its engine, read from the hub); a site correction waits for the office
+const HUB_ENGINE = 'https://hub.amistadprefab.com/js/engine/attendance.js';
+let ENG = null, regWs = null, regProj = null, regT = 0;
+const fixKey = (date, key) => `sr_${date}_${String(key).replace(/[\/.#$\[\]\s]/g, '_')}`;
+const myName = () => (store.get().profile || {}).name || '';
+function regBuild() {
+  const p = project();
+  if (!ENG || !regWs || !regProj || !p) return;
+  const period = ENG.periodFor(regProj, ui.regAt || realToday());
+  const crewList = (p.staff || []).filter(s => s.active !== false).map(s => ({ id: s.id || '', name: s.name, role: s.trade || '' }));
+  const r = ENG.register(regProj, regWs, period, crewList);
+  const waiting = {}, answered = [];
+  for (const f of regWs.attendance || []) {
+    if (!f.review || f.date < period.from || f.date > period.to) continue;
+    if (f.review === 'waiting') waiting[`${f.date}|${f.key}`] = f; else answered.push(f);
+  }
+  answered.sort((a, b) => String(b.reviewAt || '').localeCompare(String(a.reviewAt || '')));
+  ui.reg = { code: p.code, period, days: r.days, off: [...r.off], heads: r.heads, reported: r.reportedDays, groups: ENG.groupRows(r.rows, () => 'day'), waiting, answered: answered.slice(0, 20), today: realToday() };
+}
+async function regLoad() {
+  if (!project()) return;
+  if (!demo && !L.liveOn()) { ui.regErr = 'The sheet needs live updates (the Central Hub sign-in). Open Me to switch them on.'; return draw(); }
+  ui.regBusy = true; ui.regErr = ''; draw();
+  try {
+    ENG ||= await import(HUB_ENGINE);
+    if (demo) { regProj = { id: 'demo', payPeriod: 'weekly' }; regWs = { reports: [], attendance: (regWs && regWs.attendance) || [], team: [] }; }
+    else ({ project: regProj, ws: regWs } = await L.sheetData(proj => ENG.periodFor(proj, ui.regAt || realToday())));
+    regBuild();
+  } catch (e) { ui.regErr = `The sheet did not load: ${e.message || e}`; }
+  finally { ui.regBusy = false; draw(); }
+}
+function regSoon() { if (ui.attTab !== 'sheet' || route() !== 'att') return; clearTimeout(regT); regT = setTimeout(regLoad, 3000); }
+function regFixes(list) { if (!regWs) return; regWs.attendance = list; regBuild(); if (route() === 'att' && ui.attTab === 'sheet') draw(); }
+
+/** 2.16.0: Employee data: the crew form, filled in here. It sits outside the page, so redrawing never empties it. */
+function empFrame() {
+  let box = document.getElementById('emp-box');
+  if (!(ui.empUrl && route() === 'att' && ui.attTab === 'emp')) { if (box) box.hidden = true; return; }
+  if (!box) {
+    box = document.createElement('div'); box.id = 'emp-box'; box.className = 'emp-box';
+    box.innerHTML = '<div class="emp-bar"><b>Employee data</b><span>Each form goes to Central Hub, Crew forms, for review</span><button type="button" class="btn t slim" data-emp="new">New form</button><button type="button" class="btn t slim" data-emp="close">Close</button></div><iframe title="Employee data form" allow="camera"></iframe>';
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-emp]');
+      if (!b) return;
+      if (b.dataset.emp === 'close') { ui.empUrl = ''; draw(); } else box.querySelector('iframe').src = `${ui.empUrl}&n=${Date.now()}`;
+    });
+    document.body.append(box);
+  }
+  const f = box.querySelector('iframe');
+  if (f.dataset.u !== ui.empUrl) { f.dataset.u = ui.empUrl; f.src = ui.empUrl; }
+  box.hidden = false;
+}
+
 function crewFollow() {
   const p = project();
   const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
@@ -1061,6 +1119,43 @@ const ACTS = {
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Not approved: ${e.message}`); }
     finally { ui.busy = false; draw(); }
   },
+  // 2.16.0: the Office page tabs: Today, Crew attendance, Employee data
+  attTab(d) {
+    ui.attTab = d.v; ui.regEdit = null;
+    if (d.v === 'sheet' && (!ui.reg || ui.reg.code !== (project() || {}).code)) regLoad();
+    draw();
+  },
+  regLoad() { regLoad(); },
+  regShift(d) { if (!ui.reg || !ENG || !regProj) return; ui.regAt = ENG.shiftPeriod(regProj, ui.reg.period, +d.n).from; ui.regEdit = null; regLoad(); },
+  regPick(d) { const same = ui.regEdit && ui.regEdit.d === d.d && ui.regEdit.k === d.k; ui.regEdit = same ? null : { d: d.d, k: d.k }; ui.regOt = ''; draw(); },
+  async regSend(d) {
+    const ed = ui.regEdit, r = ui.reg;
+    if (!ed || !r || !ENG) return;
+    const row = r.groups.flatMap(g => g.rows).find(x => x.key === ed.k);
+    if (!row) return;
+    const state = d.v, ot = state === 'present' ? Math.max(0, Math.min(16, num(ui.regOt) || 0)) : 0;
+    const rec = { id: fixKey(ed.d, ed.k), date: ed.d, key: ed.k, personId: row.id || '', name: row.name, state, ot, was: ENG.markOn(regWs, ed.d, ed.k) || null,
+      by: `Site: ${myName() || 'Field Report'}`, at: new Date().toISOString(), site: true, review: 'waiting', undone: false };
+    if (demo) { regWs.attendance = [...regWs.attendance.filter(f => f.id !== rec.id), rec]; ui.regEdit = null; regBuild(); toast('Demo: kept on this device only.'); return draw(); }
+    try { await L.siteFix(rec); ui.regEdit = null; toast(`Sent to the office: ${row.name}, ${ed.d}. It counts once they accept it.`); }
+    catch (e) { toast(`Not sent: ${e.message}`); }
+    draw();
+  },
+  async empOpen() {
+    const p = project();
+    if (!p) return;
+    if (demo) { ui.empUrl = 'https://hub.amistadprefab.com/crew.html?l=demo'; return draw(); }
+    const k = `fr2.siteLink.${p.code}`;
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(k) || 'null'); } catch { s = null; }
+    if (!s || !s.url || s.until < Date.now() + 30 * 60e3) {
+      ui.busy = true; draw();
+      try { s = await L.siteLink({ projectName: p.name || p.code, byName: myName() }); try { localStorage.setItem(k, JSON.stringify(s)); } catch { /* private mode */ } }
+      catch (e) { toast(`The form did not open: ${e.message}`); return; }
+      finally { ui.busy = false; draw(); }
+    }
+    ui.empUrl = s.url; draw();
+  },
   startCrew() { ensureReport(); go('att'); },
   /** 2.10.0: the crew allocated in Central Hub, asked again (a report not sent yet takes in the changes). */
   async attRefresh(quiet) {
@@ -1569,6 +1664,7 @@ function draw() {
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
   bindSig();
+  empFrame();   // 2.16.0
   if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* a time field has no caret */ } } }
 }
 
@@ -1638,7 +1734,7 @@ addEventListener('keydown', e => {
 });
 
 window.addEventListener('hashchange', () => {
-  if (route() === 'att' && Date.now() - (ui.attTried || 0) > 120e3) { ui.attTried = Date.now(); ACTS.attRefresh(true); }   // 2.10.0
+  if (route() === 'att' && Date.now() - (ui.attTried || 0) > 30e3) { ui.attTried = Date.now(); ACTS.attRefresh(true); }   // 2.10.0; 2.16.0 30 s
   if (location.hash.startsWith('#go=') && openLink(location.hash.slice(1))) return;
   ui.filter = ''; ui.q = ''; ui.ot = null; ui.sheet = ''; ui.cur = null;
   const h = location.hash.slice(1);
@@ -1659,6 +1755,12 @@ window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flush
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
+// 2.16.0: the Office page asks the office list every 30 s while open, when this device has no live updates or people wait for approval
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || !store.get().auth || route() !== 'att' || Date.now() - (ui.attTried || 0) < 30e3) return;
+  if (L.liveOn() && !((project() || {}).crewWait || []).length) return;
+  ui.attTried = Date.now(); ACTS.attRefresh(true);
+}, 30e3);
 updateCheck();   // 2.12.3
 setInterval(updateCheck, 30 * 60e3);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updateCheck(); });

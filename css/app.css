@@ -385,3 +385,25 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 
 /* 2.14.2: a newer version is out: a red tag at the top, never a wall */
 .upd-tag { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #c62828; color: #fff; border: 0; border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); cursor: pointer; }
+
+/* 2.16.0: Office tabs, Crew attendance sheet, Employee data form */
+.att-tabs { margin: 0 0 10px; }
+.rg-top { gap: 6px; align-items: center; }
+.rg-scroll { overflow-x: auto; margin: 8px 0; border: 1px solid var(--line); border-radius: 8px; }
+.rg { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.rg th, .rg td { border-bottom: 1px solid var(--line); padding: 5px 3px; text-align: center; min-width: 24px; }
+.rg .rg-n { text-align: left; position: sticky; left: 0; background: var(--bg); min-width: 104px; max-width: 136px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
+.rg .rg-g td { font-weight: 700; font-size: 11px; color: var(--muted); }
+.rg .rg-off { background: var(--line-2); }
+.rg-c[data-act] { cursor: pointer; }
+.rg-P { color: var(--ok); font-weight: 700; } .rg-A { color: var(--bad); font-weight: 700; } .rg-S, .rg-L { color: var(--warn); font-weight: 700; }
+.rg-fix { text-decoration: underline; }
+.rg-wait { outline: 2px dotted var(--brand); outline-offset: -3px; }
+.rg-on { background: var(--brand-soft) !important; }
+.rg sup { font-size: 9px; }
+.rg-ed { margin: 8px 0; display: grid; gap: 8px; }
+.emp-box { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; flex-direction: column; }
+.emp-box[hidden] { display: none; }
+.emp-bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.emp-bar span { flex: 1; font-size: 12px; color: var(--muted); }
+.emp-box iframe { flex: 1; border: 0; width: 100%; }

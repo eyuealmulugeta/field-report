@@ -106,7 +106,10 @@ export function withTeam(p, team) {
   const have = new Set(staff.map(s => s.id));
   // 2.14.2: anyone ticked in Central Hub's Allocated crew joins at once (office roles stay out, as in Central Hub)
   for (const m of team) if (m.active !== false && !have.has(m.id) && m.name && (m.fromSite || !OFFICE_ROLE.test(m.role || ''))) staff.push({ id: m.id, name: m.name, trade: normTrade(m.role), active: true, level: 'crew', fromSite: !!m.fromSite });
-  return { ...p, staff };
+  // 2.16.0: someone approved in Central Hub leaves the waiting list on every device at once, not at the next check
+  const approved = new Set(team.filter(m => m.fromSite && m.active !== false).map(m => String(m.name || '').trim().toLowerCase()));
+  const crewWait = (p.crewWait || []).filter(w => !approved.has(String(w.name || '').trim().toLowerCase()));
+  return { ...p, staff, crewWait };
 }
 
 /** 2.15.0: positions the owner merged: shown as the one they became (Central Hub js/engine/positions.js OLD_ROLES). */

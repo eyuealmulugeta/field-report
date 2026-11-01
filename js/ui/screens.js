@@ -221,20 +221,67 @@ export function crew(c) {
 export function att(c) {
   const staff = c.project.staff || [], started = c.report && c.report.start && !c.report.nowork;
   const sub = `${c.project.name || c.project.code} · crew from Central Hub${c.ui.attAt ? ` · checked ${c.ui.attAt}` : ''}`;
+  // 2.16.0: three tabs: Today, Crew attendance (Central Hub's sheet), Employee data (the crew form, filled in here)
+  if (c.ui.attTab === 'sheet') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · the same sheet as Central Hub`), body: html`${attTabs(c)}${sheetView(c)}` };
+  if (c.ui.attTab === 'emp') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · employee data`), body: html`${attTabs(c)}${empView(c)}` };
   if (started) {
     const v = crew(c);
     // the tab bar stays: Done sits at the end of the page
-    return { tab: 'att', head: head('Attendance', sub), body: html`${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
+    return { tab: 'att', head: head('Attendance', sub), body: html`${attTabs(c)}${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
   }
   return {
     tab: 'att',
     head: head('Attendance', sub),
-    body: html`${refreshRow(c)}
+    body: html`${attTabs(c)}${refreshRow(c)}
       ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
         : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
       ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}
       ${crewListBox(c)}`,
   };
+}
+const ATT_TABS = [['', 'Today'], ['sheet', 'Crew attendance'], ['emp', 'Employee data']];
+const attTabs = c => html`<div class="seg wide att-tabs" role="group" aria-label="Office">${ATT_TABS.map(([k, t]) => html`<button type="button" class="${(c.ui.attTab || '') === k ? 'on' : ''}" data-act="attTab" data-v="${k}" aria-pressed="${(c.ui.attTab || '') === k}">${t}</button>`)}</div>`;
+const SHEET_MARK = { present: 'P', absent: 'A', sick: 'S', leave: 'L' };
+const SHEET_WORD = { present: 'Present', absent: 'Absent', sick: 'Sick', leave: 'On leave', none: 'No mark' };
+/** 2.16.0: Crew attendance: Central Hub's sheet of the pay period; a tapped day is corrected, and waits for the office. */
+function sheetView(c) {
+  const r = c.ui.reg;
+  if (c.ui.regErr) return html`<p class="callout warn">${c.ui.regErr}</p><button type="button" class="btn t" data-act="regLoad">Try again</button>`;
+  if (!r || r.code !== c.project.code) return html`<p class="muted">${c.ui.regBusy ? 'Loading the sheet from Central Hub…' : ''}</p>`;
+  const may = c.kind !== 'viewer', off = new Set(r.off), rows = r.groups.flatMap(g => g.rows);
+  const cell = (row, d) => {
+    const w = r.waiting[`${d}|${row.key}`], x = row.cells[d], on = c.ui.regEdit && c.ui.regEdit.d === d && c.ui.regEdit.k === row.key;
+    const mark = w ? SHEET_MARK[w.state] || '' : (x && x.mark) || '', ot = w ? w.ot : x && x.ot;
+    return html`<td class="rg-c ${off.has(d) ? 'rg-off' : ''} ${mark ? `rg-${mark}` : ''} ${w ? 'rg-wait' : x && x.fixed ? 'rg-fix' : ''} ${on ? 'rg-on' : ''}" ${may && d <= r.today ? html`data-act="regPick" data-d="${d}" data-k="${row.key}"` : ''}>${mark}${ot ? html`<sup>${ot}</sup>` : ''}</td>`;
+  };
+  const ed = c.ui.regEdit, er = ed && rows.find(x => x.key === ed.k);
+  const editor = er ? html`<div class="box pad rg-ed"><div class="spread"><b>${er.name}</b><span class="muted">${dayLabel(ed.d)}</span></div>
+    <div class="seg wide" role="group" aria-label="Mark">${Object.entries(SHEET_WORD).filter(([k]) => k !== 'none').map(([k, t]) => html`<button type="button" data-act="regSend" data-v="${k}" ${c.ui.busy ? 'disabled' : ''}>${t}</button>`)}</div>
+    <label class="small">Overtime hours, with Present <input class="fld slim" type="number" min="0" max="16" step="0.5" inputmode="decimal" data-ui="regOt" value="${c.ui.regOt || ''}" placeholder="0"></label>
+    <p class="muted small">Goes to the office for review. The sheet counts it once they accept it.</p></div>` : '';
+  const waiting = Object.values(r.waiting);
+  const line = f => html`<div class="li"><div class="n"><b>${f.name}</b><span>${dayLabel(f.date)} · ${SHEET_WORD[f.state] || f.state}${f.ot ? `, ${f.ot} h` : ''} · ${String(f.by || '').replace(/^Site: /, '')}${f.review && f.review !== 'waiting' ? ` · ${f.review === 'accepted' ? 'accepted' : 'rejected'}${f.reviewBy ? ` by ${f.reviewBy}` : ''}` : ''}</span></div></div>`;
+  return html`<div class="spread small rg-top"><button type="button" class="btn t slim" data-act="regShift" data-n="-1" aria-label="Previous period">‹</button><b>${r.period.label}</b>
+      <button type="button" class="btn t slim" data-act="regShift" data-n="1" ${r.period.to >= r.today ? 'disabled' : ''} aria-label="Next period">›</button>
+      <button type="button" class="btn t slim" data-act="regLoad" ${c.ui.regBusy ? 'disabled' : ''}>${c.ui.regBusy ? 'Loading…' : 'Refresh'}</button></div>
+    <p class="muted small">${r.reported} ${r.reported === 1 ? 'day' : 'days'} reported.${may ? ' Tap a day to correct it; the office reviews each correction.' : ''}</p>
+    ${editor}
+    ${rows.length ? html`<div class="rg-scroll"><table class="rg"><thead><tr><th class="rg-n">Name</th>${r.days.map(d => html`<th class="${off.has(d) ? 'rg-off' : ''}">${String(+d.slice(8))}</th>`)}<th>P</th><th>OT</th></tr></thead>
+      ${r.groups.map(g => html`<tbody><tr class="rg-g"><td class="rg-n" colspan="${r.days.length + 3}">${g.title.replace('Daily crew · ', '')} · ${g.rows.length}</td></tr>
+        ${g.rows.map(row => html`<tr><td class="rg-n">${row.name}</td>${r.days.map(d => cell(row, d))}<td><b>${row.present}</b></td><td>${row.ot || ''}</td></tr>`)}</tbody>`)}
+      <tfoot><tr><td class="rg-n">Present</td>${r.days.map(d => html`<td>${r.heads[d] || ''}</td>`)}<td></td><td></td></tr></tfoot></table></div>
+    <p class="muted small">P present, A absent, S sick, L on leave; a small number is overtime hours. Dotted: waiting for the office. Underlined: corrected by the office.</p>`
+    : html`<p class="callout">Nobody is on this sheet yet.</p>`}
+    ${waiting.length ? html`<div class="k">Waiting for the office · ${waiting.length}</div><div class="box">${waiting.map(line)}</div>` : ''}
+    ${r.answered.length ? html`<div class="k">Answered by the office</div><div class="box">${r.answered.map(line)}</div>` : ''}`;
+}
+/** 2.16.0: Employee data: the crew form, opened inside the app and filled in by the engineer (nothing to share). */
+function empView(c) {
+  if (!(crewBoss(c) || linkMaker(c))) return html`<p class="callout">Employee data is filled in by the project's engineers.</p>`;
+  if (c.ui.live !== 'on' && !isDemo()) return html`<p class="callout warn">Employee data needs live updates (the Central Hub sign-in). Open Me to switch them on.</p>`;
+  return html`<div class="box pad"><b>Employee data form</b>
+    <p class="muted small">The same form as the crew form link: one form per person, with the photo and the Fayda ID or passport. It opens here, nothing to share. Each form goes to Central Hub, Crew forms, for the office to review.</p>
+    <button type="button" class="btn p" data-act="empOpen" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Open the employee form</button></div>`;
 }
 const crewBoss = c => c.kind === 'reviewer' || /engineer|manager|\bgm\b/i.test((c.s.profile || {}).position || '');   // 2.13.1: GM too
 // 2.13.0: made here when live updates are on (no Central Hub sign-in); the old way otherwise
