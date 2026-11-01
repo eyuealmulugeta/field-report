@@ -238,7 +238,9 @@ export function att(c) {
 }
 const crewBoss = c => c.kind === 'reviewer' || /engineer|manager|\bgm\b/i.test((c.s.profile || {}).position || '');   // 2.13.1: GM too
 // 2.13.0: made here when live updates are on (no Central Hub sign-in); the old way otherwise
-const formLink = c => (!crewBoss(c) ? '' : c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewLink" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Share a crew form link</button>`
+// 2.15.1: crew form links: the GM and the Admin only (owner's decision)
+const linkMaker = c => ['admin', 'exec'].includes((c.s.auth || {}).role) || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
+const formLink = c => (!linkMaker(c) ? '' : c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewLink" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Share a crew form link</button>`
   : html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>`);   // 2.10.1
 /** 2.13.0: the HR photo from Central Hub, else the initials. */
 const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
