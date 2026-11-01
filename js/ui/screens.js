@@ -313,13 +313,13 @@ const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', '
 const tog = (act, f, on, title, sub) => html`<button type="button" class="box pad tog" data-act="${act}" data-f="${f}"><span><b>${title}</b><br><span class="muted small">${sub}</span></span><span class="sw ${on ? 'on' : ''}"></span></button>`;
 
 /** 2.12.0 (Phase E1): live updates from Central Hub, shown only when the Admin turned them on. */
-export function liveLine(ui) {
+export function liveLine(ui, why = '') {
   if (ui.liveRoute !== 'read') return '';
   const st = ui.live || '';
   const say = st === 'on' || st === 'connecting' ? 'On: approvals and comments from the office arrive at once'
     : st === 'none' ? 'This project is not connected to Central Hub yet'
     : st === 'error' ? 'Not available now: the app checks the office the usual way' : 'Off on this phone';
-  return html`<div class="k">Live updates</div><div class="box pad spread small"><span class="${st === 'on' ? 'ok' : 'muted'}">${say}</span>${st === 'signin' || st === '' ? html`<button type="button" class="btn t slim" data-act="liveConnect">Turn on</button>` : ''}</div>`;
+  return html`<div class="k">Live updates</div><div class="box pad spread small"><span class="${st === 'on' ? 'ok' : 'muted'}">${say}</span>${st === 'signin' || st === '' ? html`<button type="button" class="btn t slim" data-act="liveConnect">Turn on</button>` : ''}</div>${why && st !== 'on' ? html`<p class="muted tiny">${why}</p>` : ''}`;
 }
 
 export function me(c) {
@@ -339,7 +339,7 @@ export function me(c) {
       <div class="two"><label class="small">Start<input class="fld" type="time" data-f="profile.defStart" value="${p.defStart || (pr && pr.defStart) || '08:00'}"></label>
         <label class="small">End<input class="fld" type="time" data-f="profile.defEnd" value="${p.defEnd || (pr && pr.defEnd) || '17:00'}"></label></div>
       <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
-      ${liveLine(c.ui)}
+      ${liveLine(c.ui, c.ui.liveWhy || '')}
       <div class="k">Reminders and look</div>
       <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Review, Crew and working hours): ${(pr && pr.remindAt) || '17:00'}.</p>
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}

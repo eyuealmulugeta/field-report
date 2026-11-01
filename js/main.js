@@ -232,14 +232,15 @@ async function goLive(at = '') {
   if (demo) return;
   ui.liveRoute = await L.routeOf();
   if (ui.liveRoute !== 'read') { ui.live = ''; await L.stop(); return; }
-  if (at) await L.connect(at);
+  if (at && !(await L.connect(at))) { ui.live = 'error'; ui.liveWhy = L.liveWhy(); draw(); return; }
   const p = project(), a = store.get().auth;
   if (!p || !a) return;
   ui.live = await L.listen({
     code: p.code, email: a.email,
     onKnown: list => { store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } }); inboxCheck(); },
-    onChange: st => { ui.live = st; draw(); },
+    onChange: st => { ui.live = st; ui.liveWhy = L.liveWhy(); draw(); },
   });
+  ui.liveWhy = L.liveWhy();
   draw();
 }
 

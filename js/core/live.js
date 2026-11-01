@@ -33,7 +33,10 @@ export function knownOf(rec, now = Date.now()) {
 let fb = null;          // { auth, db, F } once loaded
 let stops = [];
 let state = 'off';      // off | connecting | on | error
+let why = '';           // 2.12.1: the reason of the last failure, shown on Me
 export const liveState = () => state;
+export const liveWhy = () => why;
+const fail = (e, where) => { state = 'error'; why = `${where}: ${String(e?.code || e?.message || e).replace(/^auth\/|^firestore\//, '').slice(0, 80)}`; };
 
 async function load() {
   if (fb) return fb;
@@ -51,7 +54,7 @@ export async function connect(accessToken) {
     const { U, auth } = await load();
     await U.signInWithCredential(auth, U.GoogleAuthProvider.credential(null, accessToken));
     return true;
-  } catch { state = 'error'; return false; }
+  } catch (e) { fail(e, 'Sign-in'); return false; }
 }
 
 /** Stops listening and signs out of Firebase (the phone's own sign-out, or the route back to Script). */
@@ -71,10 +74,10 @@ export async function listen({ code, email, onKnown, onChange = () => {}, today 
     const { F, auth, db } = await load();
     await auth.authStateReady();
     const u = auth.currentUser;
-    if (!u || String(u.email || '').toLowerCase() !== String(email || '').toLowerCase()) { state = 'off'; return 'signin'; }
+    if (!u || String(u.email || '').toLowerCase() !== String(email || '').toLowerCase()) { state = 'off'; if (state !== 'error') why = ''; return 'signin'; }
     const acc = await F.getDoc(F.doc(db, 'fieldAccess', u.email.toLowerCase()));
     const pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
-    if (!pid) { state = 'off'; return 'none'; }
+    if (!pid) { state = 'off'; why = `no Central Hub project for ${String(code).toUpperCase()} on ${u.email}`; return 'none'; }
     const since = new Date(today.getTime() - DAYS * 864e5).toISOString().slice(0, 10);
     const q = F.query(F.collection(db, 'projects', pid, 'reports'), F.where('date', '>=', since));
     state = 'connecting';
@@ -83,7 +86,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, today 
       const list = snap.docChanges().map(c => knownOf(c.doc.data())).filter(Boolean);
       if (list.length) onKnown(list);
       onChange(state);
-    }, () => { state = 'error'; onChange(state); }));
+    }, e => { fail(e, 'Reports'); onChange(state); }));
     return 'on';
-  } catch { state = 'error'; return 'error'; }
+  } catch (e) { fail(e, 'Access'); return 'error'; }
 }
