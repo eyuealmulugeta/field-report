@@ -201,7 +201,7 @@ export function crew(c) {
       <button type="button" class="box pad tog" data-act="allPresent"><b>Everyone present</b><span class="sw ${t.away ? '' : 'on'}"></span></button>
       <div class="chips"><button type="button" class="chip ${f ? '' : 'on'}" data-act="filter" data-v="">All ${cr.rows.length}</button>${trades.map(tr => html`<button type="button" class="chip ${f === tr ? 'on' : ''}" data-act="filter" data-v="${tr}">${tr} ${cr.rows.filter(r => (r.trade || 'Other') === tr).length}</button>`)}</div>
       <div class="fld-ic">${icon('search')}<input class="fld" data-ui="q" value="${c.ui.q || ''}" placeholder="Find a name" aria-label="Find a name"></div>
-      ${c.wide ? crewTables(c, list) : html`<div class="box">${list.map(({ r, i }) => html`<div class="li"><span class="av">${initials(r.name)}</span><div class="n"><b>${r.name}</b><span>${r.trade || 'No trade'}${r.ot ? ` · overtime ${r.ot}h` : ''}</span></div>
+      ${c.wide ? crewTables(c, list) : html`<div class="box">${list.map(({ r, i }) => html`<div class="li">${av(c, r)}<div class="n"><b>${r.name}</b><span>${r.trade || 'No trade'}${r.ot ? ` · overtime ${r.ot}h` : ''}</span></div>
         ${r.state === 'present' && c.ui.ot === i ? stepper('ot', r.ot, `${r.ot}h`, i) : seg(r, i)}
         ${r.state === 'present' ? html`<button type="button" class="mini" data-act="otOpen" data-i="${i}" aria-label="Overtime for ${r.name}">${icon('clock')}</button>` : ''}</div>`)}
         ${list.length ? '' : html`<div class="li muted small">No one matches.</div>`}</div>`}`
@@ -230,13 +230,26 @@ export function att(c) {
     tab: 'att',
     head: head('Office attendance', sub),
     body: html`${refreshRow(c)}
-      ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => html`<div class="li"><span class="av">${initials(x.name)}</span><div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}</span></div></div>`)}</div>`
+      ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
         : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
       ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}
       ${crewListBox(c)}`,
   };
 }
-const formLink = c => (c.kind === 'reviewer' || /engineer|manager/i.test((c.s.profile || {}).position || '') ? html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>` : '');   // 2.10.1
+const crewBoss = c => c.kind === 'reviewer' || /engineer|manager/i.test((c.s.profile || {}).position || '');
+// 2.13.0: made here when live updates are on (no Central Hub sign-in); the old way otherwise
+const formLink = c => (!crewBoss(c) ? '' : c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewLink" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Share a crew form link</button>`
+  : html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>`);   // 2.10.1
+/** 2.13.0: the HR photo from Central Hub, else the initials. */
+const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
+/** 2.13.0: crew the site added can be corrected or taken off from here (live updates on). */
+function staffRow(c, x) {
+  const mine = x.fromSite && c.ui.live === 'on' && crewBoss(c);
+  if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><input class="fld slim" data-ui="ceTrade" value="${c.ui.ceTrade ?? x.trade}" placeholder="Trade" aria-label="Trade"></div>
+    <button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
+  return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
+    ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button><button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Take ${x.name} off">✕</button>` : ''}</div>`;
+}
 const refreshRow = c => html`${formLink(c)}<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
 
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
@@ -275,7 +288,7 @@ function crewListBox(c) {
         ${paid && wageDiffers(x, cl.trades) ? html`<span class="pill warn">Not the trade wage: the office will check it</span>` : ''}</div>`)}
       <button type="button" class="btn t slim" data-act="clPerson">${icon('plus')}Add a person</button>
       ${cl.people.length ? html`<button type="button" class="btn p" data-act="clSend" ${c.ui.busy ? 'disabled' : ''}>Send ${cl.people.length} for approval</button>` : ''}
-      ${wait.length ? html`<div class="lab">Waiting for approval</div><ul class="plain small">${wait.map(x => html`<li>${x.name} <span class="muted">· ${x.trade || 'no trade'}</span></li>`)}</ul>` : ''}</div>`;
+      ${wait.length ? html`<div class="lab">Waiting for approval</div><ul class="plain small">${wait.map(x => html`<li>${x.name} <span class="muted">· ${x.trade || 'no trade'}</span>${x.id && c.ui.live === 'on' ? html` <button type="button" class="btn t slim" data-act="waitDrop" data-v="${x.id}" data-e="1" ${c.ui.busy ? 'disabled' : ''}>Edit</button><button type="button" class="mini" data-act="waitDrop" data-v="${x.id}" ${c.ui.busy ? 'disabled' : ''} aria-label="Remove ${x.name}">✕</button>` : ''}</li>`)}</ul>` : ''}</div>`;
 }
 
 /** On a computer: one table per trade, side by side, overtime always at hand; arrows and P A S L work from the keyboard. */

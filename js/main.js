@@ -8,7 +8,7 @@ import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm } from './model/report.js';
-import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD } from './model/crew.js';
+import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
@@ -57,7 +57,8 @@ const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'pho
 
 /* ---------- state helpers ---------- */
 
-const project = () => store.get().projects.find(p => p.code === store.get().proj) || null;
+// 2.13.0: with Central Hub's team overlaid (live)
+const project = () => { const p = store.get().projects.find(x => x.code === store.get().proj) || null; return p && ui.teamOf === p.code ? withTeam(p, ui.team) : p; };
 const key = () => draftKey(store.get().proj, today());
 const report = () => store.get().drafts[key()] || null;
 const working = () => { const r = report(); return r && r.start ? r : null; };
@@ -216,7 +217,7 @@ async function checkStatus(force) {
   for (const x of list) {
     try {
       const res = await call('status', { name: x.name });
-      known[x.name] = res.found ? { status: res.report.status, version: res.report.version, comments: res.report.comments || [], checked: Date.now() } : { status: 'submitted', comments: [], checked: Date.now() };
+      known[x.name] = res.found ? { status: res.report.status, version: res.report.version, comments: res.report.comments || [], history: res.report.history || [], checked: Date.now() } : { status: 'submitted', comments: [], checked: Date.now() };
     } catch (e) { if (e.code === 'OFFLINE') break; }
   }
   ui.checking = false;
@@ -243,6 +244,15 @@ async function goLive(at = '') {
       inboxCheck();
     },
     onChange: st => { ui.live = st; ui.liveWhy = L.liveWhy(); draw(); },
+    // 2.13.0: Central Hub sent new lists or decided on crew: reload them at once
+    onPing: d => {
+      const seen = ui.pingSeen; ui.pingSeen = d;
+      if (!seen) return;
+      if (d.lists && d.lists !== seen.lists) loadSetup();
+      if (d.crew && d.crew !== seen.crew) ACTS.attRefresh(true);
+    },
+    onTeam: team => { ui.team = team; ui.teamOf = p.code; draw(); },
+    onPhotos: m => { ui.photos = m; draw(); },
   });
   ui.liveWhy = L.liveWhy();
   draw();
@@ -527,6 +537,7 @@ async function sendReport(k, step = () => {}) {
     unqueue(k);
     if (k === draftKey(p.code, realToday()) && !demo) call('draftDel', { proj: p.code }).catch(() => {});
     store.set({ known: { ...store.get().known, [name]: { status: res.status || 'submitted', version: res.version || 1, comments: (store.get().known[name] || {}).comments || [], checked: Date.now() } } });
+    L.now('reports', { proj: p.code });   // 2.13.0: Central Hub takes it now, not on its next run
     return 'sent';
   } catch (e) {
     if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; }
@@ -921,6 +932,7 @@ const ACTS = {
     rv.busy = true; draw();
     try {
       const res = await call('review', { name: x.name, decision: d.v, text });
+      L.now('reports', { proj: (project() || {}).code });   // 2.13.0
       const upd = res.report || {};
       rv.open = { ...x, ...upd };
       rv.list = (rv.list || []).map(y => (y.name === x.name ? { ...y, ...upd } : y));
@@ -962,6 +974,7 @@ const ACTS = {
     ui.busy = true; draw();
     try {
       const res = await call('review', { name: d.v, decision: 'reply', text });
+      L.now('reports', { proj: (project() || {}).code });   // 2.13.0
       const k = store.get().known[d.v] || {};
       store.set({ known: { ...store.get().known, [d.v]: { ...k, comments: (res.report && res.report.comments) || [...(k.comments || []), { by: store.get().profile.name, at: new Date().toISOString(), kind: 'reply', text }] } } });
       ui.replyText = ''; ui.sheet = '';
@@ -1048,6 +1061,43 @@ const ACTS = {
   clTrade() { ui.cl.trades.push({ trade: '', wage: '' }); saveCl(); draw(); },
   clPerson() { ui.cl.people.push({ name: '', trade: (ui.cl.trades[0] || {}).trade || '', wage: '' }); saveCl(); draw(); },
   clDel(d) { ui.cl[d.k].splice(Number(d.i), 1); saveCl(); draw(); },
+  // 2.13.0: crew the site added: corrected or taken off here, in Central Hub at once
+  crewEdit: d => { ui.crewEdit = ui.crewEdit === d.v ? '' : d.v; draw(); },
+  async crewSave(d) {
+    const name = String(ui.ceName || '').trim(), role = String(ui.ceTrade || '').trim();
+    if (!name) return toast('Write the name.');
+    try { await L.editTeam(d.v, { name, ...(role ? { role } : {}) }); ui.crewEdit = ''; toast('Corrected. Central Hub has it.'); }
+    catch (e) { toast(`Not changed: ${e.message}`); }
+    draw();
+  },
+  async crewOff(d) {
+    if (!confirm(`Take ${d.n} off this project? Central Hub keeps the person's record.`)) return;
+    try { await L.editTeam(d.v, { active: false }); toast(`${d.n} is off this project.`); } catch (e) { toast(`Not changed: ${e.message}`); }
+  },
+  // 2.13.0: one of the waiting list taken back (Remove), or taken back into the form to correct and send again (Edit)
+  async waitDrop(d) {
+    const p = project(), x = (p.crewWait || []).find(y => y.id === d.v);
+    if (!x || (d.e !== '1' && !confirm(`Take ${x.name} off the waiting list?`))) return;
+    ui.busy = true; draw();
+    try {
+      await L.now('crewDrop', { proj: p.code, id: x.id });
+      if (d.e === '1') { ui.cl.people.push({ name: x.name, trade: x.trade || '', wage: x.wage || '' }); saveCl(); }
+      store.set({ projects: store.get().projects.map(y => (y.code === p.code ? { ...y, crewWait: (y.crewWait || []).filter(z => z.id !== x.id) } : y)) });
+      toast(d.e === '1' ? 'Correct it below and send it again.' : `${x.name} is off the waiting list.`);
+    } catch (e) { toast(`Not changed: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
+  // 2.13.0: the crew form link made here, so nobody needs Central Hub for it
+  async crewLink() {
+    const p = project();
+    ui.busy = true; draw();
+    try {
+      const url = await L.crewLink({ projectName: p.name || p.code, byName: (store.get().profile || {}).name || '' });
+      if (navigator.share) await navigator.share({ title: `Crew form · ${p.name || p.code}`, text: 'Fill in your details for the site (open 3 days):', url }).catch(() => {});
+      else { await navigator.clipboard.writeText(url).catch(() => {}); toast('Link copied. Paste it in the chat with the crew. It is open 3 days.'); }
+    } catch (e) { toast(`No link: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
   async clSend() {
     const p = project(), cl = ui.cl;
     const people = cl.people.filter(x => String(x.name).trim());
@@ -1061,6 +1111,7 @@ const ACTS = {
       const res = await call('crewPropose', { proj: p.code, trades, people: people.map(x => ({ name: x.name.trim(), trade: x.trade, ...(paid ? { wage: num(x.wage) > 0 ? num(x.wage) : trades[x.trade] } : {}) })) });
       store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || {} } : x)) });
       cl.people = []; saveCl();
+      L.now('crew', { proj: p.code });   // 2.13.0: Central Hub's list shows them at once
       toast(res.added ? `Sent ${res.added} to the office for approval.` : 'They were already sent; the office has them.');
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. The list stays here: send it again later.' : `Not sent: ${e.message}`); }
     finally { ui.busy = false; draw(); }

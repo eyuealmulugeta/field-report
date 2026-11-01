@@ -89,3 +89,17 @@ export function wageDiffers(person, trades) {
   const t = (trades || []).find(x => x.trade === person.trade);
   return Number(person.wage) > 0 && !!t && Number(t.wage) > 0 && Number(person.wage) !== Number(t.wage);
 }
+
+/**
+ * 2.13.0: the project's crew as Central Hub's team says right now: names and trades corrected there or on a phone,
+ * people taken off left out, people the site added and Central Hub approved added before the next list arrives.
+ */
+export function withTeam(p, team) {
+  if (!p || !team) return p;
+  const by = new Map(team.map(m => [m.id, m]));
+  const staff = (p.staff || []).filter(s => (by.get(s.id) || {}).active !== false)
+    .map(s => { const m = by.get(s.id); return m ? { ...s, name: m.name || s.name, trade: m.role || s.trade, fromSite: !!m.fromSite } : s; });
+  const have = new Set(staff.map(s => s.id));
+  for (const m of team) if (m.fromSite && m.active !== false && !have.has(m.id)) staff.push({ id: m.id, name: m.name, trade: m.role || '', active: true, level: 'crew', fromSite: true });
+  return { ...p, staff };
+}

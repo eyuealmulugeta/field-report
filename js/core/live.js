@@ -27,10 +27,11 @@ export function knownOf(rec, now = Date.now()) {
   const f = rec?.field;
   if (!f || !f.pdf || rec.source !== 'field') return null;
   const status = rec.review === 'done' && (!f.status || f.status === 'submitted') ? 'approved' : f.status || 'submitted';
-  return [f.pdf, { status, version: f.version || 1, comments: Array.isArray(f.comments) ? f.comments : [], checked: now, live: true }];
+  return [f.pdf, { status, version: f.version || 1, comments: Array.isArray(f.comments) ? f.comments : [], history: Array.isArray(f.history) ? f.history : [], checked: now, live: true }];
 }
 
 let fb = null;          // { auth, db, F } once loaded
+let pid = '';           // 2.13.0: the Central Hub project listened to
 let stops = [];
 let state = 'off';      // off | connecting | on | error
 let why = '';           // 2.12.1: the reason of the last failure, shown on Me
@@ -43,9 +44,9 @@ const fail = (e, where) => { state = 'error'; why = `${where}: ${String(e?.code 
 async function load() {
   if (fb) return fb;
   const sdk = name => import(`https://www.gstatic.com/firebasejs/${FIREBASE}/firebase-${name}.js`);
-  const [A, U, F] = await Promise.all([sdk('app'), sdk('auth'), sdk('firestore')]);
+  const [A, U, F, N] = await Promise.all([sdk('app'), sdk('auth'), sdk('firestore'), sdk('functions')]);
   const app = A.initializeApp(CONFIG, 'field');
-  fb = { A, U, F, auth: U.getAuth(app), db: F.getFirestore(app) };
+  fb = { A, U, F, N, app, auth: U.getAuth(app), db: F.getFirestore(app) };
   return fb;
 }
 
@@ -62,7 +63,7 @@ export async function connect(accessToken) {
 /** Stops listening and signs out of Firebase (the phone's own sign-out, or the route back to Script). */
 export async function stop() {
   stops.forEach(f => { try { f(); } catch { /* gone */ } }); stops = [];
-  state = 'off';
+  state = 'off'; pid = '';
   if (fb) await fb.U.signOut(fb.auth).catch(() => {});
 }
 
@@ -70,7 +71,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   try {
     const { F, auth, db } = await load();
@@ -78,7 +79,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, today 
     const u = auth.currentUser;
     if (!u || String(u.email || '').toLowerCase() !== String(email || '').toLowerCase()) { state = 'off'; if (state !== 'error') why = ''; return 'signin'; }
     const acc = await F.getDoc(F.doc(db, 'fieldAccess', u.email.toLowerCase()));
-    const pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
+    pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
     if (!pid) { state = 'off'; why = `no Central Hub project for ${String(code).toUpperCase()} on ${u.email}`; return 'none'; }
     const since = new Date(today.getTime() - DAYS * 864e5).toISOString().slice(0, 10);
     const q = F.query(F.collection(db, 'projects', pid, 'reports'), F.where('date', '>=', since));
@@ -90,6 +91,42 @@ export async function listen({ code, email, onKnown, onChange = () => {}, today 
       if (list.length) onKnown(list);
       onChange(state);
     }, e => { fail(e, 'Reports'); onChange(state); }));
+    // 2.13.0: Central Hub's "something changed" signals, the team (names, trades, taken off) and the crew photos
+    stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => onPing(d.data() || {}), () => {}));
+    stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
+    stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
     return 'on';
   } catch (e) { fail(e, 'Access'); return 'error'; }
+}
+
+/** 2.13.0: only what a phone needs of a team member (no wages or levels). */
+const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite });
+const signedIn = () => fb && fb.auth.currentUser && pid;
+
+/**
+ * 2.13.0 (Phase E2): asks the server to act now instead of on its next 2-minute run (Central Hub functions/fieldnow.js):
+ * 'reports' (a report sent or answered), 'crew' (crew sent for approval), 'crewDrop' { id } (take one off the waiting list).
+ * Returns the answer, or null when not connected or it failed (the 2-minute run still does it).
+ */
+export async function now(action, body = {}) {
+  if (!signedIn()) return null;
+  try { return (await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'fieldNow')({ action, ...body })).data; }
+  catch (e) { if (action === 'crewDrop') throw e; return null; }
+}
+
+/** 2.13.0: corrects or takes off a crew member the site added (Central Hub's rules allow name, trade, phone, active only). */
+export async function editTeam(id, changes) {
+  if (!signedIn()) throw new Error('Live updates are off. Ask the office.');
+  const { F, db, auth } = fb;
+  await F.updateDoc(F.doc(db, 'projects', pid, 'team', id), { ...changes, editedBy: auth.currentUser.email.toLowerCase(), editedAt: new Date().toISOString() });
+}
+
+/** 2.13.0: a crew form link of this project, made on the phone (3 days, Central Hub crew.html; no sign-in to fill it). */
+export async function crewLink({ projectName = '', byName = '', now: t = Date.now() } = {}) {
+  if (!signedIn()) throw new Error('Live updates are off. Ask the office for the link.');
+  const { F, db, auth } = fb;
+  const id = [...crypto.getRandomValues(new Uint8Array(20))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const by = auth.currentUser.email.toLowerCase();
+  await F.setDoc(F.doc(db, 'company', 'main', 'crewlinks', id), { id, kind: 'crew', name: '', email: '', projectId: pid, projectName, by, byName, at: new Date(t).toISOString(), untilMs: t + 3 * 864e5, status: 'open' });
+  return `https://hub.amistadprefab.com/crew.html?l=${id}`;
 }

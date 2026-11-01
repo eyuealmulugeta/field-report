@@ -32,17 +32,23 @@ export function reports(c) {
 }
 
 /** One day: status, the office's comments and history, and what can be done. */
+const STEP = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned' };
+/** 2.13.0: "1 Nov, 09:12". */
+export const stampOf = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
 export function daySheet(c) {
   const x = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).find(y => y.date === c.ui.daySel);
   if (!x) return '';
   const k = (x.name && c.s.known[x.name]) || {};
   const comments = k.comments || [];
+  // 2.13.0: every step of the report with its date and time (approved, sent back, reopened, comments), newest first
+  const steps = (k.history && k.history.length ? k.history : comments).filter(m => m.at).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const canWrite = x.kind !== 'approved' && x.kind !== 'nowork';
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Report of ${dayLabel(x.date)}">
     <div class="grab"></div><div class="spread"><b class="big-t">${dayLabel(x.date)}${x.no ? ` · #${x.no}` : ''}</b>${pill(x.kind)}</div>
     ${x.name ? html`<div class="muted tiny">${x.name}${x.version ? ` · version ${x.version}` : ''}</div>` : ''}
-    ${comments.length ? html`<div class="box">${comments.slice(-3).reverse().map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
-      <div class="n"><b>${m.text || (m.kind === 'approve' ? 'Approved' : m.kind)}</b><span>${m.by || 'Office'} · ${when(m.at)}</span></div></div>`)}</div>` : ''}
+    ${steps.length ? html`<div class="box">${steps.slice(0, 8).map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
+      <div class="n"><b>${m.text || STEP[m.kind] || m.kind}</b><span>${STEP[m.kind] && m.text ? `${STEP[m.kind]} · ` : ''}${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : ''}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.name && comments.length && x.kind !== 'approved' ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="Reply to the office">${c.ui.replyText || ''}</textarea>
       <button type="button" class="btn o" data-act="replySend" data-v="${x.name}">${icon('send')}Send the reply</button>` : ''}
