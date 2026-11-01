@@ -39,6 +39,7 @@ export function knownOf(rec, now = Date.now()) {
 let fb = null;          // { auth, db, F } once loaded
 let pid = '';           // 2.13.0: the Central Hub project listened to
 let stops = [];
+let gen = 0;   // 2.19.2: only the newest listen() subscribes
 let state = 'off';      // off | connecting | on | error
 let why = '';           // 2.12.1: the reason of the last failure, shown on Me
 export const liveState = () => state;
@@ -79,12 +80,17 @@ export async function stop() {
  */
 export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
+  const mine = ++gen;
   try {
     const { F, auth, db } = await load();
     await auth.authStateReady();
     const u = auth.currentUser;
     if (!u || String(u.email || '').toLowerCase() !== String(email || '').toLowerCase()) { state = 'off'; if (state !== 'error') why = ''; return 'signin'; }
     const acc = await F.getDoc(F.doc(db, 'fieldAccess', u.email.toLowerCase()));
+    // 2.19.2: a newer call (another project, a second start) took over while this one waited: two sets of listeners
+    // made the lists of two projects take turns (requests shown, then gone)
+    if (mine !== gen) return 'stale';
+    stops.forEach(f => f()); stops = [];
     pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
     if (!pid) { state = 'off'; why = `no Central Hub project for ${String(code).toUpperCase()} on ${u.email}`; return 'none'; }
     const since = new Date(today.getTime() - DAYS * 864e5).toISOString().slice(0, 10);

@@ -245,7 +245,7 @@ async function goLive(at = '') {
   if (at && !(await L.connect(at))) { ui.live = 'error'; ui.liveWhy = L.liveWhy(); draw(); return; }
   const p = project(), a = store.get().auth;
   if (!p || !a) return;
-  ui.live = await L.listen({
+  const st = await L.listen({
     code: p.code, email: a.email,
     onKnown: list => {
       store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } });
@@ -272,6 +272,8 @@ async function goLive(at = '') {
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
     all: P.isGM({ s: store.get() }),
   });
+  if (st === 'stale') return;   // 2.19.2: a newer start is in charge
+  ui.live = st;
   ui.liveWhy = L.liveWhy();
   if (ui.live === 'on') sigSync();   // 2.19.1
   draw();
