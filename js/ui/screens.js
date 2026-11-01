@@ -395,7 +395,7 @@ const tog = (act, f, on, title, sub) => html`<button type="button" class="box pa
 
 /** 2.12.0 (Phase E1): live updates from Central Hub, shown only when the Admin turned them on. */
 export function liveLine(ui, why = '', last = null) {
-  if (ui.liveRoute !== 'read') return '';
+  if (ui.liveRoute !== 'read' && ui.liveRoute !== 'both') return '';
   const st = ui.live || '';
   const say = st === 'on' || st === 'connecting' ? 'On: approvals and comments from the office arrive at once'
     : st === 'none' ? 'This project is not connected to Central Hub yet'

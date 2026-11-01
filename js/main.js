@@ -236,7 +236,7 @@ async function checkStatus(force) {
 async function goLive(at = '') {
   if (demo) return;
   ui.liveRoute = await L.routeOf();
-  if (ui.liveRoute !== 'read') { ui.live = ''; await L.stop(); return; }
+  if (!L.LIVE.has(ui.liveRoute)) { ui.live = ''; await L.stop(); return; }
   if (at && !(await L.connect(at))) { ui.live = 'error'; ui.liveWhy = L.liveWhy(); draw(); return; }
   const p = project(), a = store.get().auth;
   if (!p || !a) return;
@@ -660,6 +660,8 @@ async function sendReport(k, step = () => {}) {
     if (k === draftKey(p.code, realToday()) && !demo) call('draftDel', { proj: p.code }).catch(() => {});
     store.set({ known: { ...store.get().known, [name]: { status: res.status || 'submitted', version: res.version || 1, comments: (store.get().known[name] || {}).comments || [], checked: Date.now() } } });
     L.now('reports', { proj: p.code });   // 2.13.0: Central Hub takes it now, not on its next run
+    // 2.19.0 (Phase E3a): Data route Both: the report goes to the database too (Central Hub's Compare checks the two)
+    if (ui.liveRoute === 'both') L.now('report', { proj: p.code, date: r.date, no: r.no, name, script: 'ok', meta: L.reportLite(meta) });
     // 2.14.0: the day's shared requests go to the office with the report
     for (const q of (store.get().drafts[k] || {}).requests || []) if (q.live) L.requestStatus(q.id, 'requested', { byName: (store.get().profile || {}).name || '', note: `With report ${name}` }).catch(() => {});
     return 'sent';

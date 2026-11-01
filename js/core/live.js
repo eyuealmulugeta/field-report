@@ -10,12 +10,18 @@ const ROUTE_URL = `https://firestore.googleapis.com/v1/projects/${CONFIG.project
 const DAYS = 21;   // the reports listened to: the last three weeks
 
 /** The route the Admin set: 'script' (default, also when it cannot be read) or 'read'. */
+/** 2.19.0: the routes that read live. */
+export const LIVE = new Set(['read', 'both']);
+/** 2.19.0: what the database keeps of a report (E3a): its figures, not its text or photos. */
+export const reportLite = m => ({ hash: m.hash || '', preparedBy: m.preparedBy || '', manpower: { head: (m.manpower || {}).head || 0, manHours: (m.manpower || {}).manHours || 0 }, items: (m.items || []).map(() => 1), photos: m.photos || 0, attention: m.attention || [], rating: m.rating || null });
+
 export async function routeOf(get = fetch) {
   try {
     const r = await get(ROUTE_URL, { cache: 'no-store' });
     if (!r.ok) return 'script';
     const d = await r.json();
-    return d?.fields?.route?.stringValue === 'read' ? 'read' : 'script';
+    const v = d?.fields?.route?.stringValue;
+    return v === 'read' || v === 'both' ? v : 'script';   // 2.19.0: Both (E3a): reads live and writes each report to the database too
   } catch { return 'script'; }
 }
 
