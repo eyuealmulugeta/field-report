@@ -258,6 +258,30 @@ function liveReview(list) {
   draw();
 }
 
+/**
+ * 2.12.3: never keep working on an old version. When the site's version.json is newer, the app clears its stored
+ * copy and reloads; if the site still serves the old one, a wall asks to update. Drafts and photos stay on the phone.
+ */
+async function updateCheck() {
+  if (demo || !navigator.onLine) return;
+  let v = '';
+  try { v = (await (await fetch(`version.json?x=${Date.now()}`, { cache: 'no-store' })).json()).v || ''; } catch { return; }
+  if (!v || v === APP_VERSION) return;
+  const tried = sessionStorage.getItem('fr2:upd') === v;
+  sessionStorage.setItem('fr2:upd', v);
+  if (!tried) {
+    try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); for (const k of await caches.keys()) await caches.delete(k); } catch { /* reload anyway */ }
+    location.reload();
+    return;
+  }
+  if (document.querySelector('.update-wall')) return;
+  const box = document.createElement('div');
+  box.className = 'update-wall';
+  box.innerHTML = `<div class="box pad"><h2>Update to ${v}</h2><p class="muted">Field Report ${APP_VERSION} is out of date. Update before carrying on: reports and photos on this phone are kept.</p><button type="button" class="btn p">Update now</button></div>`;
+  box.querySelector('button').onclick = () => { sessionStorage.removeItem('fr2:upd'); box.remove(); updateCheck(); };
+  document.body.append(box);
+}
+
 const devId = () => deviceId();   // trial.2: the same id the script's device check knows
 
 /** Today's report as text in the script, so another phone can carry on (photos stay on this phone). */
@@ -1530,6 +1554,9 @@ window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flush
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
+updateCheck();   // 2.12.3
+setInterval(updateCheck, 30 * 60e3);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updateCheck(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 try { navigator.storage?.persist?.().catch(() => {}); } catch { /* 2.2.0: asks the phone not to clear the app's data (the device id) */ }
 store.subscribe(draw);

@@ -373,3 +373,7 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .qtile.add { border-style: dashed; } .qtile.add .qic { background: transparent; border: 1.5px dashed currentColor; }
 .qpin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line-2); font-weight: 700; }
 .qpin.on { background: var(--brand, #062b35); color: #fff; border-color: transparent; }
+
+/* 2.12.3: an old version waits for the update */
+.update-wall { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: rgba(6, 43, 53, .55); padding: 16px; }
+.update-wall .box { max-width: 380px; text-align: center; background: var(--card, #fff); }

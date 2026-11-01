@@ -36,6 +36,8 @@ let state = 'off';      // off | connecting | on | error
 let why = '';           // 2.12.1: the reason of the last failure, shown on Me
 export const liveState = () => state;
 export const liveWhy = () => why;
+let last = null;        // 2.12.3: the last change received { at, what }, shown on Me
+export const liveLast = () => last;
 const fail = (e, where) => { state = 'error'; why = `${where}: ${String(e?.code || e?.message || e).replace(/^auth\/|^firestore\//, '').slice(0, 80)}`; };
 
 async function load() {
@@ -84,6 +86,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, today 
     stops.push(F.onSnapshot(q, snap => {
       state = 'on';
       const list = snap.docChanges().map(c => knownOf(c.doc.data())).filter(Boolean);
+      if (list.length && !snap.metadata.fromCache) last = { at: new Date(), what: list.map(([n, k]) => `${n.slice(0, 10)} ${k.status}`).slice(-1)[0], n: list.length };
       if (list.length) onKnown(list);
       onChange(state);
     }, e => { fail(e, 'Reports'); onChange(state); }));
