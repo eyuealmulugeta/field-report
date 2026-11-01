@@ -84,6 +84,11 @@ function nextNo(p) {
 /** Saves the report (after a change made with fn). quiet = do not redraw, for typing. */
 function edit(fn, quiet) {
   const k = key(), r = structuredClone(report());
+  // 2.19.1: the GM changes a project's report before it is sent only after saying yes (once per report, per opening)
+  if (!r.sentAt && P.isGM({ s: store.get() }) && !(ui.gmOk || {})[k]) {
+    if (!confirm(`This is the site's report of ${r.date} for ${r.proj}, not sent yet. Change it?`)) { draw(); return; }
+    ui.gmOk = { ...(ui.gmOk || {}), [k]: true };
+  }
   fn(r);
   r.updated = Date.now();
   // 2.4.0: one report per project and day, shared: who worked on it, in turn
@@ -268,6 +273,7 @@ async function goLive(at = '') {
     all: P.isGM({ s: store.get() }),
   });
   ui.liveWhy = L.liveWhy();
+  if (ui.live === 'on') sigSync();   // 2.19.1
   draw();
 }
 
@@ -552,6 +558,21 @@ async function signedIn(pending) {
     else ui.error = e.message;
   }
   ui.busy = false; draw();
+}
+
+/** 2.19.1: a new signature: on this phone, and in Central Hub's copy that every device of this person uses. */
+function sigSaved(png) {
+  const at = Date.now();
+  store.set({ profile: { ...store.get().profile, sig: png, sigAt: at } });
+  L.sigPush(png, at).catch(() => {});
+}
+/** 2.19.1: when live: the newer of this phone's signature and the shared one wins on both. */
+async function sigSync() {
+  try {
+    const prof = store.get().profile, far = await L.sigPull();
+    if (far && far.sig !== prof.sig && (!prof.sig || far.at >= (prof.sigAt || 0))) { store.set({ profile: { ...store.get().profile, sig: far.sig, sigAt: far.at } }); draw(); }
+    else if (prof.sig && (!far || far.sig !== prof.sig)) await L.sigPush(prof.sig, prof.sigAt || Date.now());
+  } catch { /* the script's copy still works */ }
 }
 
 /** 2.4.0: the signature kept in Drive comes to a phone that has none (a new phone, or after clearing it). */
@@ -1004,7 +1025,7 @@ const ACTS = {
   async sigFull(d) {
     const png = await openPad(d.v === 'report' ? 'Sign the report' : 'Your signature');
     if (!png) return;
-    store.set({ profile: { ...store.get().profile, sig: png } });
+    sigSaved(png);
     if (d.v === 'report' && report()) edit(r => { r.signed = new Date().toISOString(); });
     if (!demo) call('sigPut', { png }).catch(() => toast('Your signature is kept on this phone. It goes to the office with the next sign-in.'));
     draw();
@@ -1456,7 +1477,8 @@ const ACTS = {
     out.width = cv.width; out.height = cv.height;
     const g = out.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, out.width, out.height); g.drawImage(cv, 0, 0);
-    store.set({ profile: { ...store.get().profile, sig: out.toDataURL('image/png') } });
+    sigSaved(out.toDataURL('image/png'));
+    if (!demo) call('sigPut', { png: store.get().profile.sig }).catch(() => {});
     ui.sig = [];
     edit(r => { r.signed = new Date().toISOString(); });
   },

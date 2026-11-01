@@ -135,6 +135,27 @@ export function dayOf(rec) {
 const signedIn = () => fb && fb.auth.currentUser && pid;
 
 /**
+ * 2.19.1: the person's signature, the same in Field Report and Central Hub on every device: Central Hub's prefs/<email>
+ * (items of { k, v as JSON }), keys sf:mysig (the PNG) and sf:mysigAt (when it was made). Only that person reads or writes it.
+ */
+const SIG = 'sf:mysig', SIG_AT = 'sf:mysigAt';
+const prefsRef = () => fb.F.doc(fb.db, 'prefs', fb.auth.currentUser.email.toLowerCase());
+const itemOf = (items, k) => { const it = items.find(i => i && i.k === k); try { return it ? JSON.parse(it.v) : null; } catch { return null; } };
+export async function sigPull() {
+  if (!signedIn()) return null;
+  const s = await fb.F.getDoc(prefsRef()), items = (s.exists() && s.data().items) || [];
+  const sig = itemOf(items, SIG);
+  return typeof sig === 'string' && sig.startsWith('data:image/png') ? { sig, at: Number(itemOf(items, SIG_AT)) || 0 } : null;
+}
+export async function sigPush(sig, at) {
+  if (!signedIn() || !sig) return false;
+  const ref = prefsRef(), s = await fb.F.getDoc(ref);
+  const items = ((s.exists() && s.data().items) || []).filter(i => i && i.k !== SIG && i.k !== SIG_AT);
+  await fb.F.setDoc(ref, { items: [...items, { k: SIG, v: JSON.stringify(sig) }, { k: SIG_AT, v: JSON.stringify(at) }], at: Date.now() });
+  return true;
+}
+
+/**
  * 2.13.0 (Phase E2): asks the server to act now instead of on its next 2-minute run (Central Hub functions/fieldnow.js):
  * 'reports' (a report sent or answered), 'crew' (crew sent for approval), 'crewDrop' { id } (take one off the waiting list).
  * Returns the answer, or null when not connected or it failed (the 2-minute run still does it).
