@@ -224,11 +224,11 @@ export function att(c) {
   if (started) {
     const v = crew(c);
     // the tab bar stays: Done sits at the end of the page
-    return { tab: 'att', head: head('Office attendance', sub), body: html`${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
+    return { tab: 'att', head: head('Attendance', sub), body: html`${refreshRow(c)}${v.body}<div class="att-done">${v.foot}</div>` };
   }
   return {
     tab: 'att',
-    head: head('Office attendance', sub),
+    head: head('Attendance', sub),
     body: html`${refreshRow(c)}
       ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
         : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
@@ -236,7 +236,7 @@ export function att(c) {
       ${crewListBox(c)}`,
   };
 }
-const crewBoss = c => c.kind === 'reviewer' || /engineer|manager/i.test((c.s.profile || {}).position || '');
+const crewBoss = c => c.kind === 'reviewer' || /engineer|manager|\bgm\b/i.test((c.s.profile || {}).position || '');   // 2.13.1: GM too
 // 2.13.0: made here when live updates are on (no Central Hub sign-in); the old way otherwise
 const formLink = c => (!crewBoss(c) ? '' : c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewLink" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Share a crew form link</button>`
   : html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>`);   // 2.10.1

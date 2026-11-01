@@ -6,14 +6,14 @@ import { sum, hoursBetween } from '../core/util.js';
 export const STATES = ['present', 'absent', 'sick', 'leave'];
 export const STATE_LETTER = { present: 'P', absent: 'A', sick: 'S', leave: 'L' };
 
-/** Today's attendance rows from the office's crew list, everyone present. Yesterday's overtime is not carried. */
+/** Today's attendance rows from the office's crew list, nobody marked yet (2.13.1). Yesterday's overtime is not carried. */
 export function rowsFromStaff(staff) {
   return (staff || []).filter(s => s && s.name && s.active !== false)
-    .map(s => ({ id: s.id || '', name: s.name, trade: s.trade || '', state: 'present', ot: 0 }));
+    .map(s => ({ id: s.id || '', name: s.name, trade: s.trade || '', state: '', ot: 0 }));
 }
 
 /**
- * Brings saved rows in line with the office's current list: new people are added as present,
+ * Brings saved rows in line with the office's current list: new people are added unmarked,
  * people the office removed stay only if they were marked today.
  */
 export function mergeStaff(rows, staff) {
@@ -21,7 +21,7 @@ export function mergeStaff(rows, staff) {
   const have = new Map((rows || []).map(r => [key(r), r]));
   const out = rowsFromStaff(staff).map(r => ({ ...r, ...(have.get(key(r)) || {}), trade: r.trade || (have.get(key(r)) || {}).trade || '' }));
   const inList = new Set(out.map(key));
-  for (const r of rows || []) if (!inList.has(key(r)) && (r.state !== 'present' || r.ot || r.added)) out.push(r);
+  for (const r of rows || []) if (!inList.has(key(r)) && (r.state || r.ot || r.added)) out.push(r);
   return out;
 }
 
@@ -57,7 +57,7 @@ export function manpowerMeta(crew, start, end) {
 }
 
 /** The office attendance block the Apps Script and Central Hub take: [{ id, name, trade, state, ot }]. */
-export const attendanceRows = crew => (crew && crew.rows || []).map(r => ({
+export const attendanceRows = crew => (crew && crew.rows || []).filter(r => r.state).map(r => ({   // 2.13.1: unmarked people are not sent
   id: r.id || '', name: r.name, trade: r.trade || '', state: r.state, ot: r.state === 'present' ? Number(r.ot) || 0 : 0,
 }));
 

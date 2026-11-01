@@ -272,23 +272,38 @@ function liveReview(list) {
  * 2.12.3: never keep working on an old version. When the site's version.json is newer, the app clears its stored
  * copy and reloads; if the site still serves the old one, a wall asks to update. Drafts and photos stay on the phone.
  */
+/** 2.13.1: the app's files fetched past every cache (service worker and browser), so the reload is the new version. */
+async function freshFiles() {
+  try {
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.update();
+    for (const k of await caches.keys()) await caches.delete(k);
+    const own = performance.getEntriesByType('resource').map(e => e.name).filter(u => u.startsWith(location.origin) && /\.(js|css|json|html)(\?|$)/.test(u));
+    await Promise.all([...new Set([location.href.split('#')[0], ...own])].map(u => fetch(u, { cache: 'reload' }).catch(() => {})));
+  } catch { /* reload anyway */ }
+}
+
 async function updateCheck() {
   if (demo || !navigator.onLine) return;
   let v = '';
   try { v = (await (await fetch(`version.json?x=${Date.now()}`, { cache: 'no-store' })).json()).v || ''; } catch { return; }
   if (!v || v === APP_VERSION) return;
-  const tried = sessionStorage.getItem('fr2:upd') === v;
-  sessionStorage.setItem('fr2:upd', v);
-  if (!tried) {
-    try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); for (const k of await caches.keys()) await caches.delete(k); } catch { /* reload anyway */ }
+  // 2.13.1: one update per new version: every file is fetched fresh (the browser's own copy too), then one reload.
+  // If that still did not take, the box shows once; it is never asked again for the same version.
+  let tried = '', walled = '';
+  try { tried = localStorage.getItem('fr2:upd') || ''; walled = localStorage.getItem('fr2:wall') || ''; } catch { /* private window */ }
+  if (walled === v) return;
+  if (tried !== v) {
+    try { localStorage.setItem('fr2:upd', v); } catch { /* reload anyway */ }
+    await freshFiles();
     location.reload();
     return;
   }
+  try { localStorage.setItem('fr2:wall', v); } catch { /* shown once this time */ }
   if (document.querySelector('.update-wall')) return;
   const box = document.createElement('div');
   box.className = 'update-wall';
   box.innerHTML = `<div class="box pad"><h2>Update to ${v}</h2><p class="muted">Field Report ${APP_VERSION} is out of date. Update before carrying on: reports and photos on this phone are kept.</p><button type="button" class="btn p">Update now</button></div>`;
-  box.querySelector('button').onclick = () => { sessionStorage.removeItem('fr2:upd'); box.remove(); updateCheck(); };
+  box.querySelector('button').onclick = async () => { box.remove(); await freshFiles(); location.reload(); };
   document.body.append(box);
 }
 
@@ -1118,6 +1133,8 @@ const ACTS = {
   },
   extra: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const x = r.crew.extra[i]; x.qty = Math.max(0, x.qty + Number(d.d)); if (!x.qty && !x.trade) r.crew.extra.splice(i, 1); }); },
   async crewDone() {
+    const open = (report().crew.rows || []).filter(x => !x.state).length;   // 2.13.1
+    if (open && !confirm(`${open} ${open === 1 ? 'person is' : 'people are'} not marked. They are not sent. Done anyway?`)) return;
     edit(r => { r.crew.done = true; r.crew.extra = r.crew.extra.filter(x => x.qty > 0); });
     const p = project(), r = report(), rows = attendanceRows(r.crew);
     go('today');

@@ -5,7 +5,7 @@ import { PHASES, STEPS, stepStatus } from '../model/report.js';
 
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
-  { id: 'att', title: 'Office attendance', icon: 'users' },   // 2.10.0
+  { id: 'att', title: 'Office', icon: 'users' },   // 2.13.1: the page itself says Attendance   // 2.10.0
   { id: 'reports', title: 'Reports', icon: 'doc' },
   { id: 'requests', title: 'Requests', icon: 'box' },
   { id: 'quick', title: 'Quick', icon: 'plus' },   // 2.11.0: the + tab
