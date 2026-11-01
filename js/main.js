@@ -296,29 +296,17 @@ async function freshFiles() {
   } catch { /* reload anyway */ }
 }
 
+/** 2.14.2: a newer version is out: a red tag at the top; tapping it updates. Nothing is blocked. */
 async function updateCheck() {
   if (demo || !navigator.onLine) return;
   let v = '';
   try { v = (await (await fetch(`version.json?x=${Date.now()}`, { cache: 'no-store' })).json()).v || ''; } catch { return; }
-  if (!v || v === APP_VERSION) return;
-  // 2.13.1: one update per new version: every file is fetched fresh (the browser's own copy too), then one reload.
-  // If that still did not take, the box shows once; it is never asked again for the same version.
-  let tried = '', walled = '';
-  try { tried = localStorage.getItem('fr2:upd') || ''; walled = localStorage.getItem('fr2:wall') || ''; } catch { /* private window */ }
-  if (walled === v) return;
-  if (tried !== v) {
-    try { localStorage.setItem('fr2:upd', v); } catch { /* reload anyway */ }
-    await freshFiles();
-    location.reload();
-    return;
-  }
-  try { localStorage.setItem('fr2:wall', v); } catch { /* shown once this time */ }
-  if (document.querySelector('.update-wall')) return;
-  const box = document.createElement('div');
-  box.className = 'update-wall';
-  box.innerHTML = `<div class="box pad"><h2>Update to ${v}</h2><p class="muted">Field Report ${APP_VERSION} is out of date. Update before carrying on: reports and photos on this phone are kept.</p><button type="button" class="btn p">Update now</button></div>`;
-  box.querySelector('button').onclick = async () => { box.remove(); await freshFiles(); location.reload(); };
-  document.body.append(box);
+  if (!v || v === APP_VERSION || document.querySelector('.upd-tag')) return;
+  const tag = document.createElement('button');
+  tag.type = 'button'; tag.className = 'upd-tag'; tag.textContent = `Update to ${v}`;
+  tag.title = 'Field Report ' + APP_VERSION + ' is out of date. Tap to update; nothing you saved is lost.';
+  tag.onclick = async () => { tag.textContent = 'Updating…'; await freshFiles(); location.reload(); };
+  document.body.append(tag);
 }
 
 const devId = () => deviceId();   // trial.2: the same id the script's device check knows
