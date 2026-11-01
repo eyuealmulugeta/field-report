@@ -428,3 +428,16 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .wide .fld { font-size: 13px; }
 .wide .k { margin-top: 4px; }
 .wide .ws.solo .bd > .box:has(> .li:nth-child(6)) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; column-span: all; }
+
+/* 2.17.2: no page scrolls sideways: tables fit, long words wrap */
+html, body, .app, .ws, .bd { overflow-x: hidden; }
+.bd img, .bd video, .bd canvas, .bd iframe, .bd select, .bd input, .bd textarea { max-width: 100%; }
+.li .n b, .li .n span, .callout, .box.pad { overflow-wrap: anywhere; }
+.tbl-wrap { overflow: visible; }
+.tbl { table-layout: fixed; } .tbl td, .tbl th { overflow-wrap: anywhere; }
+.rg-scroll { overflow: hidden; }
+.rg { width: 100%; table-layout: fixed; }
+.rg th, .rg td { min-width: 0; padding: 5px 1px; }
+.rg .rg-n { width: 34%; min-width: 0; max-width: none; position: static; }
+.rg th .muted { font-size: 9px; font-weight: 400; }
+.rg .rg-g td { text-align: left; padding-left: 6px; }

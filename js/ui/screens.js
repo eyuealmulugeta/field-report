@@ -255,6 +255,9 @@ function sheetView(c) {
     const mark = w ? SHEET_MARK[w.state] || '' : (x && x.mark) || '', ot = w ? w.ot : x && x.ot;
     return html`<td class="rg-c ${off.has(d) ? 'rg-off' : ''} ${mark ? `rg-${mark}` : ''} ${w ? 'rg-wait' : x && x.fixed ? 'rg-fix' : ''} ${on ? 'rg-on' : ''}" ${may && d <= r.today ? html`data-act="regPick" data-d="${d}" data-k="${row.key}"` : ''}>${mark}${ot ? html`<sup>${ot}</sup>` : ''}</td>`;
   };
+  // 2.17.2: a week per table, so the sheet fits the screen (nothing scrolls sideways)
+  const weeks = [];
+  for (let i = 0; i < r.days.length; i += 7) weeks.push(r.days.slice(i, i + 7));
   const ed = c.ui.regEdit, er = ed && rows.find(x => x.key === ed.k);
   const editor = er ? html`<div class="box pad rg-ed"><div class="spread"><b>${er.name}</b><span class="muted">${dayLabel(ed.d)}</span></div>
     <div class="seg wide" role="group" aria-label="Mark">${Object.entries(SHEET_WORD).filter(([k]) => k !== 'none').map(([k, t]) => html`<button type="button" data-act="regSend" data-v="${k}" ${c.ui.busy ? 'disabled' : ''}>${t}</button>`)}</div>
@@ -267,10 +270,12 @@ function sheetView(c) {
       <button type="button" class="btn t slim" data-act="regLoad" ${c.ui.regBusy ? 'disabled' : ''}>${c.ui.regBusy ? 'Loading…' : 'Refresh'}</button></div>
     <p class="muted small">${r.reported} ${r.reported === 1 ? 'day' : 'days'} reported.${may ? ' Tap a day to correct it; the office reviews each correction.' : ''}</p>
     ${editor}
-    ${rows.length ? html`<div class="rg-scroll"><table class="rg"><thead><tr><th class="rg-n">Name</th>${r.days.map(d => html`<th class="${off.has(d) ? 'rg-off' : ''}">${String(+d.slice(8))}</th>`)}<th>P</th><th>OT</th></tr></thead>
-      ${r.groups.map(g => html`<tbody><tr class="rg-g"><td class="rg-n" colspan="${r.days.length + 3}">${g.title.replace('Daily crew · ', '')} · ${g.rows.length}</td></tr>
-        ${g.rows.map(row => html`<tr><td class="rg-n">${row.name}</td>${r.days.map(d => cell(row, d))}<td><b>${row.present}</b></td><td>${row.ot || ''}</td></tr>`)}</tbody>`)}
-      <tfoot><tr><td class="rg-n">Present</td>${r.days.map(d => html`<td>${r.heads[d] || ''}</td>`)}<td></td><td></td></tr></tfoot></table></div>
+    ${rows.length ? html`${weeks.map(w => html`<div class="rg-scroll"><table class="rg"><thead><tr><th class="rg-n">${dayLabel(w[0]).slice(4)} – ${dayLabel(w[w.length - 1]).slice(4)}</th>${w.map(d => html`<th class="${off.has(d) ? 'rg-off' : ''}">${String(+d.slice(8))}<br><span class="muted">${'SMTWTFS'[new Date(`${d}T00:00:00Z`).getUTCDay()]}</span></th>`)}</tr></thead>
+      ${r.groups.map(g => html`<tbody><tr class="rg-g"><td colspan="${w.length + 1}">${g.title.replace('Daily crew · ', '')} · ${g.rows.length}</td></tr>
+        ${g.rows.map(row => html`<tr><td class="rg-n">${row.name}</td>${w.map(d => cell(row, d))}</tr>`)}</tbody>`)}
+      <tfoot><tr><td class="rg-n">Present</td>${w.map(d => html`<td>${r.heads[d] || ''}</td>`)}</tr></tfoot></table></div>`)}
+    <div class="k">Totals · ${r.period.label}</div><div class="rg-scroll"><table class="rg"><thead><tr><th class="rg-n">Name</th><th>P</th><th>A</th><th>S</th><th>L</th><th>OT h</th></tr></thead>
+      <tbody>${rows.map(row => html`<tr><td class="rg-n">${row.name}</td><td><b>${row.present}</b></td><td>${row.absent || ''}</td><td>${row.sick || ''}</td><td>${row.leave || ''}</td><td>${row.ot || ''}</td></tr>`)}</tbody></table></div>
     <p class="muted small">P present, A absent, S sick, L on leave; a small number is overtime hours. Dotted: waiting for the office. Underlined: corrected by the office.</p>`
     : html`<p class="callout">Nobody is on this sheet yet.</p>`}
     ${waiting.length ? html`<div class="k">Waiting for the office · ${waiting.length}</div><div class="box">${waiting.map(line)}</div>` : ''}
