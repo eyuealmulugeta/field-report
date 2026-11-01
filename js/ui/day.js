@@ -6,6 +6,8 @@ import { plural } from '../core/util.js';
 import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipmentChoices, materialChoices, photoNeedsCaption } from '../model/day.js';
 import { stepHead, chips, stepper } from './parts.js';
 import { thumb } from './work.js';
+import { fitLine } from '../pdf.js';
+
 
 const camTile = act => html`<button type="button" class="thumb add" data-act="${act}" aria-label="Take a photo">${icon('cam')}</button>`;
 const doneBtn = (r, id, label) => html`<button type="button" class="btn p" data-act="dayDone" data-v="${id}">${icon('check')}${r.done[id] ? 'Ticked as done' : label}</button>`;
@@ -72,6 +74,7 @@ export function safety(c) {
     head: stepHead('Safety and delays', 'Step 6 of 9 · During the day'),
     body: html`${clear && !s.done ? html`<button type="button" class="box pad allclear" data-act="allClear"><span class="ic ok">${icon('shield')}</span><div class="small left"><b>No incidents, no delays today</b><br><span class="muted">One tap ticks this step.</span></div></button>` : ''}
       <button type="button" class="box pad tog" data-act="flip" data-f="safety.toolbox"><span><b>Toolbox talk held</b><br><span class="muted small">The short safety talk before work</span></span><span class="sw ${s.toolbox ? 'on' : ''}"></span></button>
+      ${s.toolbox ? html`<label class="small">Time of the toolbox talk<input class="fld" type="time" data-f="safety.toolboxAt" value="${s.toolboxAt || ''}"></label>` : ''}
       <button type="button" class="box pad tog" data-act="flip" data-f="safety.incident"><span><b>Incident or near miss</b><br><span class="muted small">Anything that hurt someone or nearly did</span></span><span class="sw ${s.incident ? 'on bad' : ''}"></span></button>
       ${s.incident ? html`${chips('safety.kind', INCIDENTS, s.kind)}
         <textarea class="fld" data-f="safety.note" rows="2" placeholder="What happened, who, what was done" aria-label="What happened">${s.note}</textarea>` : ''}
@@ -110,7 +113,8 @@ export function photos(c) {
   const work = id => r.items.find(i => i.id === id);
   return {
     head: stepHead('Photos', `Step 7 of 9 · ${plural(r.photos.length, 'photo')} today`),
-    body: html`${missing ? html`<p class="callout warn">${plural(missing, 'photo')} without a caption or work item. Tap to add one, so the office knows what it shows.</p>` : ''}
+    body: html`${fitLine(c.ui.fit) ? html`<p class="soft small"><b>${fitLine(c.ui.fit)}</b></p>` : ''}
+      ${missing ? html`<p class="callout warn">${plural(missing, 'photo')} without a caption or work item. Tap to add one, so the office knows what it shows.</p>` : ''}
       <div class="ptiles">${list.map(p => html`<button type="button" class="ptile ${photoNeedsCaption(p) ? 'need' : ''}" data-act="openPhoto" data-v="${p.id}">
         ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
         <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button></div>`,

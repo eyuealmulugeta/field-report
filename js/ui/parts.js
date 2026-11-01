@@ -8,6 +8,7 @@ export const TABS = [
   { id: 'att', title: 'Office attendance', icon: 'users' },   // 2.10.0
   { id: 'reports', title: 'Reports', icon: 'doc' },
   { id: 'requests', title: 'Requests', icon: 'box' },
+  { id: 'quick', title: 'Quick', icon: 'plus' },   // 2.11.0: the + tab
 ];   // 2.8.0: Me is the person button at the top right (`head`)
 
 /** 2.6.0: a reviewer or viewer account: Review, Crew and Me. */

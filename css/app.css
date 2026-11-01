@@ -364,3 +364,12 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .btn.bad-t { color: var(--bad); border-color: var(--bad); }
 /* 2.10.0: Done at the end of the Office attendance tab */
 .att-done { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 6px; }
+
+/* 2.11.0: Quick, the + tab */
+.qgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
+.qtile { display: grid; justify-items: center; gap: 6px; padding: 12px 4px; border-radius: 14px; background: var(--card, #fff); border: 1px solid var(--line-2); font-size: 12px; font-weight: 600; text-align: center; color: var(--ink); }
+.qtile .qic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--brand-soft, #e7eef0); color: var(--brand, #062b35); }
+.qtile .qic .i { width: 24px; height: 24px; }
+.qtile.add { border-style: dashed; } .qtile.add .qic { background: transparent; border: 1.5px dashed currentColor; }
+.qpin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line-2); font-weight: 700; }
+.qpin.on { background: var(--brand, #062b35); color: #fff; border-color: transparent; }

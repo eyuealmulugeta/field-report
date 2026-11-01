@@ -11,6 +11,7 @@ import { zonesOf } from '../model/items.js';
 import { offlineLine } from '../model/follow.js';
 import { stepHead, chips, kpi } from './parts.js';
 import { canPdf } from './view.js';
+import { fitLine } from '../pdf.js';
 
 const STEP_NAMES = { start: 'Start of day', crew: 'Attendance', work: 'Work done', equipment: 'Equipment', materials: 'Materials', safety: 'Safety', photos: 'Photos', end: 'Tomorrow', me: 'Me', sign: 'Signature' };
 
@@ -105,10 +106,11 @@ export function send(c) {
       ${changed ? html`<p class="callout warn">Changed after sending. Send again so the office has the new version.</p>` : ''}
       ${r.queuedAt && !r.sentAt ? html`<p class="callout warn">Saved on this phone at ${new Date(r.queuedAt).toTimeString().slice(0, 5)}. It goes to the office by itself when there is a connection.</p>` : ''}
       <div class="kpis four">${kpi(sum.present, 'Present')}${kpi(html`${sum.manHours}<small>h</small>`, 'Man-hours')}${kpi(sum.items, 'Work items')}${kpi(sum.photos, 'Photos')}</div>
-      ${list.length ? html`<div class="k">${warns ? `${plural(warns, 'thing')} to look at · sending still works` : 'Before sending'}</div>
+      ${list.length ? html`<div class="k">${!ok ? 'Fix the red lines to send' : warns ? `${plural(warns, 'thing')} to look at · sending still works` : 'Before sending'}</div>
         <div class="box">${list.map(x => html`<button type="button" class="li chk ${x.level}" data-act="${x.step === 'sign' ? 'toSign' : 'go'}" data-to="${x.step}">
           <span class="ic ${x.level === 'need' ? 'bad' : 'warn'}">${icon('alert')}</span><div class="n"><b>${x.text}</b><span>${STEP_NAMES[x.step] || ''}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`
         : html`<div class="soft small"><b>Everything is in.</b> <span class="muted">Sign and send.</span></div>`}
+      ${fitLine(c.ui.fit) && r.photos.length ? html`<p class="soft small"><b>${fitLine(c.ui.fit)}</b> <button type="button" class="btn t slim" data-act="go" data-to="photos">Photos</button></p>` : ''}
       <div class="k">The report</div>
       <div class="box pad prev">
         <div class="spread"><b>Report #${r.no} · ${dayLabel(r.date)}</b><span class="muted small">${p.name}</span></div>
@@ -116,7 +118,7 @@ export function send(c) {
         <b class="small">Work done</b>
         ${zones.length ? zones.map(z => html`<div class="small"><b>${z.zone}</b><ul>${z.lines.map(l => html`<li>${l}</li>`)}</ul></div>`) : html`<p class="small muted">No work logged.</p>`}
         <b class="small">Equipment</b><p class="small">${r.equipment.length ? r.equipment.map(e => `${e.qty} × ${e.name}${e.status !== 'Active' ? ` (${e.status.toLowerCase()})` : ''}`).join(', ') : 'None'}</p>
-        <b class="small">Safety and delays</b><p class="small">${sum.safety}${r.safety.toolbox ? ' · toolbox talk held' : ''}${r.delays.length ? ` · ${plural(r.delays.length, 'delay')}, ${sum.delayHours} h` : ' · no delays'}</p>
+        <b class="small">Safety and delays</b><p class="small">${sum.safety}${r.safety.toolbox ? ` · toolbox talk ${r.safety.toolboxAt || 'held'}` : ''}${r.delays.length ? ` · ${plural(r.delays.length, 'delay')}, ${sum.delayHours} h` : ' · no delays'}</p>
         <b class="small">Materials received</b><p class="small">${r.received.length ? r.received.map(x => `${x.name}${x.qty != null && x.qty !== '' ? ` ${x.qty} ${x.unit}` : ''}`).join(', ') : 'Nothing received'}</p>
         <b class="small">Requests</b><p class="small">${reqs.length ? reqs.map(q => `${q.priority === 'Urgent' ? 'URGENT ' : ''}${q.text}`).join('; ') : 'None'}</p>
         <b class="small">Tomorrow</b><p class="small">${plan.length ? plan.map(planLine).join('; ') : 'No plan given'}</p>

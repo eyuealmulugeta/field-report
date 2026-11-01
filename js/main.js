@@ -6,7 +6,7 @@ import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
-import { newReport, draftKey, STEPS } from './model/report.js';
+import { newReport, draftKey, STEPS, weatherTerm } from './model/report.js';
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
@@ -19,7 +19,8 @@ import * as Y from './ui/day.js';
 import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta } from './model/end.js';
-import { buildPdf, loadPdfLib, photoCaption } from './pdf.js';
+import { buildPdf, loadPdfLib, photoCaption, weatherFile } from './pdf.js';
+
 import * as F from './ui/follow.js';
 import { monthDays, needsYou, toCheck, draftChoice } from './model/follow.js';
 import { nav } from './ui/parts.js';
@@ -29,6 +30,7 @@ import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM } from './model/sp
 import { shrinkVideo } from './core/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
+import * as Q from './ui/quick.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
@@ -48,6 +50,7 @@ const SCREENS = {
   reports: F.reports, requests: F.requests, view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
   spot: SP.spot, attention: S.attention,              // 2.7.0
+  quick: Q.quick,                                      // 2.11.0
 };
 const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
 
@@ -311,15 +314,30 @@ async function makePdf(r, p, step = () => {}) {
     const b = await getPhoto(ph.id).catch(() => null) || (ph.drive ? await drivePhoto(pdfName(p, r.date, r.no), ph.id) : null);
     if (!b) continue;
     const bmp = await createImageBitmap(b).catch(() => null);
-    photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, cap: photoCaption(ph, r.items) });
+    photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, at: ph.at || '', cap: photoCaption(ph, r.items) });
     if (bmp) bmp.close();
   }
   const prof = store.get().profile;
-  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), photos, sig: r.signed ? prof.sig : '', signedAt: now() });
+  const pic = f => (f ? fetch(f).then(x => x.blob()).then(toDataUrl).catch(() => '') : '');
+  const [logo, weather] = await Promise.all([pic('icon-192.png'), pic(weatherFile(weatherTerm(r.start.cond)) && `img/weather/${weatherFile(weatherTerm(r.start.cond))}.png`)]);
+  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, sig: r.signed ? prof.sig : '', signedAt: now() });
   const blob = doc.output('blob');
   if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
   ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
   return blob;
+}
+
+/** 2.11.0: how many photos fill the last photo page: the PDF laid out without the pictures, when jsPDF is at hand. */
+function fitSoon() {
+  const r = report(), p = project();
+  if (!r || !p) return;
+  const key = `${draftKey(r.proj, r.date)}|${r.updated}`;
+  if (ui.fit && ui.fit.key === key) return;
+  ui.fit = { key };
+  loadPdfLib().then(J => {
+    const doc = buildPdf(J, { r, project: p, profile: store.get().profile, photos: r.photos.map(ph => ({ data: '', w: 4, h: 3, at: ph.at, cap: photoCaption(ph, r.items) })), signedAt: '00:00' });
+    if (ui.fit.key === key) { ui.fit = { key, ...doc.photoFit }; draw(); }
+  }).catch(() => {});   // offline and never loaded: no hint
 }
 
 /** The script's answer to a sign-in (from the demo button or the return from Google). */
@@ -638,26 +656,28 @@ addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => { e.preventDefault(); if ([...(e.dataTransfer?.files || [])].length) toast('Report photos are taken with the camera.'); });
 
 /** Shrinks and keeps a picture, then attaches it to the item being edited or opens the Photo page. */
+/** 2.11.0: 'p' (portrait) or 'l' (landscape), for the PDF's photo grid. */
+const orientOfBlob = async b => { const bmp = await createImageBitmap(b).catch(() => null); if (!bmp) return 'l'; const o = bmp.height > bmp.width ? 'p' : 'l'; bmp.close(); return o; };
 async function addPhoto(file) {
   try {
-    const blob = await shrink(file), id = uid();
+    const blob = await shrink(file), id = uid(), o = await orientOfBlob(blob);
     await putPhoto(id, blob);
     await photoUrl(id);
     const r = ensureReport();
     if (ui.camFor === 'item' && ui.item) {
       ui.item.photos.push(id);
-      edit(x => { x.photos.push({ id, at: now(), zone: ui.item.zone, captionKind: 'Progress', caption: '', itemId: ui.item.id }); });
+      edit(x => { x.photos.push({ id, o, at: now(), zone: ui.item.zone, captionKind: 'Progress', caption: '', itemId: ui.item.id }); });
     } else if (ui.camFor === 'crew') {
-      edit(x => { x.photos.push({ id, at: now(), zone: '', captionKind: 'Crew', caption: 'Morning crew', itemId: '' }); });
+      edit(x => { x.photos.push({ id, o, at: now(), zone: '', captionKind: 'Crew', caption: 'Morning crew', itemId: '' }); });
       crewStamp(id);
       return;
     } else if (ui.camFor === 'recv' && ui.recv) {
       if (!ui.recv.photos.length) ui.recv.at = now();   // 2.5.0: the first photo's time is the delivery time
       ui.recv.photos.push(id);
-      edit(x => { x.photos.push({ id, at: now(), zone: '', captionKind: 'Delivery', caption: ui.recv.name ? `Delivery: ${ui.recv.name}` : 'Delivery note', itemId: '' }); });
+      edit(x => { x.photos.push({ id, o, at: now(), zone: '', captionKind: 'Delivery', caption: ui.recv.name ? `Delivery: ${ui.recv.name}` : 'Delivery note', itemId: '' }); });
     } else {
       const last = r.items.at(-1);
-      ui.photo = { id, at: now(), zone: last ? last.zone : '', captionKind: 'Progress', caption: '', itemId: '' };
+      ui.photo = { id, o, at: now(), zone: last ? last.zone : '', captionKind: 'Progress', caption: '', itemId: '' };
       ui.photoEditing = false;
       ui.photoBack = route() === 'photos' ? 'photos' : 'today';
       if (location.hash.slice(1) === 'photo') draw(); else go('photo');
@@ -769,6 +789,8 @@ const KEEP = new Set(['unit', 'captionKind', 'name', 'category', 'priority', 'te
 
 const ACTS = {
   go: d => go(d.to),
+  quickEdit() { ui.quickEdit = !ui.quickEdit; draw(); },   // 2.11.0
+  quickPin(d) { Q.quickToggle(d.v); draw(); },
   signin: () => signedIn(signIn(store.get().profile.name || '')),
   /** 2.4.0: the sign-up form: full name and phone go with the Google sign-in just made. */
   signUp() {
@@ -1138,7 +1160,7 @@ const ACTS = {
     edit(r => { r.done[d.v] = !r.done[d.v]; if (d.v === 'safety') r.safety.done = r.done.safety; });
     if (report().done[d.v]) go('today');
   },
-  flip: d => edit(r => { setPath(r, d.f, !getPath(r, d.f)); if (d.f === 'safety.incident') { r.safety.done = false; r.done.safety = false; } }),
+  flip: d => edit(r => { setPath(r, d.f, !getPath(r, d.f)); if (d.f === 'safety.incident') { r.safety.done = false; r.done.safety = false; } if (d.f === 'safety.toolbox' && r.safety.toolbox && !r.safety.toolboxAt) r.safety.toolboxAt = now(); }),
   allClear() {
     edit(r => { Object.assign(r.safety, { incident: false, kind: '', note: '', done: true }); r.delays = []; r.done.safety = true; });
     toast('Ticked: no incidents, no delays.'); go('today');
@@ -1296,7 +1318,7 @@ let layout = D.layoutOf(innerWidth);
 addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
 
 /** The open step's tab in the menu. */
-const TAB_OF = { att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
+const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 
@@ -1347,6 +1369,7 @@ function route() {
 function draw() {
   clSync();
   const r = route(), c = context();
+  if (r === 'photos' || r === 'send') fitSoon();   // 2.11.0
   const setup = r === 'signin' || r === 'profile' || r === 'choose';
   const wide = layout !== 'phone' && !setup;
   // on a computer, Today with a started report shows the summary; the day itself sits in the middle column

@@ -148,8 +148,8 @@ export function attention(c) {
   return {
     head: stepHead('Attention', 'A serious issue for the client'),
     body: html`<p class="muted small">Only for a serious issue that needs the client's urgent attention (for example a safety risk, a design problem, or work stopped by the client). It is printed in a red box at the top of the report, and Central Hub lists it under Needs attention.</p>
-      ${list.length ? html`<div class="box">${list.map(x => html`<div class="li"><span class="ic bad">${icon('alert')}</span><div class="n"><b>${x.text}</b><span>${x.at}</span></div>
-        <button type="button" class="btn t" data-act="attDrop" data-v="${x.id}" aria-label="Remove">Remove</button></div>`)}</div>` : ''}
+      ${list.length ? html`<div class="box">${list.map(x => html`<div class="li"><span class="ic bad">${icon('alert')}</span><div class="n"><b class="pre">${x.text}</b><span>${x.at}</span></div>
+        <button type="button" class="btn t slim" data-act="attDrop" data-v="${x.id}" aria-label="Remove">Remove</button></div>`)}</div>` : ''}
       <textarea class="fld" rows="3" data-ui="attText" placeholder="What is the issue, and what must the client do?">${c.ui.attText || ''}</textarea>
       <button type="button" class="btn p" data-act="attAdd">${icon('alert')}Add to the report</button>`,
   };

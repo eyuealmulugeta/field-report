@@ -33,7 +33,7 @@ export function view(c) {
       ${sec('Work done by zone', zones.length ? zones.map(z => html`<div class="small"><b>${z.zone}</b><ul>${z.lines.map(l => html`<li>${l}</li>`)}</ul></div>`) : none('No work logged.'))}
       ${sec('Manpower and equipment', html`<p class="small">${t.byTrade.map(x => `${x.qty} ${x.trade} (${x.hrs} h)`).join(', ') || 'No crew'} · ${t.present} present, ${t.manHours} man-hours</p>
         <p class="small">${r.equipment.length ? r.equipment.map(e => `${e.qty} × ${e.name}, ${e.hrs} h${e.status !== 'Active' ? ` (${e.status.toLowerCase()})` : ''}`).join('; ') : 'No equipment'}</p>`)}
-      ${sec('Safety and delays', html`<p class="small">Toolbox talk ${r.safety.toolbox ? 'held' : 'not held'} · ${r.safety.incident ? `${s.safety}: ${r.safety.note || 'no description'}` : 'No incidents'}</p>
+      ${sec('Safety and delays', html`<p class="small">Toolbox talk ${r.safety.toolbox ? r.safety.toolboxAt || 'held' : 'not held'} · ${r.safety.incident ? `${s.safety}: ${r.safety.note || 'no description'}` : 'No incidents'}</p>
         ${r.delays.length ? html`<ul class="small">${r.delays.map(x => html`<li>${x.at} · ${x.cause}${x.party ? ` (${x.party})` : ''} · ${x.hours} h${x.note ? ` · ${x.note}` : ''}</li>`)}</ul>` : none('No delays.')}`)}
       ${sec('Materials received', r.received.length ? html`<ul class="small">${r.received.map(x => html`<li>${x.at} · ${x.name}${qty(x) ? ` · ${qty(x)}` : ''}${x.note ? ` · ${x.note}` : ''}</li>`)}</ul>` : none('Nothing received.'))}
       ${sec('Requests', reqs.length ? html`<ul class="small">${reqs.map(q => html`<li>${q.priority === 'Urgent' ? 'URGENT · ' : ''}${q.category} · ${q.text}${qty(q) ? ` · ${qty(q)}` : ''}${q.neededBy ? ` · by ${dayLabel(q.neededBy)}` : ''}</li>`)}</ul>` : none('No requests.'))}
@@ -41,7 +41,7 @@ export function view(c) {
         ${String(r.notes || '').trim() ? html`<p class="small"><b>Notes:</b> ${r.notes}</p>` : ''}
         ${String(r.instructions || '').trim() ? html`<p class="small"><b>Client engineer's instructions:</b> ${r.instructions}</p>` : ''}`)}
       <div class="k">Photos</div>
-      ${r.photos.length ? html`<div class="rv-photos">${r.photos.map(ph => html`<figure>${thumb(ph.id, 'rv')}<figcaption class="tiny muted">${photoCaption(ph, r.items)}</figcaption></figure>`)}</div>`
+      ${r.photos.length ? html`<div class="rv-photos">${r.photos.map(ph => html`<figure>${thumb(ph.id, 'rv')}<figcaption class="tiny muted">${[ph.at, photoCaption(ph, r.items)].filter(Boolean).join(' · ')}</figcaption></figure>`)}</div>`
         : none('No photos.')}
       ${canPdf(c) ? '' : html`<p class="tiny muted center">${icon('doc')} The report PDF goes to the office only.</p>`}
     </div>`,
