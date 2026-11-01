@@ -71,7 +71,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   try {
     const { F, auth, db } = await load();
@@ -95,6 +95,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => onPing(d.data() || {}), () => {}));
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
     stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
+    // 2.15.0: today's attendance marks from every phone and computer of the project
+    if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}), () => {}));
     // 2.14.0: the project's site requests, drafts included, from every phone
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
     return 'on';
@@ -161,5 +163,13 @@ export async function requestStatus(qid, status, { byName = '', note = '' } = {}
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
   await F.updateDoc(F.doc(db, 'projects', pid, 'requests', `fr_${qid}`), { status, editedBy: byName || email, editedAt: at, log: F.arrayUnion({ at, by: email, byName: byName || email, status, note }) });
+  return true;
+}
+
+/** 2.15.0: attendance marks shared with the project's other phones and computers (projects/<id>/fieldDay/<date>). */
+export async function shareMarks(day, marks) {
+  if (!signedIn() || !day || !Object.keys(marks).length) return false;
+  const { F, db } = fb;
+  await F.setDoc(F.doc(db, 'projects', pid, 'fieldDay', day), { rows: marks, at: new Date().toISOString() }, { merge: true });
   return true;
 }

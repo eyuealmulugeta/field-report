@@ -102,9 +102,25 @@ export function withTeam(p, team) {
   // 2.14.2: someone taken off the project in Central Hub leaves at once (unless the ids do not match at all)
   const matched = (p.staff || []).some(s => by.has(s.id));
   const staff = (p.staff || []).filter(s => (by.get(s.id) || {}).active !== false && (!matched || !s.id || by.has(s.id)))
-    .map(s => { const m = by.get(s.id); return m ? { ...s, name: m.name || s.name, trade: m.role || s.trade, fromSite: !!m.fromSite } : s; });
+    .map(s => { const m = by.get(s.id); return m ? { ...s, name: m.name || s.name, trade: normTrade(m.role || s.trade), fromSite: !!m.fromSite } : s; });
   const have = new Set(staff.map(s => s.id));
   // 2.14.2: anyone ticked in Central Hub's Allocated crew joins at once (office roles stay out, as in Central Hub)
-  for (const m of team) if (m.active !== false && !have.has(m.id) && m.name && (m.fromSite || !OFFICE_ROLE.test(m.role || ''))) staff.push({ id: m.id, name: m.name, trade: m.role || '', active: true, level: 'crew', fromSite: !!m.fromSite });
+  for (const m of team) if (m.active !== false && !have.has(m.id) && m.name && (m.fromSite || !OFFICE_ROLE.test(m.role || ''))) staff.push({ id: m.id, name: m.name, trade: normTrade(m.role), active: true, level: 'crew', fromSite: !!m.fromSite });
   return { ...p, staff };
+}
+
+/** 2.15.0: positions the owner merged: shown as the one they became (Central Hub js/engine/positions.js OLD_ROLES). */
+const OLD_TRADES = { 'steel structure foreman': 'Foreman', 'general foreman': 'Foreman', 'container house technician': 'Technician', 'daily labourer': 'Daily labor', 'semi-skilled labourer': 'Semi-skilled labor' };
+export const normTrade = t => OLD_TRADES[String(t || '').trim().toLowerCase()] || String(t || '').trim();
+
+/** 2.15.0: the key a person's mark is shared under (their Central Hub id, else their name). */
+export const markKey = r => String(r.id || r.name || '').toLowerCase().replace(/[.\/\[\]#$~*`]/g, '_');
+
+/** 2.15.0: today's marks from the project's other phones and computers: a newer mark wins, person by person. */
+export function applyMarks(rows, marks) {
+  if (!marks) return rows;
+  return rows.map(r => {
+    const m = marks[markKey(r)];
+    return m && Number(m.at) > Number(r.markAt || 0) ? { ...r, state: m.state || '', ot: m.state === 'present' ? Number(m.ot) || 0 : 0, markAt: Number(m.at) } : r;
+  });
 }

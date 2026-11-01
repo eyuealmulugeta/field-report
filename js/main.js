@@ -8,7 +8,7 @@ import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm } from './model/report.js';
-import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam } from './model/crew.js';
+import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
@@ -97,7 +97,7 @@ function ensureReport() {
   if (report() && report().start) return report();
   const p = project(), prof = store.get().profile;
   const r = newReport({ ...p, defStart: prof.defStart || p.defStart, defEnd: prof.defEnd || p.defEnd }, today(), nextNo(p), lastReport(p.code, today()));
-  r.crew.rows = mergeStaff([], p.staff);
+  r.crew.rows = applyMarks(mergeStaff([], p.staff), !ui.date && ui.marksOf === p.code ? ui.marks : null);   // 2.15.0: marks made on another device
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
   syncNo(key()).catch(() => {});   // offline: checked again when it is sent
   return r;
@@ -151,7 +151,7 @@ async function loadProjects() {
   const extra = new Map((mine.projects || []).map(p => [String(p.proj).toUpperCase(), p]));
   const projects = (cfg.projects || []).map(p => {
     const code = codesOf(p).code, m = extra.get(code) || {};
-    return { ...p, code, staff: m.staff || [], location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove, hoursEdit: !!m.hoursEdit };
+    return { ...p, code, staff: (m.staff || []).map(x => ({ ...x, trade: normTrade(x.trade) })), location: m.location || p.siteName || '', crewWait: m.crewWait || [], tradeWages: m.tradeWages || {}, crewApprove: !!m.crewApprove, hoursEdit: !!m.hoursEdit };
   });
   const s = store.get(), old = new Map(s.projects.map(p => [p.code, p]));
   for (const p of projects) if (old.get(p.code)?.setup) p.setup = old.get(p.code).setup;
@@ -251,12 +251,32 @@ async function goLive(at = '') {
       if (d.lists && d.lists !== seen.lists) loadSetup();
       if (d.crew && d.crew !== seen.crew) ACTS.attRefresh(true);
     },
-    onTeam: team => { ui.team = team; ui.teamOf = p.code; draw(); },
+    onTeam: team => { ui.team = team; ui.teamOf = p.code; crewFollow(); draw(); },
+    onDay: marks => { ui.marks = marks; ui.marksOf = p.code; crewFollow(); draw(); },
+    day: realToday(),
     onPhotos: m => { ui.photos = m; draw(); },
     onRequests: list => liveRequests(list),
   });
   ui.liveWhy = L.liveWhy();
   draw();
+}
+
+/**
+ * 2.15.0: today's report (not sent yet) follows Central Hub's crew and the marks made on the project's other devices
+ * at once: nobody presses "Check the office list".
+ */
+function crewFollow() {
+  const p = project();
+  const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
+  if (!r || r.sentAt || r.nowork || !r.crew) return;
+  const rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
+  if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) editKey(k, x => { x.crew.rows = rows; });
+}
+
+/** 2.15.0: the marks of these rows to the project's other devices (today only). */
+function shareRows(rows) {
+  if (ui.date || !L.liveOn()) return;
+  L.shareMarks(realToday(), Object.fromEntries(rows.map(x => [markKey(x), { state: x.state || '', ot: Number(x.ot) || 0, at: x.markAt || Date.now(), by: (store.get().profile || {}).name || '' }]))).catch(() => {});
 }
 
 /** 2.14.0: the project's shared requests: shown on Requests, and today's drafts kept in today's report. */
@@ -1068,10 +1088,10 @@ const ACTS = {
     store.set({ lastNo: { ...store.get().lastNo, [store.get().proj]: report().no } });
     go(report().crew.done ? 'today' : 'crew');
   },
-  mark: d => { edit(r => { const x = r.crew.rows[d.i]; x.state = d.v; if (d.v !== 'present') x.ot = 0; }); ui.ot = null; },
+  mark: d => { edit(r => { const x = r.crew.rows[d.i]; x.state = d.v; x.markAt = Date.now(); if (d.v !== 'present') x.ot = 0; }); ui.ot = null; shareRows([report().crew.rows[d.i]]); },
   otOpen: d => { ui.ot = ui.ot === Number(d.i) ? null : Number(d.i); draw(); },
-  ot: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const x = r.crew.rows[i]; x.ot = Math.max(0, Math.min(12, (Number(x.ot) || 0) + Number(d.d) * 0.5)); }); },
-  allPresent: () => edit(r => { const away = r.crew.rows.some(x => x.state !== 'present'); if (away) r.crew.rows.forEach(x => { x.state = 'present'; }); }),
+  ot: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const x = r.crew.rows[i]; x.ot = Math.max(0, Math.min(12, (Number(x.ot) || 0) + Number(d.d) * 0.5)); x.markAt = Date.now(); }); shareRows([report().crew.rows[i]]); },
+  allPresent: () => { edit(r => { const away = r.crew.rows.some(x => x.state !== 'present'); if (away) { const t = Date.now(); r.crew.rows.forEach(x => { x.state = 'present'; x.markAt = t; }); } }); shareRows(report().crew.rows); },
   filter: d => { ui.filter = d.v; draw(); },
   addExtra: () => edit(r => { r.crew.extra.push({ trade: '', qty: 1 }); }),
   crewPhoto() {
