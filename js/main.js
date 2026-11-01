@@ -29,7 +29,7 @@ import { monthDays, needsYou, toCheck, draftChoice } from './model/follow.js';
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
-import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM } from './model/spot.js';
+import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
 import { shrinkVideo } from './core/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
@@ -945,14 +945,18 @@ async function upNow() {
 }
 
 /* 2.7.0: Spotlight. Photos and videos wait in the phone's photo store; each goes up alone, then the note. */
-const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid'), spotPick = document.getElementById('spotPick');
+const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid');   // 2.21.0: no gallery
 const spotIn = el => { el.value = ''; el.click(); };
+/** 2.21.0: the length of a video in seconds (0 when the phone cannot tell). */
+const videoSeconds = file => new Promise(res => { const v = document.createElement('video'), u = URL.createObjectURL(file); v.preload = 'metadata'; v.onloadedmetadata = () => { URL.revokeObjectURL(u); res(Number.isFinite(v.duration) ? v.duration : 0); }; v.onerror = () => { URL.revokeObjectURL(u); res(0); }; v.src = u; });
 const spotFiles = async files => {
   const s = ui.spot || (ui.spot = newSpot());
   for (const f of files) {
     if (s.media.length >= SPOT_MAX) { toast(`At most ${SPOT_MAX} photos or videos.`); break; }
     const k = mediaKind(f);
     if (k.refused) { toast(k.refused); continue; }
+    // 2.21.0: a live video is at most 60 seconds
+    if (k.kind === 'video' && await videoSeconds(f) > VIDEO_SECONDS + 1) { toast(`The video is longer than ${VIDEO_SECONDS} seconds. Record a shorter one.`); continue; }
     try {
       let blob = k.kind === 'photo' ? await shrink(f) : f;
       // 2.7.1: a video too big (or of another type) is made smaller here instead of being refused
@@ -972,7 +976,6 @@ const spotFiles = async files => {
 };
 spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
 spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
-spotPick.addEventListener('change', () => spotFiles([...(spotPick.files || [])]));
 const spotSet = (id, fn) => store.set({ spots: (store.get().spots || []).map(x => { if (x.id !== id) return x; const y = structuredClone(x); fn(y); return y; }) });
 let spotting = false;
 async function flushSpots() {
@@ -1167,10 +1170,11 @@ const ACTS = {
   spotCat(d) { ui.spot.cat = d.v; draw(); },
   spotCam() { spotIn(spotCam); },
   spotVid() { spotIn(spotVid); },
-  spotGallery() { spotIn(spotPick); },
+
   spotDrop(d) { const [m] = ui.spot.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
   spotSave() {
-    const s = { ...ui.spot, about: ui.spotAbout || 'The project', note: String(ui.spotNote || '').trim() }, why = spotMissing(s);
+    const list = aboutList(project().staff, (store.get().profile || {}).position);
+    const s = { ...ui.spot, about: list.includes(ui.spotAbout) ? ui.spotAbout : list[0], note: String(ui.spotNote || '').trim() }, why = spotMissing(s);
     if (why) return toast(why);
     const p = project(), keep = { id: uid(), proj: p.code, date: realToday(), time: now(), about: s.about, tone: s.tone, cat: s.cat, note: s.note, media: s.media, sent: false };
     const old = store.get().spots || [];

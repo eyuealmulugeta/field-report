@@ -59,6 +59,7 @@ export function manpowerMeta(crew, start, end) {
 /** The office attendance block the Apps Script and Central Hub take: [{ id, name, trade, state, ot }]. */
 export const attendanceRows = crew => (crew && crew.rows || []).filter(r => r.state).map(r => ({   // 2.13.1: unmarked people are not sent
   id: r.id || '', name: r.name, trade: r.trade || '', state: r.state, ot: r.state === 'present' ? Number(r.ot) || 0 : 0,
+  ...(r.markAt > 1e12 ? { at: new Date(r.markAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit' }) } : {}),   // 2.21.0: when it was marked, for the engagement score in Central Hub
 }));
 
 export const initials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
