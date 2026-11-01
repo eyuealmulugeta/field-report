@@ -378,3 +378,7 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 /* 2.12.3: an old version waits for the update */
 .update-wall { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: rgba(6, 43, 53, .55); padding: 16px; }
 .update-wall .box { max-width: 380px; text-align: center; background: var(--card, #fff); }
+
+/* 2.14.1: the overtime button stays in place when someone is not present (the row never shifts) */
+.mini.off { opacity: .25; pointer-events: none; }
+.tb-r .ot-off { display: inline-block; min-width: 112px; text-align: center; }

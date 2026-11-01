@@ -203,7 +203,7 @@ export function crew(c) {
       <div class="fld-ic">${icon('search')}<input class="fld" data-ui="q" value="${c.ui.q || ''}" placeholder="Find a name" aria-label="Find a name"></div>
       ${c.wide ? crewTables(c, list) : html`<div class="box">${list.map(({ r, i }) => html`<div class="li">${av(c, r)}<div class="n"><b>${r.name}</b><span>${r.trade || 'No trade'}${r.ot ? ` · overtime ${r.ot}h` : ''}</span></div>
         ${r.state === 'present' && c.ui.ot === i ? stepper('ot', r.ot, `${r.ot}h`, i) : seg(r, i)}
-        ${r.state === 'present' ? html`<button type="button" class="mini" data-act="otOpen" data-i="${i}" aria-label="Overtime for ${r.name}">${icon('clock')}</button>` : ''}</div>`)}
+        <button type="button" class="mini ${r.state === 'present' ? '' : 'off'}" data-act="otOpen" data-i="${i}" aria-label="Overtime for ${r.name}" ${r.state === 'present' ? '' : 'disabled'}>${icon('clock')}</button></div>`)}
         ${list.length ? '' : html`<div class="li muted small">No one matches.</div>`}</div>`}`
       : html`<p class="callout warn">The office has not sent a crew list for this project yet. Add day workers below, or ask the office to add the crew in Central Hub.</p>`}
       <div class="k">Day workers without names</div>
@@ -299,7 +299,7 @@ function crewTables(c, list) {
   return html`<div class="crew-cols">${[...groups].map(([trade, rows]) => html`<div class="box tb">
     <div class="tb-h"><span>${trade} · ${rows.length}</span><span>Today</span><span>Overtime</span></div>
     ${rows.map(({ r, i }) => html`<div class="tb-r ${c.ui.cur === i ? 'cur' : ''}" data-row="${i}"><span class="nm">${r.name}</span>${seg(r, i)}
-      ${r.state === 'present' ? stepper('ot', r.ot, r.ot ? `${r.ot}h` : '–', i) : html`<span class="muted small">–</span>`}</div>`)}
+      ${r.state === 'present' ? stepper('ot', r.ot, r.ot ? `${r.ot}h` : '–', i) : html`<span class="muted small ot-off">–</span>`}</div>`)}
   </div>`)}</div>
   <p class="muted tiny">Keyboard: ↑ ↓ move · P A S L mark · + − overtime · Ctrl S done</p>`;
 }
