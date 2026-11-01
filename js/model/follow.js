@@ -49,7 +49,10 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
     const o = sent.get(d);
     if (o && ['today', 'draft', 'missing', 'off'].includes(row.kind)) {
-      Object.assign(row, { kind: o.status === 'approved' || o.status === 'changes' ? o.status : 'submitted', no: Number(o.no) || o.no, name: o.name, version: o.version || 1, by: o.by || '', other: true });
+      // 2.12.2: a live answer from Central Hub (known) wins over the script's list of the project's reports
+      const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
+      Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true });
+      if (ko.comments && ko.comments.length) row.comment = ko.comments[ko.comments.length - 1];
     }
     out.push(row);
   }

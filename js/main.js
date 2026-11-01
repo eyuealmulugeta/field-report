@@ -237,10 +237,24 @@ async function goLive(at = '') {
   if (!p || !a) return;
   ui.live = await L.listen({
     code: p.code, email: a.email,
-    onKnown: list => { store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } }); inboxCheck(); },
+    onKnown: list => {
+      store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } });
+      liveReview(list);   // 2.12.2: the reviewer's list too
+      inboxCheck();
+    },
     onChange: st => { ui.live = st; ui.liveWhy = L.liveWhy(); draw(); },
   });
   ui.liveWhy = L.liveWhy();
+  draw();
+}
+
+/** 2.12.2: live answers into the reviewer's open list and report (Review), which come from the script's `list`. */
+function liveReview(list) {
+  const rv = ui.rv, m = new Map(list);
+  if (!rv || !rv.list) return;
+  const upd = y => (m.has(y.name) ? { ...y, status: m.get(y.name).status, comments: m.get(y.name).comments } : y);
+  rv.list = rv.list.map(upd);
+  if (rv.open) rv.open = upd(rv.open);
   draw();
 }
 
