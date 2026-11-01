@@ -3,7 +3,7 @@
 import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, takeGoogleToken } from './core/api.js';
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
-import { partOf } from './model/rating.js';   // 2.18.0   // 2.16.1
+import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
 import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
@@ -94,7 +94,7 @@ function edit(fn, quiet) {
   // 2.4.0: one report per project and day, shared: who worked on it, in turn
   const me = store.get().profile.name || (store.get().auth || {}).name || '';
   if (me) { const last = (r.edits || []).at(-1); if (last && last.by === me) last.at = r.updated; else r.edits = [...(r.edits || []), { by: me, at: r.updated }].slice(-50); }
-  if (r.date === today()) { const pt = partOf(now()); if (pt && !(r.seen || {})[pt]) r.seen = { ...(r.seen || {}), [pt]: r.updated }; }   // 2.18.0
+  if (r.date === today()) { const pt = partOf(now()); if (pt && !(r.seen || {})[pt]) r.seen = { ...(r.seen || {}), [pt]: r.updated }; const sl = slotOf(now()); if (sl != null && !(r.slots || []).includes(sl)) r.slots = [...(r.slots || []), sl]; }   // 2.18.0, 2.19.3 half hours
   const drafts = { ...store.get().drafts, [k]: r };
   if (quiet) store.quiet({ drafts }); else store.set({ drafts });
   draftSoon();

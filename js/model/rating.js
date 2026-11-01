@@ -15,9 +15,9 @@ export function photoScore(r) {
   const times = ps.map(p => mins(p.at)).filter(x => x != null);
   const inside = times.filter(x => x >= a && x <= b).length;
   let v = 5 * inside / ps.length;
-  const bunched = times.length >= 3 && Math.max(...times) - Math.min(...times) < 60;
-  if (bunched) v -= 1;
-  return { v: round(v), why: inside < ps.length ? `${ps.length - inside} taken outside working hours` : bunched ? 'All taken within one hour' : 'Taken through the day' };
+  const bunched = times.length >= 3 && Math.max(...times) - Math.min(...times) < 120;   // 2.19.3: within 2 hours
+  if (bunched) v /= 2;
+  return { v: round(v), why: inside < ps.length ? `${ps.length - inside} taken outside working hours` : bunched ? 'All taken within two hours' : 'Taken through the day' };
 }
 
 /** How full the report is: the eight data steps done, and work lines with real detail. */
@@ -30,13 +30,30 @@ export function dataScore(r) {
   return { v: round(v), why: `${steps.filter(Boolean).length} of 8 parts filled${items.length ? `, ${Math.round(detail * 100)}% of work lines detailed` : ', no work lines'}` };
 }
 
-/** Worked on in the morning, during the day and at the end of day (each part counts once). */
+/** 2.19.3: the half hours (0-47) in which the report was worked on: kept slots, edit times, first times per part, photo times. */
+const addis = ms => new Date(ms).toLocaleTimeString('en-GB', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit' });
+export const slotOf = hhmm => { const m = mins(hhmm); return m == null ? null : Math.floor(m / 30); };
+export function slotsOf(r) {
+  const out = new Set((r.slots || []).map(Number).filter(x => x >= 0 && x < 48));
+  for (const e of r.edits || []) if (e && e.at > 1e12) out.add(slotOf(addis(e.at)));
+  for (const v of Object.values(r.seen || {})) if (v > 1e12) out.add(slotOf(addis(v)));
+  for (const p of r.photos || []) { const s = slotOf(p.at); if (s != null) out.add(s); }
+  out.delete(null);
+  return [...out].sort((a, b) => a - b);
+}
+
+/**
+ * Engagement (2.19.3, owner: the engineer works with the app all day; a report made in 20 minutes is not ideal):
+ * the parts of the day reached (morning before 11:00, day to 16:00, end after) and the half hours worked in (6 or more
+ * for full marks) multiply, so one short sitting scores low however full the report is.
+ */
 export function engageScore(r) {
-  const seen = { ...(r.seen || {}) };
-  for (const e of r.edits || []) { const p = partOf(new Date(e.at).toLocaleTimeString('en-GB', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit' })); if (p) seen[p] = seen[p] || e.at; }
-  const parts = ['m', 'd', 'e'].filter(p => seen[p]);
+  const slots = slotsOf(r);
+  const parts = ['m', 'd', 'e'].filter(p => slots.some(s => partOf(`${String(Math.floor(s / 2)).padStart(2, '0')}:${s % 2 ? '30' : '00'}`) === p));
   const word = { m: 'morning', d: 'day', e: 'end' };
-  return { v: round(5 * parts.length / 3), parts, why: parts.length ? `Worked on: ${parts.map(p => word[p]).join(', ')}` : 'No times kept' };
+  const v = 5 * (parts.length / 3) * Math.min(1, slots.length / 6);
+  const span = slots.length ? (slots[slots.length - 1] - slots[0] + 1) * 30 : 0;
+  return { v: round(v), parts, slots: slots.length, why: slots.length ? `${parts.map(p => word[p]).join(', ') || 'no part'} · ${slots.length} half hour${slots.length > 1 ? 's' : ''} over ${span >= 60 ? `${Math.round(span / 60)} h` : `${span} min`}` : 'No times kept' };
 }
 
 /** Free text written in the report. */
@@ -57,7 +74,9 @@ export function grammarScore(r) {
 /** The rating: the four parts and their average. */
 export function rateReport(r) {
   const parts = { photos: photoScore(r), data: dataScore(r), engage: engageScore(r), grammar: grammarScore(r) };
-  const v = round(Object.values(parts).reduce((a, x) => a + x.v, 0) / 4);
+  // 2.19.3: engagement half the rating; the rating is never more than 1.5 above it
+  const w = 0.5 * parts.engage.v + 0.2 * parts.photos.v + 0.15 * parts.data.v + 0.15 * parts.grammar.v;
+  const v = round(Math.min(w, parts.engage.v + 1.5));
   return { v, parts };
 }
 
