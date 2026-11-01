@@ -3,7 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
-import { head, stepHead } from './parts.js';
+import { head, stepHead, isGM } from './parts.js';
 import { STATUS, offlineLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
@@ -28,15 +28,18 @@ const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `$
 const pill = st => { const s = STATUS[st] || STATUS.submitted; return html`<span class="pill ${s.cls}">${s.label}</span>`; };
 
 export function review(c) {
-  const rv = c.ui.rv || {}, f = rv.f ?? 'submitted', list = reviewRows(rv.list, c.project.code, f);
+  // 2.17.0: the GM's All projects; each line with when it was sent and the last answer
+  const all = !!c.ui.allProj && isGM(c);
+  const rv = c.ui.rv || {}, f = rv.f ?? 'submitted', list = reviewRows(rv.list, all ? '' : c.project.code, f);
+  const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
   return {
     tab: 'review',
-    head: head('Review', `${c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
-    body: html`<div class="k">Reports of ${c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
+    head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
+    body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
-          <div class="n"><b>${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
+          <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
         : html`<p class="muted">No report here.</p>`}
       ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew and working hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}`,
   };

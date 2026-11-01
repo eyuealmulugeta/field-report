@@ -10,7 +10,7 @@ import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js
 import { inboxLink } from '../model/follow.js';
 import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses } from '../model/crew.js';
 import { thumb } from './work.js';
-import { head, stepHead, nav, chips, stepper, dayList, kpi } from './parts.js';
+import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop } from './parts.js';
 
 /** 2.4.0: the saved signature, or a button to sign full screen (or choose a PNG). */
 const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Change</button></div></div>`
@@ -289,15 +289,19 @@ const crewBoss = c => c.kind === 'reviewer' || /engineer|manager|\bgm\b/i.test((
 const linkMaker = c => ['admin', 'exec'].includes((c.s.auth || {}).role) || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
 const formLink = c => (!linkMaker(c) ? '' : c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewLink" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Share a crew form link</button>`
   : html`<a class="btn t slim" href="https://hub.amistadprefab.com/#crewforms" target="_blank" rel="noopener">${icon('users')}Crew form link (Central Hub)</a>`);   // 2.10.1
+const stampAt = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 /** 2.13.0: the HR photo from Central Hub, else the initials. */
 const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
 /** 2.13.0: crew the site added can be corrected or taken off from here (live updates on). */
+// 2.17.0: delete from the list: anyone of the site asks, the PM or the GM confirms
+const dropOk = c => c.kind === 'reviewer' || isGM(c);
 function staffRow(c, x) {
-  const mine = x.fromSite && c.ui.live === 'on' && crewBoss(c);
+  const mine = x.fromSite && c.ui.live === 'on' && crewBoss(c), del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
+  const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the PM or GM</span>`}</div>` : '';
   if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><input class="fld slim" data-ui="ceTrade" value="${c.ui.ceTrade ?? x.trade}" placeholder="Trade" aria-label="Trade"></div>
     <button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
-    ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button><button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Take ${x.name} off">✕</button>` : ''}</div>`;
+    ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
 const refreshRow = c => html`${formLink(c)}<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
 
@@ -397,7 +401,7 @@ export function me(c) {
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
         : sigLine(p)}
       <div class="k">Project</div>
-      <div class="box">${c.s.projects.map(x => html`<button type="button" class="li" data-act="pickProject" data-v="${x.code}"><span class="ic ${x.code === c.s.proj ? 'ok' : ''}">${icon(x.code === c.s.proj ? 'check' : 'pin')}</span><div class="n"><b>${x.name}</b><span>${x.code}</span></div></button>`)}</div>
+      ${isGM(c) ? html`<div class="box pad">${projTop(c)}</div>` : ''}<div class="box ${isGM(c) ? 'hide' : ''}">${c.s.projects.map(x => html`<button type="button" class="li" data-act="pickProject" data-v="${x.code}"><span class="ic ${x.code === c.s.proj ? 'ok' : ''}">${icon(x.code === c.s.proj ? 'check' : 'pin')}</span><div class="n"><b>${x.name}</b><span>${x.code}</span></div></button>`)}</div>
       <div class="k">Your usual day</div>
       <div class="two"><label class="small">Start<input class="fld" type="time" data-f="profile.defStart" value="${p.defStart || (pr && pr.defStart) || '08:00'}"></label>
         <label class="small">End<input class="fld" type="time" data-f="profile.defEnd" value="${p.defEnd || (pr && pr.defEnd) || '17:00'}"></label></div>

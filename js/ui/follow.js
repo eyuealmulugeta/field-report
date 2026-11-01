@@ -3,16 +3,41 @@
 
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
-import { head } from './parts.js';
-import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW } from '../model/follow.js';
+import { head, isGM } from './parts.js';
+import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
 
 const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(d.toISOString().slice(0, 10))} ${d.toTimeString().slice(0, 5)}`; };
 const pill = kind => html`<span class="pill ${STATUS[kind].cls}">${STATUS[kind].label}</span>`;
 
+const STEP_DONE = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned' };
+/** 2.17.0: "Approved by Abel · 1 Nov, 09:12": the report's newest step. */
+const stepLine = s => (s && s.at ? `${STEP_DONE[s.kind] || 'Sent'}${s.by ? ` by ${s.by}` : ''} · ${stampOf(s.at)}` : '');
+const allOn = c => !!c.ui.allProj && isGM(c);
+
+/** 2.17.0: the GM's All projects: every report sent on the account's projects, newest first, from Central Hub. */
+function allReports(c) {
+  const since = new Date(Date.parse(`${c.realToday}T00:00:00Z`) - 31 * 864e5).toISOString().slice(0, 10);
+  const rows = c.s.projects.flatMap(p => ((c.s.others || {})[p.code] || []).filter(o => o && o.date >= since && !(c.s.hidden || {})[`${p.code}|${o.date}`]).map(o => {
+    const k = (o.name && c.s.known[o.name]) || {}, st = k.status || o.status;
+    return { ...o, p, kind: st === 'approved' || st === 'changes' ? st : 'submitted', last: lastStep(k.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null) };
+  })).sort((a, b) => b.date.localeCompare(a.date) || Number(b.no) - Number(a.no));
+  const f = c.ui.rf || '', n = counts(rows), list = rows.filter(x => !f || x.kind === f);
+  return {
+    tab: 'reports',
+    head: head('Reports', 'All projects · last 31 days', c.ui.checking ? 'Checking…' : ''),
+    body: html`<div class="chips">${FILTERS.filter(([k]) => k !== 'missing').map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
+      ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openAll" data-p="${x.p.code}" data-v="${x.date}">
+        <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
+        <div class="n"><b>${x.p.name} · Report #${x.no}</b><span>${[x.by, stepLine(x.last)].filter(Boolean).join(' · ')}</span></div>${pill(x.kind)}</button>`)}</div>`
+        : html`<div class="box pad muted small">Nothing here.</div>`}`,
+  };
+}
+
 export function reports(c) {
-  const rows = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]);
+  if (allOn(c)) return allReports(c);
+  const rows = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).filter(x => !(c.s.hidden || {})[`${c.project.code}|${x.date}`]);
   const n = counts(rows), f = c.ui.rf || '';
   const list = rows.filter(x => !f || x.kind === f);
   return {
@@ -24,7 +49,7 @@ export function reports(c) {
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
         <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
-          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') :x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}</span></div>
+          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') :x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>
         ${pill(x.kind)}</button>`)}</div>`
         : html`<div class="box pad muted small">Nothing here.</div>`}
       <p class="muted tiny center">The office's answers are checked when the app opens and every 10 minutes${c.s.knownAt ? ` · last ${new Date(c.s.knownAt).toTimeString().slice(0, 5)}` : ''}.</p>`,
@@ -57,6 +82,7 @@ export function daySheet(c) {
     ${x.date === c.realToday ? html`<button type="button" class="btn p" data-act="go" data-to="today">Open today</button>` : ''}
     ${x.report && x.report.start ? html`<button type="button" class="btn o" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View the report</button>` : ''}
     ${x.report && x.report.start && canPdf(c) ? html`<button type="button" class="btn t" data-act="dayPdf" data-v="${x.date}">${icon('send')}Share the PDF</button>` : ''}
+    ${['approved', 'changes', 'submitted'].includes(x.kind) ? html`<button type="button" class="btn t" data-act="dayHide" data-v="${x.date}">Remove from this device</button>` : ''}
     <button type="button" class="btn t" data-act="closeSheet">Close</button></div>`;
 }
 
@@ -67,17 +93,22 @@ const REQ_TONE = { draft: 'warn', requested: 'info', approved: 'ok', arranging: 
 /** 2.14.0: the project's requests from every phone, each with who did what and when. */
 function sharedRequests(c) {
   const me = String((c.s.auth || {}).email || '').toLowerCase();
-  const list = c.ui.liveReqs.filter(d => d.status !== 'deleted' && d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
+  // 2.17.0: the GM's All projects: every project's requests, each with its project
+  const all = allOn(c), mine = new Set(c.ui.liveReqs.map(d => d.id));
+  const nameOf = code => (c.s.projects.find(p => p.code === code) || {}).name || code;
+  const tag = (list, code) => list.map(d => ({ ...d, _p: code }));
+  const list = [...tag(c.ui.liveReqs, c.project.code), ...(all ? Object.entries(c.ui.reqAll || {}).filter(([k]) => k !== c.project.code).flatMap(([k, l]) => tag(l.filter(d => !mine.has(d.id)), k)) : [])]
+    .filter(d => d.status !== 'deleted' && d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
   return {
     tab: 'requests',
-    head: head('Requests', `${list.length} on this project`, `${list.filter(d => d.status === 'draft').length} draft`),
+    head: head('Requests', `${list.length} on ${all ? 'all projects' : 'this project'}`, `${list.filter(d => d.status === 'draft').length} draft`),
     body: html`${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
         <span class="time ${d.fr.priority === 'Urgent' ? 'urgent' : ''}">${d.fr.priority === 'Urgent' ? 'Urgent' : String(d.fr.date || '').slice(5)}</span>
-        <div class="n"><b>${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
+        <div class="n"><b>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
           ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
         <span class="pill ${REQ_TONE[d.status] || ''}">${REQ_WORD[d.status] || d.status}</span>
-        ${d.status === 'draft' ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
-        ${d.status === 'requested' && d.by === me ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
+        ${d.status === 'draft' && d._p === c.project.code ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
+        ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
       : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
       <p class="muted tiny">Drafts are shared with every phone of this project and go to the office with the day's report. Central Hub's answers show here.</p>`,
   };

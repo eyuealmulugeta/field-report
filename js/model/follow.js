@@ -32,7 +32,9 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
   const first = today.slice(0, 8) + '01';
   // days before the first report on this phone are left out: their reports may have come from the old app
   const mine = Object.keys(drafts).filter(k => k.startsWith(project.code + '|')).map(k => k.split('|')[1]).sort()[0] || today;
-  const from = [Number(today.slice(8)) < 8 ? addDays(today, -31) : first, mine].sort()[1];
+  // 2.17.0: with the project's reports from Central Hub, the whole month shows (not only from this phone's first)
+  const start = Number(today.slice(8)) < 8 ? addDays(today, -31) : first;
+  const from = (others || []).length ? start : [start, mine].sort()[1];
   const out = [];
   for (let d = today; d >= from; d = addDays(d, -1)) {
     const r = drafts[`${project.code}|${d}`];
@@ -44,6 +46,7 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       row.version = (k && k.version) || (r.sent && r.sent.version) || 1;
       row.comment = k && k.comments && k.comments.length ? k.comments[k.comments.length - 1] : null;
       row.changed = r.updated > r.sentAt + 1000;
+      row.last = lastStep(k && k.history) || { kind: 'submit', at: r.sentAt };   // 2.17.0
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
@@ -53,11 +56,15 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
       Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true });
       if (ko.comments && ko.comments.length) row.comment = ko.comments[ko.comments.length - 1];
+      row.last = lastStep(ko.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null);   // 2.17.0
     }
     out.push(row);
   }
   return out;
 }
+
+/** 2.17.0: the newest step of a report's history (sent, approved, sent back…) with who and when. */
+export const lastStep = h => (Array.isArray(h) && h.length ? h.filter(x => x && x.at).slice().sort((a, b) => String(a.at).localeCompare(String(b.at))).pop() || null : null);
 
 /** The office sent these back and they were not sent again since. */
 /** 2.7.0: a send that waited for a connection: '' when it went at once (within 2 minutes). */

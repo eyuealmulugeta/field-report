@@ -259,6 +259,10 @@ async function goLive(at = '') {
     onPhotos: m => { ui.photos = m; draw(); },
     onRequests: list => liveRequests(list),
     onFixes: list => regFixes(list),   // 2.16.0
+    // 2.17.0: every phone's reports, live; the GM's other projects too
+    onDays: (code, days) => liveDays(code, days),
+    onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
+    all: P.isGM({ s: store.get() }),
   });
   ui.liveWhy = L.liveWhy();
   draw();
@@ -268,6 +272,23 @@ async function goLive(at = '') {
  * 2.15.0: today's report (not sent yet) follows Central Hub's crew and the marks made on the project's other devices
  * at once: nobody presses "Check the office list".
  */
+/** 2.17.0: a project's reports from every phone, live from Central Hub: Reports and Review show the same, with times. */
+function liveDays(code, days) {
+  const s = store.get(), old = (s.others || {})[code] || [], names = new Set(days.map(d => d.name));
+  const next = [...days, ...old.filter(o => !o.live && !names.has(o.name))];
+  if (JSON.stringify(next) !== JSON.stringify(old)) store.set({ others: { ...(s.others || {}), [code]: next } });
+  const rv = ui.rv;
+  if (!rv || !rv.list) return;
+  for (const d of days) {
+    const x = rv.list.find(y => y.name === d.name), h = d.history || [], last = h[h.length - 1] || {};
+    const fresh = { status: d.status, version: d.version, history: h, ...(last.kind && last.kind !== 'submit' ? { reviewedBy: last.by || '', reviewedAt: last.at || '' } : {}) };
+    if (x) Object.assign(x, fresh);
+    else rv.list.push({ name: d.name, date: d.date, no: d.no, preparedBy: d.by, uploadedAt: d.at, ...fresh });
+  }
+  rv.list.sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.no) - Number(a.no));
+  draw();
+}
+
 /** 2.16.0: crew decided in Central Hub: the office list asked now and again a little later, on every device. */
 function crewSoon() { ACTS.attRefresh(true); for (const t of [15e3, 45e3]) setTimeout(() => ACTS.attRefresh(true), t); }
 
@@ -328,7 +349,9 @@ function crewFollow() {
   const p = project();
   const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
   if (!r || r.sentAt || r.nowork || !r.crew) return;
-  const rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
+  let rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
+  // 2.17.0: only Central Hub's crew (and labour added on site today) once the team is known
+  if (ui.teamOf === p.code) { const ok = new Set(p.staff.map(s => String(s.id || s.name).toLowerCase())); rows = rows.filter(x => x.added || ok.has(String(x.id || x.name).toLowerCase())); }
   if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) editKey(k, x => { x.crew.rows = rows; });
 }
 
@@ -993,11 +1016,28 @@ const ACTS = {
   // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
   // 2.16.1: the GM's project list at the top: every page follows the project chosen
   projTop(d) {
-    if (!d.v || d.v === store.get().proj) return;
+    // 2.17.0: All projects (Reports, Requests, Review)
+    if (d.v === '*') {
+      ui.allProj = true;
+      if (route() === 'review') { ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); }
+      if (route() === 'reports') for (const p of store.get().projects) teamDays(p);
+      return draw();
+    }
+    const was = ui.allProj; ui.allProj = false;
+    if (!d.v || d.v === store.get().proj) { if (was && route() === 'review') { ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); } return draw(); }
     store.set({ proj: d.v }); loadSetup(); goLive();
     ui.reg = null; ui.regEdit = null; ui.regAt = ''; ui.empUrl = '';
     if (route() === 'review') { ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); }
     draw();
+  },
+  /** 2.17.0: a report of All projects: its project opens, then the day. */
+  openAll(d) { ui.allProj = false; if (d.p !== store.get().proj) { store.set({ proj: d.p }); loadSetup(); goLive(); } ACTS.openDay({ v: d.v }); },
+  /** 2.17.0: a sent report off this device's list (Central Hub keeps it). */
+  dayHide(d) {
+    const p = project();
+    if (!p || !confirm(`Remove the report of ${d.v} from this device? Central Hub keeps it.`)) return;
+    store.set({ hidden: { ...(store.get().hidden || {}), [`${p.code}|${d.v}`]: Date.now() } });
+    ui.sheet = ''; toast('Removed from this device.'); draw();
   },
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
@@ -1015,7 +1055,9 @@ const ACTS = {
     const rv = ui.rv || (ui.rv = {});
     rv.busy = true; draw();
     try {
-      const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || [];
+      // 2.17.0: the GM's All projects: every project's list
+      if (ui.allProj && P.isGM({ s: store.get() })) rv.list = (await Promise.all(store.get().projects.map(p => call('list', { proj: p.code, days: 45 }).then(r => r.reports || []).catch(() => [])))).flat();
+      else { const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || []; }
       // 2.7.0: opened from a notification: straight to that report
       const w = rv.want; rv.want = null;
       const hit = w && rv.list.find(x => x.date === w.d && String(Number(x.no)) === String(Number(w.no)));
@@ -1215,10 +1257,23 @@ const ACTS = {
     catch (e) { toast(`Not changed: ${e.message}`); }
     draw();
   },
+  // 2.17.0: delete from the crew list: the site asks, the PM or the GM confirms (the server takes them off in Central Hub too)
   async crewOff(d) {
-    if (!confirm(`Take ${d.n} off this project? Central Hub keeps the person's record.`)) return;
-    try { await L.editTeam(d.v, { active: false }); toast(`${d.n} is off this project.`); } catch (e) { toast(`Not changed: ${e.message}`); }
+    const boss = kind() === 'reviewer' || P.isGM({ s: store.get() });
+    if (boss) return ACTS.crewDropOk(d);
+    if (!confirm(`Ask the PM or the GM to delete ${d.n} from this project?`)) return;
+    try { await L.editTeam(d.v, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString() } }); toast(`Asked. ${d.n} stays until the PM or the GM confirms.`); }
+    catch (e) { toast(`Not asked: ${e.message}`); }
   },
+  async crewDropOk(d) {
+    const p = project();
+    if (!p || !confirm(`Delete ${d.n} from ${p.name}? They leave the crew list here and in Central Hub; their record stays.`)) return;
+    ui.busy = true; draw();
+    try { await L.now('crewOff', { proj: p.code, id: d.v, byName: myName() }); toast(`${d.n} is deleted from this project.`); }
+    catch (e) { toast(`Not deleted: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
+  },
+  async crewDropNo(d) { try { await L.editTeam(d.v, { dropAsk: null }); toast('Kept on the list.'); } catch (e) { toast(`Not changed: ${e.message}`); } },
   // 2.13.0: one of the waiting list taken back (Remove), or taken back into the form to correct and send again (Edit)
   async waitDrop(d) {
     const p = project(), x = (p.crewWait || []).find(y => y.id === d.v);
@@ -1649,7 +1704,7 @@ function draw() {
   let v = r === 'signin' ? S.signin(c) : r === 'profile' ? S.profile(c) : r === 'choose' ? S.chooseProject(c)
     : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);
   if (ui.date && (r === 'today' || NEEDS_REPORT.has(r))) v = { ...v, body: html`${F.pastBand(c)}${v.body}` };
-  if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c)}` };   // 2.16.1
+  if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c, P.ALL_PROJ.has(r))}` };   // 2.16.1; 2.17.0 All projects
   document.documentElement.dataset.theme = c.s.profile.dark ? 'dark' : '';
   const scroll = root.querySelector('.bd')?.scrollTop || 0;
   const same = root.dataset.screen === r;
@@ -1745,6 +1800,7 @@ addEventListener('keydown', e => {
 
 window.addEventListener('hashchange', () => {
   if (route() === 'att' && Date.now() - (ui.attTried || 0) > 30e3) { ui.attTried = Date.now(); ACTS.attRefresh(true); }   // 2.10.0; 2.16.0 30 s
+  if (route() === 'review' && !(ui.rv && (ui.rv.list || ui.rv.busy))) ACTS.revLoad();   // 2.17.0: the list is there when the tab opens
   if (location.hash.startsWith('#go=') && openLink(location.hash.slice(1))) return;
   ui.filter = ''; ui.q = ''; ui.ot = null; ui.sheet = ''; ui.cur = null;
   const h = location.hash.slice(1);

@@ -411,3 +411,20 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 /* 2.16.1: the GM's project list at the top */
 .proj-top { padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .proj-top select { width: 100%; font-size: 14px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+
+/* 2.17.0: delete asked; on a computer: smaller, compact, the page in two columns */
+.drop-ask { background: var(--bad-soft); gap: 6px; flex-wrap: wrap; }
+.hide { display: none !important; }
+.app.wide { font-size: 13px; }
+.wide .bd { padding: 12px 16px 16px; gap: 8px; }
+.wide .ws.solo .bd { display: block; column-count: 2; column-gap: 16px; }
+.wide .ws.solo .bd > * { max-width: none; break-inside: avoid; margin: 0 0 8px; }
+.wide .ws.solo .bd > .k { break-after: avoid; }
+.wide .ws.solo .bd > .split, .wide .ws.solo .bd > .tbl-wrap, .wide .ws.solo .bd > .rg-scroll, .wide .ws.solo .bd > .att-tabs, .wide .ws.solo .bd > .chips, .wide .ws.solo .bd > .rg-top { column-span: all; }
+.wide .btn { min-height: 36px; font-size: 13px; border-radius: 9px; gap: 6px; }
+.wide .hd b { font-size: 15px; }
+.wide .li { padding-top: 6px; padding-bottom: 6px; min-height: 0; }
+.wide .li .n b { font-size: 13px; } .wide .li .n span { font-size: 11.5px; }
+.wide .fld { font-size: 13px; }
+.wide .k { margin-top: 4px; }
+.wide .ws.solo .bd > .box:has(> .li:nth-child(6)) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; column-span: all; }

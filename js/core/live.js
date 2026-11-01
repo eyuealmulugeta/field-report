@@ -71,7 +71,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   try {
     const { F, auth, db } = await load();
@@ -89,8 +89,19 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
       const list = snap.docChanges().map(c => knownOf(c.doc.data())).filter(Boolean);
       if (list.length && !snap.metadata.fromCache) last = { at: new Date(), what: list.map(([n, k]) => `${n.slice(0, 10)} ${k.status}`).slice(-1)[0], n: list.length };
       if (list.length) onKnown(list);
+      onDays(String(code).toUpperCase(), snap.docs.map(x => dayOf(x.data())).filter(Boolean));   // 2.17.0
       onChange(state);
     }, e => { fail(e, 'Reports'); onChange(state); }));
+    // 2.17.0: the GM's "All projects": the reports and requests of every project on the account
+    if (all) for (const [c2, p2] of Object.entries(acc.data().codes || {})) {
+      if (p2 === pid) continue;
+      stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', p2, 'reports'), F.where('date', '>=', since)), snap => {
+        const list = snap.docChanges().map(x => knownOf(x.doc.data())).filter(Boolean);
+        if (list.length) onKnown(list);
+        onDays(c2, snap.docs.map(x => dayOf(x.data())).filter(Boolean));
+      }, () => {}));
+      stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', p2, 'requests'), F.where('site', '==', true)), snap => onReqAll(c2, snap.docs.map(x => x.data())), () => {}));
+    }
     // 2.13.0: Central Hub's "something changed" signals, the team (names, trades, taken off) and the crew photos
     stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => onPing(d.data() || {}), () => {}));
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
@@ -105,8 +116,16 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
   } catch (e) { fail(e, 'Access'); return 'error'; }
 }
 
-/** 2.13.0: only what a phone needs of a team member (no wages or levels). */
-const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite });
+/** 2.13.0: only what a phone needs of a team member (no wages or levels); 2.17.0 a delete asked. */
+const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite, dropAsk: m.dropAsk || null });
+
+/** 2.17.0: one report of the project for the Reports list, from Central Hub: the same status as Review, with its times. */
+export function dayOf(rec) {
+  const k = knownOf(rec);
+  if (!k || !rec.date) return null;
+  const f = rec.field;
+  return { date: rec.date, no: f.no || '', name: f.pdf, by: rec.by || '', status: k[1].status, version: k[1].version, at: f.receivedAt || f.pressedAt || '', history: k[1].history, live: true };
+}
 const signedIn = () => fb && fb.auth.currentUser && pid;
 
 /**
@@ -117,7 +136,7 @@ const signedIn = () => fb && fb.auth.currentUser && pid;
 export async function now(action, body = {}) {
   if (!signedIn()) return null;
   try { return (await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'fieldNow')({ action, ...body })).data; }
-  catch (e) { if (action === 'crewDrop') throw e; return null; }
+  catch (e) { if (action === 'crewDrop' || action === 'crewOff') throw e; return null; }
 }
 
 /** 2.13.0: corrects or takes off a crew member the site added (Central Hub's rules allow name, trade, phone, active only). */
