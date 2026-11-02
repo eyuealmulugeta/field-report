@@ -12,7 +12,7 @@ import { rateReport, rateLine } from '../model/rating.js';
 const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(d.toISOString().slice(0, 10))} ${d.toTimeString().slice(0, 5)}`; };
 const pill = kind => html`<span class="pill ${STATUS[kind].cls}">${STATUS[kind].label}</span>`;
 
-const STEP_DONE = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned' };
+const STEP_DONE = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned', office: 'Corrected' };
 /** 2.17.0: "Approved by Abel · 1 Nov, 09:12": the report's newest step. */
 const stepLine = s => (s && s.at ? `${STEP_DONE[s.kind] || 'Sent'}${s.by ? ` by ${s.by}` : ''} · ${stampOf(s.at)}` : '');
 const allOn = c => !!c.ui.allProj && isGM(c);
@@ -58,9 +58,15 @@ export function reports(c) {
 }
 
 /** One day: status, the office's comments and history, and what can be done. */
-const STEP = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned' };
+const STEP = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned', office: 'Corrected by the office' };
 /** 2.13.0: "1 Nov, 09:12". */
 export const stampOf = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
+/** 2.24.0: the office corrected the report in Central Hub: its copy there is the newest version (who, when, what changed). */
+export const officeLine = steps => {
+  const o = steps.find(m => m.kind === 'office');
+  return o ? html`<p class="callout warn"><b>Corrected by the office (${o.by || 'Office'}, ${stampOf(o.at)}).</b> The office copy in Central Hub is the newest version${o.text ? `: ${o.text}` : '.'}</p>` : '';
+};
 
 export function daySheet(c) {
   const x = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).find(y => y.date === c.ui.daySel);
@@ -77,6 +83,7 @@ export function daySheet(c) {
       <div class="n"><b>${m.text || STEP[m.kind] || m.kind}</b><span>${STEP[m.kind] && m.text ? `${STEP[m.kind]} · ` : ''}${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : ''}
     ${x.report && x.report.start ? html`<p class="soft small"><b>${rateLine(rateReport(x.report))}</b></p>` : ''}
     ${(x.report && x.report.edits || []).length ? html`<div class="k">Log · who entered and when</div><div class="box">${x.report.edits.slice().reverse().slice(0, 10).map(e => html`<div class="li"><span class="ic">${icon('doc')}</span><div class="n"><b>${e.by}</b><span>Entered · ${stampOf(new Date(e.at).toISOString())}</span></div></div>`)}</div>` : ''}
+    ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.name && comments.length && x.kind !== 'approved' ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="Reply to the office">${c.ui.replyText || ''}</textarea>
       <button type="button" class="btn o" data-act="replySend" data-v="${x.name}">${icon('send')}Send the reply</button>` : ''}
