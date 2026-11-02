@@ -9,6 +9,25 @@ const CONFIG = { apiKey: 'AIzaSyCnm4E4PubEs6pqC30AWYDFi55s-qX-y5w', authDomain: 
 const ROUTE_URL = `https://firestore.googleapis.com/v1/projects/${CONFIG.projectId}/databases/(default)/documents/public/fieldRoute?key=${CONFIG.apiKey}`;
 const DAYS = 21;   // the reports listened to: the last three weeks
 
+/**
+ * 2.23.0 (CH 20b): the whole report for the database, so Central Hub draws the same PDF (its copy of pdf.js) and
+ * edits it later. Photos stay in Drive: only their ids, times and captions travel; any picture data is left out.
+ * `project` and `profile` carry only what pdf.js prints. Under 700 kB, or null.
+ */
+export function reportFull(r, project = {}, profile = {}, signedAt = '') {
+  const drop = v => (typeof v === 'string' && v.startsWith('data:') && v.length > 2048 ? undefined : v);
+  const clean = x => (Array.isArray(x) ? x.map(clean).filter(v => v !== undefined)
+    : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, clean(v)]).filter(([, v]) => v !== undefined))
+    : drop(x));
+  const sig = r.signed && typeof profile.sig === 'string' && profile.sig.startsWith('data:image/') && profile.sig.length < 200000 ? profile.sig : '';
+  const full = {
+    r: clean(JSON.parse(JSON.stringify(r))),
+    project: { code: project.code || '', name: project.name || '', client: project.client || '', pn: project.pn || '', cc: project.cc || '' },
+    profile: { name: profile.name || '', position: profile.position || '' }, sig, signedAt: String(signedAt || ''),
+  };
+  return JSON.stringify(full).length < 700000 ? full : null;
+}
+
 /** The route the Admin set: 'script' (default, also when it cannot be read) or 'read'. */
 /** 2.19.0: the routes that read live. */
 export const LIVE = new Set(['read', 'both']);

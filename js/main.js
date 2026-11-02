@@ -505,6 +505,7 @@ function remindTick() {
 
 const toDataUrl = blob => new Promise((ok, fail) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => fail(fr.error); fr.readAsDataURL(blob); });
 
+let pdfSignedAt = '';
 /** The report PDF, with the report's photos (from this phone, or from Drive) and the saved signature. */
 async function makePdf(r, p, step = () => {}) {
   step('Making the PDF…');
@@ -520,7 +521,8 @@ async function makePdf(r, p, step = () => {}) {
   const prof = store.get().profile;
   const pic = f => (f ? fetch(f).then(x => x.blob()).then(toDataUrl).catch(() => '') : '');
   const [logo, weather] = await Promise.all([pic('icon-192.png'), pic(weatherFile(weatherTerm(r.start.cond)) && `img/weather/${weatherFile(weatherTerm(r.start.cond))}.png`)]);
-  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, sig: r.signed ? prof.sig : '', signedAt: now() });
+  pdfSignedAt = now();   // 2.23.0: kept with the whole report, so Central Hub prints the same time
+  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, sig: r.signed ? prof.sig : '', signedAt: pdfSignedAt });
   const blob = doc.output('blob');
   if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
   ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
@@ -684,7 +686,8 @@ async function sendReport(k, step = () => {}) {
     store.set({ known: { ...store.get().known, [name]: { status: res.status || 'submitted', version: res.version || 1, comments: (store.get().known[name] || {}).comments || [], checked: Date.now() } } });
     L.now('reports', { proj: p.code });   // 2.13.0: Central Hub takes it now, not on its next run
     // 2.19.0 (Phase E3a): Data route Both: the report goes to the database too (Central Hub's Compare checks the two)
-    if (ui.liveRoute === 'both') L.now('report', { proj: p.code, date: r.date, no: r.no, name, script: 'ok', meta: L.reportLite(meta) });
+    // 2.23.0 (CH 20b): with the whole report, for Central Hub's copy of the PDF and its edits
+    if (ui.liveRoute === 'both') L.now('report', { proj: p.code, date: r.date, no: r.no, name, script: 'ok', meta: L.reportLite(meta), full: L.reportFull(store.get().drafts[k] || r, p, store.get().profile, pdfSignedAt) });
     // 2.14.0: the day's shared requests go to the office with the report
     for (const q of (store.get().drafts[k] || {}).requests || []) if (q.live) L.requestStatus(q.id, 'requested', { byName: (store.get().profile || {}).name || '', note: `With report ${name}` }).catch(() => {});
     return 'sent';
