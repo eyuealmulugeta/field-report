@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { plural, dayLabel } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo } from '../core/api.js';
-import { REQUEST_TYPES, PRIORITIES, REQUEST_UNITS, requestReady, requestLine, planReady, planLine, unfinishedWork, checks, canSend, summary, byZone } from '../model/end.js';
+import { REQUEST_TYPES, EXPENSE_COSTS, CURRENCIES, PRIORITIES, REQUEST_UNITS, requestReady, requestLine, planReady, planLine, unfinishedWork, checks, canSend, summary, byZone } from '../model/end.js';
 import { materialChoices } from '../model/day.js';
 import { zonesOf } from '../model/items.js';
 import { offlineLine } from '../model/follow.js';
@@ -57,18 +57,30 @@ export function request(c) {
     body: html`<div class="lab">Type</div>${chips('req.category', REQUEST_TYPES, q.category)}
       <div class="lab">What is needed</div>
       ${names.length ? chips('req.text', names, q.text) : ''}
-      <input class="fld" data-f="req.text" value="${q.text}" placeholder="${q.category === 'Manpower' ? 'e.g. Two welders for the trusses' : 'e.g. Self-drilling screws 5.5 x 25'}" aria-label="What is needed">
-      <div class="lab">Amount</div>
+      <input class="fld" data-f="req.text" value="${q.text}" placeholder="${q.category === 'Manpower' ? 'e.g. Two welders for the trusses' : q.category === 'Expense' ? 'e.g. Diesel for the generator, 40 litres' : 'e.g. Self-drilling screws 5.5 x 25'}" aria-label="What is needed">
+      ${q.category === 'Expense' ? expenseFields(q) : html`<div class="lab">Amount</div>
       <div class="two"><div class="stp"><button type="button" data-act="reqQty" data-d="-1" aria-label="Less">−</button>
         <input class="num" inputmode="decimal" data-f="req.qty" value="${q.qty ?? ''}" placeholder="0" aria-label="Amount"><button type="button" data-act="reqQty" data-d="1" aria-label="More">+</button></div>
         ${chips('req.unit', REQUEST_UNITS, q.unit)}</div>
       <div class="two"><div><label class="lab" for="nb">Needed by</label><input id="nb" class="fld" type="date" data-f="req.neededBy" value="${q.neededBy}" min="${c.today}"></div>
-        <div><div class="lab">Priority</div>${chips('req.priority', PRIORITIES, q.priority)}</div></div>
+        <div><div class="lab">Priority</div>${chips('req.priority', PRIORITIES, q.priority)}</div></div>`}
       <label class="lab" for="rl">Where on site <span class="muted thin">· optional</span></label>
       <input id="rl" class="fld" data-f="req.location" value="${q.location}" placeholder="Zone or area">
       ${editing ? html`<button type="button" class="btn t danger" data-act="deleteReq">Delete this request</button>` : ''}`,
     foot: html`<div class="two"><button type="button" class="btn o" data-act="saveReq" data-v="again">Save, add another</button><button type="button" class="btn p" data-act="saveReq" ${requestReady(q) ? '' : 'disabled'}>${icon('check')}Save</button></div>`,
   };
+}
+
+/** 2.29.0: what an expense needs: the amount, ETB or USD, the category, who was paid and the receipt photo. */
+function expenseFields(q) {
+  return html`<div class="two"><div><label class="lab" for="xa">Amount</label><input id="xa" class="fld" inputmode="decimal" data-f="req.amount" value="${q.amount ?? ''}" placeholder="0"></div>
+      <div><div class="lab">Currency</div>${chips('req.currency', CURRENCIES, q.currency || 'ETB')}</div></div>
+    <div class="lab">Category</div>${chips('req.cost', EXPENSE_COSTS.map(([n]) => n), q.cost || 'Material')}
+    <label class="lab" for="xv">Paid to <span class="muted thin">· optional</span></label>
+    <input id="xv" class="fld" data-f="req.vendor" value="${q.vendor || ''}" placeholder="Shop or person">
+    <div class="lab">Receipt</div>
+    ${q.receipt ? html`<img class="rcpt" src="${q.receipt}" alt="Receipt">` : ''}
+    <button type="button" class="btn o" data-act="reqReceipt">${q.receipt ? 'Take another photo' : 'Photo of the receipt'}</button>`;
 }
 
 /** The signature: the saved one goes on with one tap (2.0.2), or a pad to sign by hand (kept for the next reports). */

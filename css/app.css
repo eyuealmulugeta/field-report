@@ -459,3 +459,6 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 /* 2.27.0: the engagement checks under the rating */
 .checks { list-style: none; padding: 0; margin: .35em 0 0; }
 .checks li { margin: .15em 0; }
+
+/* 2.29.0: the receipt photo of an expense */
+.rcpt { display: block; max-width: 100%; max-height: 240px; border-radius: 8px; margin: 6px 0; }

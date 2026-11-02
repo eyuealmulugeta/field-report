@@ -979,6 +979,28 @@ async function upNow() {
 const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid');
 const spotGal = document.getElementById('spotGal');   // 2.27.0 (owner): from the gallery too, several at once
 const spotIn = el => { el.value = ''; el.click(); };
+/* 2.29.0: the receipt of an expense, camera or gallery, made small enough to go with the request (at most about 300 KB). */
+const rcpt = document.getElementById('rcpt');
+async function receiptUrl(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
+  const src = bmp || await new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = URL.createObjectURL(file); });
+  const c = document.createElement('canvas');
+  let side = 1400, q = 0.75, url = '';
+  for (let i = 0; i < 6; i++) {
+    const k = Math.min(1, side / Math.max(src.width, src.height));
+    c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    url = c.toDataURL('image/jpeg', q);
+    if (url.length * 0.75 < 300 * 1024) break;
+    side = Math.round(side * 0.8); q = Math.max(0.5, q - 0.05);
+  }
+  return url;
+}
+rcpt.addEventListener('change', async () => {
+  const f = rcpt.files?.[0];
+  if (!f || !ui.req) return;
+  try { ui.req.receipt = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
+});
 /** 2.21.0: the length of a video in seconds (0 when the phone cannot tell). */
 const videoSeconds = file => new Promise(res => { const v = document.createElement('video'), u = URL.createObjectURL(file); v.preload = 'metadata'; v.onloadedmetadata = () => { URL.revokeObjectURL(u); res(Number.isFinite(v.duration) ? v.duration : 0); }; v.onerror = () => { URL.revokeObjectURL(u); res(0); }; v.src = u; });
 const spotFiles = async files => {
@@ -1044,7 +1066,7 @@ const saveCl = () => store.quiet({ crewList: { ...(store.get().crewList || {}), 
 window.__addPhoto = demo ? addPhoto : undefined;   // lets the demo check be driven without a camera
 
 /** Choices a second tap does not clear. */
-const KEEP = new Set(['unit', 'captionKind', 'name', 'category', 'priority', 'text']);
+const KEEP = new Set(['unit', 'captionKind', 'name', 'category', 'priority', 'text', 'currency', 'cost']);
 
 const ACTS = {
   go: d => go(d.to),
@@ -1477,10 +1499,12 @@ const ACTS = {
   logReq() { ui.sheet = ''; openReq(); },
   openReq: d => openReq(d.v),
   reqQty: d => { ui.req.qty = Math.max(0, (num(ui.req.qty) || 0) + Number(d.d)); draw(); },
+  reqReceipt() { spotIn(rcpt); },
   saveReq(d) {
     const q = ui.req;
     if (!String(q.text || '').trim()) return toast('Write what is needed first.');
-    q.text = q.text.trim(); q.qty = num(q.qty);
+    if (q.category === 'Expense' && !(num(q.amount) > 0)) return toast('Give the amount of the expense.');
+    q.text = q.text.trim(); q.qty = num(q.qty); if (q.category === 'Expense') q.amount = num(q.amount);
     // 2.14.0: shared with the project's phones and Central Hub (a draft until the report is sent)
     const by = { date: ui.reqDate || report().date, byName: (store.get().profile || {}).name || '' };
     // 2.25.0: when sharing fails the request stays on the phone (shown as "On this phone") and goes again by itself

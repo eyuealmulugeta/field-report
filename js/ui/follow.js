@@ -97,8 +97,8 @@ export function daySheet(c) {
 }
 
 /** 2.14.0: the words and colours of a shared request's state (Central Hub's approval). */
-export const REQ_WORD = { draft: 'Draft', requested: 'Waiting for approval', approved: 'Approved', arranging: 'Being arranged', fulfilled: 'Delivered', rejected: 'Rejected', cancelled: 'Cancelled', deleted: 'Deleted' };
-const REQ_TONE = { draft: 'warn', requested: 'info', approved: 'ok', arranging: 'info', fulfilled: 'ok', rejected: 'bad' };
+export const REQ_WORD = { gm: 'Waiting for the GM', paid: 'Paid', draft: 'Draft', requested: 'Waiting for approval', approved: 'Approved', arranging: 'Being arranged', fulfilled: 'Delivered', rejected: 'Rejected', cancelled: 'Cancelled', deleted: 'Deleted' };
+const REQ_TONE = { gm: 'info', paid: 'ok', draft: 'warn', requested: 'info', approved: 'ok', arranging: 'info', fulfilled: 'ok', rejected: 'bad' };
 
 /** 2.14.0: the project's requests from every phone, each with who did what and when. */
 function sharedRequests(c) {

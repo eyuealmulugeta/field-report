@@ -244,7 +244,8 @@ export async function siteLink({ projectName = '', byName = '', now: t = Date.no
 
 /** 2.14.0: live writes are possible (signed in to Central Hub, project found). */
 export const liveOn = () => !!signedIn();
-const KIND = { Material: 'material', Manpower: 'manpower', Equipment: 'equipment' };
+const KIND = { Material: 'material', Manpower: 'manpower', Equipment: 'equipment', Expense: 'expense' };
+const COST = { Material: 'material', Labour: 'labor', Equipment: 'equipment', Subcontract: 'subcontract', Transport: 'transport', Overhead: 'overhead' };
 
 /**
  * 2.14.0: a request written on this phone, shared as a draft with the project's other phones and Central Hub
@@ -259,6 +260,8 @@ export async function saveRequest(q, { date, byName = '' }) {
   const base = { id, kind: KIND[fr.category] || 'material', priority: fr.priority === 'Urgent' ? 'urgent' : 'normal', status: 'draft', date, neededBy: fr.neededBy, taskId: '',
     purpose: fr.location ? `Where on site: ${fr.location}` : '', lines: [{ id: `${id}_1`, description: fr.text, qty: Number(fr.qty) || 0, unit: fr.unit, note: '' }],
     projectId: pid, site: true, fr, editedBy: byName || email, editedAt: at };
+  // 2.29.0: an expense carries its amount, currency, Ledger category, who was paid and the receipt photo (Central Hub's shape)
+  if (fr.category === 'Expense') Object.assign(base, { amount: Number(q.amount) || 0, currency: q.currency === 'USD' ? 'USD' : 'ETB', category: COST[q.cost] || 'material', vendor: String(q.vendor || '').trim(), receipt: q.receipt || '', lines: [{ id: `${id}_1`, description: fr.text, qty: 1, unit: '', note: '' }] });
   const entry = { at, by: email, byName: byName || email, status: 'draft', note: old.exists() ? 'Changed on site' : 'Written on site' };
   if (old.exists()) await F.updateDoc(ref, { ...base, log: F.arrayUnion(entry) });
   else await F.setDoc(ref, { ...base, number: `SITE-${String(q.id).slice(-4).toUpperCase()}`, by: email, byName: byName || email, byTitle: 'Field Report', log: [entry] });
