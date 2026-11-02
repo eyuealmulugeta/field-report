@@ -462,3 +462,18 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 
 /* 2.29.0: the receipt photo of an expense */
 .rcpt { display: block; max-width: 100%; max-height: 240px; border-radius: 8px; margin: 6px 0; }
+
+/* 2.30.0 (owner): on a computer (the wide layout) the text and controls are the size of Central Hub's: 14 px text,
+ * 36 px buttons and fields, 12 px chips and labels. Phones keep the larger, easier to tap sizes. */
+.wide .hd b { font-size: 16px; }
+.wide .btn { min-height: 36px; font-size: 14px; font-weight: 600; border-radius: 10px; }
+.wide .btn.t { min-height: 32px; font-size: 13px; }
+.wide .btn .g { font-size: 15px; }
+.wide .fld { min-height: 36px; padding: 7px 10px; font-size: 14px; border-radius: 8px; }
+.wide .fld-ic svg { top: 9px; }
+.wide .chip { padding: 4px 10px; font-size: 12px; }
+.wide .lab { font-size: 12px; }
+.wide .li { padding: 7px 12px; }
+.wide .li .n b { font-size: 14px; } .wide .li .n span { font-size: 12px; }
+.wide .big-t { font-size: 15px; }
+.wide .wdg .kpi b { font-size: 16px; }
