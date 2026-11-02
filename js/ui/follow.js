@@ -7,7 +7,7 @@ import { head, isGM } from './parts.js';
 import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
-import { rateReport, rateLine } from '../model/rating.js';
+import { rateReport, rateLine, checkLines } from '../model/rating.js';
 
 const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(d.toISOString().slice(0, 10))} ${d.toTimeString().slice(0, 5)}`; };
 const pill = kind => html`<span class="pill ${STATUS[kind].cls}">${STATUS[kind].label}</span>`;
@@ -81,7 +81,7 @@ export function daySheet(c) {
     ${x.name ? html`<div class="muted tiny">${x.name}${x.version ? ` · version ${x.version}` : ''}</div>` : ''}
     ${steps.length ? html`<div class="box">${steps.slice(0, 8).map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
       <div class="n"><b>${m.text || STEP[m.kind] || m.kind}</b><span>${STEP[m.kind] && m.text ? `${STEP[m.kind]} · ` : ''}${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : ''}
-    ${x.report && x.report.start ? html`<p class="soft small"><b>${rateLine(rateReport(x.report))}</b></p>` : ''}
+    ${x.report && x.report.start ? (rt => html`<div class="soft small"><b>${rateLine(rt)}</b><ul class="checks">${checkLines(rt).map(l => html`<li>${l}</li>`)}</ul></div>`)(rateReport(x.report)) : ''}
     ${(x.report && x.report.edits || []).length ? html`<div class="k">Log · who entered and when</div><div class="box">${x.report.edits.slice().reverse().slice(0, 10).map(e => html`<div class="li"><span class="ic">${icon('doc')}</span><div class="n"><b>${e.by}</b><span>Entered · ${stampOf(new Date(e.at).toISOString())}</span></div></div>`)}</div>` : ''}
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}

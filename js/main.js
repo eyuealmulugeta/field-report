@@ -9,7 +9,7 @@ import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
-import { newReport, draftKey, STEPS, weatherTerm } from './model/report.js';
+import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen } from './model/report.js';
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
@@ -94,6 +94,9 @@ function edit(fn, quiet) {
   r.updated = Date.now();
   // 2.4.0: one report per project and day, shared: who worked on it, in turn
   const me = store.get().profile.name || (store.get().auth || {}).name || '';
+  // 2.27.0 (owner, 2 Nov): each step keeps who changed it last and when, and when it was first changed
+  const step = stepOfScreen(location.hash.slice(1) || '');
+  if (step) { const was = (r.stamps || {})[step]; r.stamps = { ...(r.stamps || {}), [step]: { by: me, at: r.updated, first: (was && was.first) || r.updated } }; }
   if (me) { const last = (r.edits || []).at(-1); if (last && last.by === me) last.at = r.updated; else r.edits = [...(r.edits || []), { by: me, at: r.updated }].slice(-50); }
   if (r.date === today()) { const pt = partOf(now()); if (pt && !(r.seen || {})[pt]) r.seen = { ...(r.seen || {}), [pt]: r.updated }; const sl = slotOf(now()); if (sl != null && !(r.slots || []).includes(sl)) r.slots = [...(r.slots || []), sl]; }   // 2.18.0, 2.19.3 half hours
   const drafts = { ...store.get().drafts, [k]: r };
@@ -973,7 +976,8 @@ async function upNow() {
 }
 
 /* 2.7.0: Spotlight. Photos and videos wait in the phone's photo store; each goes up alone, then the note. */
-const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid');   // 2.21.0: no gallery
+const spotCam = document.getElementById('spotCam'), spotVid = document.getElementById('spotVid');
+const spotGal = document.getElementById('spotGal');   // 2.27.0 (owner): from the gallery too, several at once
 const spotIn = el => { el.value = ''; el.click(); };
 /** 2.21.0: the length of a video in seconds (0 when the phone cannot tell). */
 const videoSeconds = file => new Promise(res => { const v = document.createElement('video'), u = URL.createObjectURL(file); v.preload = 'metadata'; v.onloadedmetadata = () => { URL.revokeObjectURL(u); res(Number.isFinite(v.duration) ? v.duration : 0); }; v.onerror = () => { URL.revokeObjectURL(u); res(0); }; v.src = u; });
@@ -1004,6 +1008,7 @@ const spotFiles = async files => {
 };
 spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
 spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
+spotGal.addEventListener('change', () => spotFiles([...(spotGal.files || [])]));
 const spotSet = (id, fn) => store.set({ spots: (store.get().spots || []).map(x => { if (x.id !== id) return x; const y = structuredClone(x); fn(y); return y; }) });
 let spotting = false;
 async function flushSpots() {
@@ -1198,6 +1203,7 @@ const ACTS = {
   spotCat(d) { ui.spot.cat = d.v; draw(); },
   spotCam() { spotIn(spotCam); },
   spotVid() { spotIn(spotVid); },
+  spotGal() { spotIn(spotGal); },
 
   spotDrop(d) { const [m] = ui.spot.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
   spotSave() {

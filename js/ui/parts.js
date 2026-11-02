@@ -1,7 +1,7 @@
 // Pieces every screen uses: the header, the tab bar, chips, number steppers and the day's step list.
 
 import { html, icon } from '../core/dom.js';
-import { PHASES, STEPS, stepStatus } from '../model/report.js';
+import { PHASES, STEPS, stepStatus, stampLine } from '../model/report.js';
 
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
@@ -57,7 +57,7 @@ export function dayList(r, ready = new Set(), sel = '', keys = false) {
       const st = stepStatus(r, s.id);
       const open = ready.has(s.id);
       return html`<button type="button" class="st ${open ? '' : 'later'} ${sel === s.id ? 'sel' : ''}" data-act="${open ? 'go' : 'later'}" data-to="${s.id}">
-        ${dot(st, s.i)}<div class="n"><b>${s.title}</b><span>${st.line}</span></div>${keys ? html`<kbd>${s.i + 1}</kbd>` : open ? html`<span class="ch">${icon('chev')}</span>` : ''}</button>`;
+        ${dot(st, s.i)}<div class="n"><b>${s.title}</b><span>${[st.line, stampLine((r && r.stamps || {})[s.id])].filter(Boolean).join(' · ')}</span></div>${keys ? html`<kbd>${s.i + 1}</kbd>` : open ? html`<span class="ch">${icon('chev')}</span>` : ''}</button>`;
     })}</div>`;
   });
 }
