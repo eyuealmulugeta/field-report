@@ -325,6 +325,14 @@ kbd { font: 600 10px "Segoe UI", system-ui, sans-serif; border: 1px solid var(--
 :root[data-theme="dark"] .chip.on { background: var(--brand); color: #0f151d; }
 :root[data-theme="dark"] .btn.p { background: var(--brand); color: #0f151d; }
 :root[data-theme="dark"] .logo { color: #0f151d; }
+:root[data-theme="dark"] { --card: #141c26; --soft: #1b2430; --surface: #141c26; }
+/* 2.26.0 (owner): no white boxes with light grey text in dark mode: outline buttons, Quick tiles, project cards, keys */
+:root[data-theme="dark"] .btn.o, :root[data-theme="dark"] .qtile, :root[data-theme="dark"] .proj, :root[data-theme="dark"] kbd,
+:root[data-theme="dark"] .thumb.add, :root[data-theme="dark"] .soft .bar, :root[data-theme="dark"] .navi:hover, :root[data-theme="dark"] .navi.on { background: #1b2430; color: var(--ink); }
+:root[data-theme="dark"] .btn.o { border-color: #3a4757; }
+:root[data-theme="dark"] .btn.bad-t, :root[data-theme="dark"] .btn.bad { color: var(--bad); }
+:root[data-theme="dark"] .time.urgent { color: #0f151d; }
+:root[data-theme="dark"] .muted, :root[data-theme="dark"] .hd span { color: #a3adbb; }
 
 /* trial.2: the report as a plain page (no download, share or print) and the Admin's devices */
 .rview { display: flex; flex-direction: column; gap: 8px; -webkit-user-select: none; user-select: none; }
@@ -388,6 +396,10 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 
 /* 2.16.0: Office tabs, Crew attendance sheet, Employee data form */
 .att-tabs { margin: 0 0 10px; }
+/* 2.26.0: the three Office tabs each with an outline and a small gap */
+.seg.att-tabs { border: 0; overflow: visible; gap: 6px; }
+.seg.att-tabs button { border: 1px solid var(--line); border-radius: 8px; height: 32px; }
+.seg.att-tabs button:first-child { border-left: 1px solid var(--line); }
 .rg-top { gap: 6px; align-items: center; }
 .rg-scroll { overflow-x: auto; margin: 8px 0; border: 1px solid var(--line); border-radius: 8px; }
 .rg { border-collapse: collapse; font-size: 12px; min-width: 100%; }
@@ -441,3 +453,5 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .rg .rg-n { width: 34%; min-width: 0; max-width: none; position: static; }
 .rg th .muted { font-size: 9px; font-weight: 400; }
 .rg .rg-g td { text-align: left; padding-left: 6px; }
+/* 2.26.0: two buttons side by side (Review: Check again and Crew & Hours) */
+.row2 { display: flex; gap: 8px; } .row2 > .btn { flex: 1; min-width: 0; }

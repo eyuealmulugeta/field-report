@@ -240,7 +240,7 @@ export function att(c) {
       ${crewListBox(c)}`,
   };
 }
-const ATT_TABS = [['', 'Today'], ['sheet', 'Crew attendance'], ['emp', 'Employee data']];
+const ATT_TABS = [['', 'Today'], ['sheet', 'Crew attendance'], ['emp', 'Candidate']];   // 2.26.0: was Employee data
 const attTabs = c => html`<div class="seg wide att-tabs" role="group" aria-label="Office">${ATT_TABS.map(([k, t]) => html`<button type="button" class="${(c.ui.attTab || '') === k ? 'on' : ''}" data-act="attTab" data-v="${k}" aria-pressed="${(c.ui.attTab || '') === k}">${t}</button>`)}</div>`;
 const SHEET_MARK = { present: 'P', absent: 'A', sick: 'S', leave: 'L' };
 const SHEET_WORD = { present: 'Present', absent: 'Absent', sick: 'Sick', leave: 'On leave', none: 'No mark' };
@@ -283,9 +283,9 @@ function sheetView(c) {
 }
 /** 2.16.0: Employee data: the crew form, opened inside the app and filled in by the engineer (nothing to share). */
 function empView(c) {
-  if (!(crewBoss(c) || linkMaker(c))) return html`<p class="callout">Employee data is filled in by the project's engineers.</p>`;
-  if (c.ui.live !== 'on' && !isDemo()) return html`<p class="callout warn">Employee data needs live updates (the Central Hub sign-in). Open Me to switch them on.</p>`;
-  return html`<div class="box pad"><b>Employee data form</b>
+  if (!(crewBoss(c) || linkMaker(c))) return html`<p class="callout">Candidate data is filled in by the project's engineers.</p>`;
+  if (c.ui.live !== 'on' && !isDemo()) return html`<p class="callout warn">The Candidate form needs live updates (the Central Hub sign-in). Open Me to switch them on.</p>`;
+  return html`<div class="box pad"><b>Candidate form</b>
     <p class="muted small">The same form as the crew form link: one form per person, with the photo and the Fayda ID or passport. It opens here, nothing to share. Each form goes to Central Hub, Crew forms, for the office to review.</p>
     <button type="button" class="btn p" data-act="empOpen" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Open the employee form</button></div>`;
 }
@@ -422,7 +422,7 @@ export function me(c) {
       <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
       ${liveLine(c.ui, c.ui.liveWhy || '', L.liveLast())}
       <div class="k">Reminders and look</div>
-      <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Review, Crew and working hours): ${(pr && pr.remindAt) || '17:00'}.</p>
+      <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Review, Crew & Hours): ${(pr && pr.remindAt) || '17:00'}.</p>
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}

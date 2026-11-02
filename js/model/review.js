@@ -5,7 +5,7 @@
 export const kindOf = role => (role === 'coordinator' || role === 'admin' ? 'reviewer' : role === 'viewer' || role === 'exec' ? 'viewer' : 'reporter');
 export const KIND_WORD = { reporter: 'Site', reviewer: 'Approve, send back, comment', viewer: 'View only' };
 
-export const REVIEW_FILTERS = [['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['', 'All']];
+export const REVIEW_FILTERS = [['', 'All'], ['approved', 'Approved'], ['changes', 'Sent back'], ['submitted', 'Waiting']];   // 2.26.0: owner's order
 /** The reports of one project, newest first, filtered by status. */
 export const reviewRows = (list, code, f) => (list || []).filter(x => (!code || String(x.name || '').includes(`_${code}_`)) && (!f || (x.status || 'submitted') === f))
   .sort((a, b) => String(b.date + b.no).localeCompare(String(a.date + a.no)));

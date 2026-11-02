@@ -34,6 +34,7 @@ import { shrinkVideo } from './core/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
+import { onSwipe } from './core/swipe.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
@@ -343,7 +344,7 @@ function empFrame() {
   if (!(ui.empUrl && route() === 'att' && ui.attTab === 'emp')) { if (box) box.hidden = true; return; }
   if (!box) {
     box = document.createElement('div'); box.id = 'emp-box'; box.className = 'emp-box';
-    box.innerHTML = '<div class="emp-bar"><b>Employee data</b><span>Each form goes to Central Hub, Crew forms, for review</span><button type="button" class="btn t slim" data-emp="new">New form</button><button type="button" class="btn t slim" data-emp="close">Close</button></div><iframe title="Employee data form" allow="camera"></iframe>';
+    box.innerHTML = '<div class="emp-bar"><b>Candidate</b><span>Each form goes to Central Hub, Crew forms, for review</span><button type="button" class="btn t slim" data-emp="new">New form</button><button type="button" class="btn t slim" data-emp="close">Close</button></div><iframe title="Employee data form" allow="camera"></iframe>';
     box.addEventListener('click', e => {
       const b = e.target.closest('[data-emp]');
       if (!b) return;
@@ -1707,6 +1708,8 @@ const ACTS = {
 /* ---------- drawing ---------- */
 
 const root = document.getElementById('app');
+// 2.26.0: on a phone, slide left or right for the next or previous tab of the bottom bar
+onSwipe(root, () => root.querySelectorAll('nav.nav > button'));
 let layout = D.layoutOf(innerWidth);
 addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
 

@@ -35,13 +35,14 @@ export function review(c) {
   return {
     tab: 'review',
     head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
-    body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
+    body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
+        <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>
+        ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}</div>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
           <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
-        : html`<p class="muted">No report here.</p>`}
-      ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew and working hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}`,
+        : html`<p class="muted">No report here.</p>`}`,
   };
 }
 
@@ -75,7 +76,7 @@ export function crewrev(c) {
   const wait = c.project.crewWait || [], picks = (c.ui.rv || {}).picks || {}, may = c.project.crewApprove;
   return {
     tab: 'review',
-    head: stepHead('Crew and working hours', `${c.project.name} · sent by the site`, 'review'),
+    head: stepHead('Crew & Hours', `${c.project.name} · sent by the site`, 'review'),
     body: html`${wait.length ? html`<div class="box pad"><p class="muted small">Tick the people to approve and give their daily wage. Central Hub adds them to the crew of ${c.project.name}.</p>
         ${wait.map(x => { const on = !!picks[x.id], wage = c.ui[`cw_${x.id}`]; return html`<div class="cl-row"><label class="check"><input type="checkbox" data-act="crewPick" data-v="${x.id}" ${on ? 'checked' : ''} ${may ? '' : 'disabled'}> <b>${x.name}</b></label>
           <span class="muted">${x.trade || 'no trade'}</span>
