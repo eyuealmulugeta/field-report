@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['bell', 'Reminder to send (2.28.0)', 'When today’s report has 8 or more of its 9 steps done but is not sent, the people who worked on it are reminded at 17:30, 18:00 and 18:30. Spotlight: the Gallery button.'],
   ['check', 'Who and when, and the new rating (2.27.0)', 'Each step on Today shows who changed it last and at what time. The engagement rating has four checks: photos in the morning, midday and afternoon; most sections filled in; attendance marked on time; the report sent before 18:00. They show on Review and send and in Reports. Spotlight takes photos and videos from the gallery too, several at once.'],
   ['user', 'Office attendance (2.10.0)', 'Attendance has its own tab, Office attendance. The list is the crew the office allocated in Central Hub and is checked again each time you open it. People working on site who are not on the list: Add labour on site for approval; once approved they join the list.'],
   ['check', 'Sent from any phone (2.9.0)', 'A report sent from another phone of the project shows as Submitted (or Approved) on every phone, in Reports and on Today.'],

@@ -20,7 +20,7 @@ export function spot(c) {
       <textarea class="fld" rows="3" data-ui="spotNote" placeholder="What did you see?">${c.ui.spotNote || ''}</textarea>
       ${s.media.length ? html`<div class="thumbs">${s.media.map((m, i) => html`<button type="button" class="tb" data-act="spotDrop" data-v="${i}" aria-label="Remove">${m.kind === 'video' ? html`<span class="thumb sm vid">${icon('cam')}<small>video</small></span>` : thumb(m.id, 'sm')}</button>`)}</div><p class="muted tiny">Tap one to remove it.</p>` : ''}
       ${s.media.length < SPOT_MAX ? html`<div class="two"><button type="button" class="btn o" data-act="spotCam" ${c.ui.spotWork ? 'disabled' : ''}>${icon('cam')}Photo</button><button type="button" class="btn o" data-act="spotVid" ${c.ui.spotWork ? 'disabled' : ''}>${icon('cam')}Video</button></div>
-        <button type="button" class="btn o" data-act="spotGal" ${c.ui.spotWork ? 'disabled' : ''}>${icon('doc')}From gallery (choose several)</button>
+        <button type="button" class="btn o" data-act="spotGal" ${c.ui.spotWork ? 'disabled' : ''}>${icon('doc')}Gallery</button>
         <p class="muted tiny">Up to ${SPOT_MAX} photos or videos. A video is at most ${VIDEO_SECONDS} seconds.</p>` : ''}
       ${c.ui.spotWork ? html`<p class="callout warn small">${c.ui.spotWork}</p>` : ''}
       <button type="button" class="btn p" data-act="spotSave" ${c.ui.busy || c.ui.spotWork ? 'disabled' : ''}>Send to Central Hub</button>

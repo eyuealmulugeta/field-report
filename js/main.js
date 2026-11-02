@@ -9,7 +9,7 @@ import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
-import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen } from './model/report.js';
+import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount } from './model/report.js';
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
@@ -461,7 +461,7 @@ function draftSoon() {
 async function pushDraft() {
   const r = report(), p = project();
   if (!r || !r.start || !p || (r.sentAt && !(r.updated > r.sentAt + 1000))) return;
-  await call('draftPut', { proj: p.code, date: r.date, no: r.no, screen: 'fr2', photoCount: r.photos.length, dev: devId(), s: { fr2: 1, report: r } }).catch(() => {});
+  await call('draftPut', { proj: p.code, date: r.date, no: r.no, screen: 'fr2', photoCount: r.photos.length, steps: r.start ? doneCount(r) : 0, dev: devId(), s: { fr2: 1, report: r } }).catch(() => {});
 }
 async function pullDraft() {
   const p = project();
