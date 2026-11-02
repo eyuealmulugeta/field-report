@@ -20,6 +20,7 @@ const blank = () => ({
   inbox: [],           // 2.0.1: the last notifications sent to this person [{ t, h, m, c, f }] (script 7.29.0)
   inboxSeen: '',       // 2.0.1: notifications up to this time were cleared from Today
   pushAppId: '',       // 2.0.1: the OneSignal app id, kept after the first ask
+  reqQueue: [],        // 2.25.0: requests for another day not shared yet [{ code, date, q }], shared when the connection is back
   spots: [],           // 2.7.0: Spotlight notes made on this phone, newest first; sent ones are kept as a short list
 });
 

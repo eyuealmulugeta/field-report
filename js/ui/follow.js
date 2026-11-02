@@ -4,7 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
 import { head, isGM } from './parts.js';
-import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
 import { rateReport, rateLine } from '../model/rating.js';
@@ -109,17 +109,24 @@ function sharedRequests(c) {
   const tag = (list, code) => list.map(d => ({ ...d, _p: code }));
   const list = [...tag(c.ui.liveReqs, c.project.code), ...(all ? Object.entries(c.ui.reqAll || {}).filter(([k]) => k !== c.project.code).flatMap(([k, l]) => tag(l.filter(d => !mine.has(d.id)), k)) : [])]
     .filter(d => d.status !== 'deleted' && d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
+  // 2.25.0: saved on this phone but not in the shared list yet: shown, never hidden, and shared again by itself
+  const wait = unsharedRequests(c.project.code, c.s.drafts, c.ui.liveReqs, c.s.reqQueue || []);
   return {
     tab: 'requests',
-    head: head('Requests', `${list.length} on ${all ? 'all projects' : 'this project'}`, `${list.filter(d => d.status === 'draft').length} draft`),
-    body: html`${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
+    head: head('Requests', `${list.length + wait.length} on ${all ? 'all projects' : 'this project'}`, `${list.filter(d => d.status === 'draft').length + wait.length} draft`),
+    body: html`${wait.length ? html`<div class="box">${wait.map(({ q, date }) => html`<div class="li item">
+        <span class="time ${q.priority === 'Urgent' ? 'urgent' : ''}">${q.priority === 'Urgent' ? 'Urgent' : String(date || '').slice(5)}</span>
+        <div class="n"><b>${all ? `${nameOf(c.project.code)} · ` : ''}${q.text}</b><span>${requestLine(q)}</span><span class="tiny muted">Saved on this phone · sharing with the other phones and the office</span></div>
+        <span class="pill warn">On this phone</span>
+        <button type="button" class="btn t slim" data-act="openReq" data-v="${q.id}">Edit</button></div>`)}</div>` : ''}
+      ${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
         <span class="time ${d.fr.priority === 'Urgent' ? 'urgent' : ''}">${d.fr.priority === 'Urgent' ? 'Urgent' : String(d.fr.date || '').slice(5)}</span>
         <div class="n"><b>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
           ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
         <span class="pill ${REQ_TONE[d.status] || ''}">${REQ_WORD[d.status] || d.status}</span>
         ${d.status === 'draft' && d._p === c.project.code ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
         ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
-      : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
+      : wait.length ? '' : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
       <p class="muted tiny">Drafts are shared with every phone of this project and go to the office with the day's report. Central Hub's answers show here.</p>`,
   };
 }

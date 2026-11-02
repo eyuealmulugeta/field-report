@@ -25,7 +25,7 @@ import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeReq
 import { buildPdf, loadPdfLib, photoCaption, weatherFile } from './pdf.js';
 
 import * as F from './ui/follow.js';
-import { monthDays, needsYou, toCheck, draftChoice } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests } from './model/follow.js';
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
@@ -381,7 +381,30 @@ function liveRequests(list) {
     const cur = r.requests || [], next = mergeRequests(cur, list, r.date);
     if (JSON.stringify(next) !== JSON.stringify(cur)) editKey(k, x => { x.requests = next; });
   }
+  shareLater();
   draw();
+}
+
+/** 2.25.0: requests kept on this phone and not in the shared list yet go again, at most once a minute each. */
+const tried = new Map();
+function shareLater() {
+  const p = project();
+  if (!p || !L.liveOn() || !ui.liveReqs) return;
+  const byName = (store.get().profile || {}).name || '';
+  for (const x of unsharedRequests(p.code, store.get().drafts, ui.liveReqs, store.get().reqQueue || [])) {
+    if (Date.now() - (tried.get(x.q.id) || 0) < 60000) continue;
+    tried.set(x.q.id, Date.now());
+    L.saveRequest(x.q, { date: x.date, byName }).then(ok => { if (ok) dropQueued(x.q.id); }).catch(() => {});
+  }
+}
+/** 2.25.0: a request for another day kept on the phone until it is shared (before, it was lost when sharing failed). */
+function queueReq(q, date) {
+  const p = project(), qq = (store.get().reqQueue || []).filter(x => x.q.id !== q.id);
+  if (p) store.set({ reqQueue: [...qq, { code: p.code, date, q: structuredClone(q) }] });
+}
+function dropQueued(id) {
+  const qq = store.get().reqQueue || [];
+  if (qq.some(x => x.q.id === id)) store.set({ reqQueue: qq.filter(x => x.q.id !== id) });
 }
 
 /** 2.12.2: live answers into the reviewer's open list and report (Review), which come from the script's `list`. */
@@ -824,8 +847,9 @@ function openReq(id) {
   const r = ensureReport();
   const found = id && (r.requests || []).find(x => x.id === id);
   const shared = !found && id && (ui.liveReqs || []).find(d => d.fr && d.fr.id === id && d.status === 'draft');   // 2.14.0
-  ui.req = found ? structuredClone(found) : shared ? fromLive(shared) : newRequest(now());
-  ui.reqDate = shared ? shared.fr.date : '';
+  const queued = !found && !shared && id && (store.get().reqQueue || []).find(x => x.q.id === id);   // 2.25.0
+  ui.req = found ? structuredClone(found) : shared ? fromLive(shared) : queued ? structuredClone(queued.q) : newRequest(now());
+  ui.reqDate = shared ? shared.fr.date : queued ? queued.date : '';
   if (location.hash.slice(1) === 'request') draw(); else go('request');
 }
 
@@ -1452,8 +1476,11 @@ const ACTS = {
     q.text = q.text.trim(); q.qty = num(q.qty);
     // 2.14.0: shared with the project's phones and Central Hub (a draft until the report is sent)
     const by = { date: ui.reqDate || report().date, byName: (store.get().profile || {}).name || '' };
-    if (L.liveOn()) { q.live = true; L.saveRequest(q, by).catch(e => toast(`Not shared: ${e.message}`)); }
-    if (ui.reqDate && ui.reqDate !== report().date) { toast('Request saved.'); return go('requests'); }
+    // 2.25.0: when sharing fails the request stays on the phone (shown as "On this phone") and goes again by itself
+    const otherDay = !!ui.reqDate && ui.reqDate !== report().date;
+    if (otherDay) queueReq(q, by.date);
+    if (L.liveOn()) { q.live = true; L.saveRequest(q, by).then(ok => { if (ok) dropQueued(q.id); }).catch(e => toast(`Saved on this phone; it is shared when the connection is back (${e.message}).`)); }
+    if (otherDay) { toast('Request saved.'); return go('requests'); }
     edit(r => { r.requests = r.requests || []; const i = r.requests.findIndex(y => y.id === q.id); if (i >= 0) r.requests[i] = q; else r.requests.push(q); r.done.end = false; });
     toast(q.priority === 'Urgent' ? 'Urgent request saved.' : 'Request saved.');
     if (d.v === 'again') openReq(); else go('end');
@@ -1462,6 +1489,7 @@ const ACTS = {
     if (!confirm('Delete this request?')) return;
     const id = ui.req.id;
     if (ui.req.live) L.requestStatus(id, 'deleted', { byName: (store.get().profile || {}).name || '' }).catch(e => toast(`Not deleted for the others: ${e.message}`));   // 2.14.0
+    dropQueued(id);   // 2.25.0
     if (ui.reqDate && ui.reqDate !== report().date) return go('requests');
     edit(r => { r.requests = (r.requests || []).filter(y => y.id !== id); });
     go('end');
@@ -1859,6 +1887,7 @@ window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flush
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
+setInterval(shareLater, 60e3);   // 2.25.0: requests not shared yet go again
 // 2.16.0: the Office page asks the office list every 30 s while open, when this device has no live updates or people wait for approval
 setInterval(() => {
   if (document.visibilityState !== 'visible' || !store.get().auth || route() !== 'att' || Date.now() - (ui.attTried || 0) < 30e3) return;

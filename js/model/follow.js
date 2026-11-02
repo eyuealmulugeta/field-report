@@ -109,6 +109,19 @@ export function allRequests(code, drafts) {
     .flatMap(k => (drafts[k].requests || []).filter(requestReady).map(q => ({ ...q, date: drafts[k].date, no: drafts[k].no, sent: !!drafts[k].sentAt })));
 }
 
+/**
+ * 2.25.0: requests kept on this phone that the shared list does not have yet (never shared, or sharing failed):
+ * those of reports not sent yet, and those for another day waiting in the queue. [{ q, date }]
+ */
+export function unsharedRequests(code, drafts, live = [], queue = []) {
+  const there = new Set(live.filter(d => d.fr).map(d => d.fr.id));
+  const local = Object.keys(drafts).filter(k => k.startsWith(code + '|')).map(k => drafts[k]).filter(r => r && !r.sentAt)
+    .flatMap(r => (r.requests || []).filter(requestReady).map(q => ({ q, date: r.date })));
+  const queued = queue.filter(x => x.code === code && x.q).map(x => ({ q: x.q, date: x.date }));
+  const seen = new Set();
+  return [...local, ...queued].filter(x => !there.has(x.q.id) && !seen.has(x.q.id) && seen.add(x.q.id));
+}
+
 /** A request is late when its date has passed. */
 export const lateRequest = (q, today) => !!q.neededBy && q.neededBy < today;
 
