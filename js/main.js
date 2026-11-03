@@ -1385,11 +1385,13 @@ const ACTS = {
   clPerson() { ui.cl.people.push({ name: '', trade: (ui.cl.trades[0] || {}).trade || '', wage: '' }); saveCl(); draw(); },
   clDel(d) { ui.cl[d.k].splice(Number(d.i), 1); saveCl(); draw(); },
   // 2.13.0: crew the site added: corrected or taken off here, in Central Hub at once
-  crewEdit: d => { ui.crewEdit = ui.crewEdit === d.v ? '' : d.v; draw(); },
+  // 2.36.0: every crew member, by the project's SE, PE or GM; Central Hub copies it to the Manpower Directory
+  crewEdit: d => { ui.crewEdit = ui.crewEdit === d.v ? '' : d.v; ui.ceName = undefined; ui.ceTrade = undefined; ui.cePhone = undefined; draw(); },
   async crewSave(d) {
-    const name = String(ui.ceName || '').trim(), role = String(ui.ceTrade || '').trim();
+    const x = (project().staff || []).find(s => s.id === d.v) || {};
+    const name = String(ui.ceName ?? x.name ?? '').trim(), role = String(ui.ceTrade ?? x.trade ?? '').trim(), phone = String(ui.cePhone ?? '').trim();
     if (!name) return toast('Write the name.');
-    try { await L.editTeam(d.v, { name, ...(role ? { role } : {}) }); ui.crewEdit = ''; toast('Corrected. Central Hub has it.'); }
+    try { await L.editTeam(d.v, { name, ...(role ? { role } : {}), ...(phone ? { contact: phone } : {}), crewSync: true }); ui.crewEdit = ''; toast('Corrected. Central Hub has it.'); }
     catch (e) { toast(`Not changed: ${e.message}`); }
     draw();
   },

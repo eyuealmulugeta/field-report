@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['users', 'Correct the crew (2.36.0)', "The project's Site Engineer, Project Engineer and the GM can correct any crew member's name, trade and phone in Office attendance (Edit). Central Hub and the Manpower Directory get it."],
   ['alert', 'Database copy of every report (2.35.0)', 'If the phone is no longer signed in to the database, a red bar says so: tap it to sign in again. Reports sent meanwhile are copied there once you are back.'],
   ['bell', 'Urgent notices (2.34.0)', "An urgent notice from the GM covers the screen until you tap I've read it, or send a different reply. It also comes as a phone notification."],
   ['users', 'Attendance shared and confirmed (2.33.0)', "Today's marks show at once on Central Hub's attendance sheet. When everyone is marked, tap Confirm the attendance is correct; if a mark changes later, confirm again."],
