@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.43.0';
+export const APP_VERSION = '2.43.1';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -104,14 +104,15 @@ export function signUp(form) {
  * 2.0.1: the whole page goes to Google and comes back (no popup). The popup lost its way back on installed apps:
  * after choosing the account the phone showed the email app, and only a second try worked.
  */
-export async function signIn(name = '') {
+export async function signIn(name = '', hint = '') {
   if (fake) return signinPost({ accessToken: 'demo', name, ua: deviceUa() });
   const cfg = await post('authcfg');
   if (!cfg.clientId) throw new ApiError('Google sign-in is not set up on the server yet.', 'AUTH');
   const a = new Uint8Array(16); crypto.getRandomValues(a);
   const state = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
   try { localStorage.setItem(OAUTH, JSON.stringify({ state, name, at: Date.now() })); } catch { /* checked on the way back */ }
-  const q = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: backUrl(), response_type: 'token', scope: 'openid email profile', state, prompt: 'select_account', include_granted_scopes: 'true' });
+  // 2.43.1: with the account already known (hint) Google goes straight back, no account list
+  const q = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: backUrl(), response_type: 'token', scope: 'openid email profile', state, include_granted_scopes: 'true', ...(hint ? { login_hint: hint } : { prompt: 'select_account' }) });
   location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${q}`);
   return new Promise(() => {});   // the page is leaving
 }

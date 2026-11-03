@@ -621,7 +621,9 @@ async function signedIn(pending) {
     oldAppClear();
     sigFetch();
     await loadProjects();
-    go('today');
+    let after = '';
+    try { after = sessionStorage.getItem(AFTER) || ''; } catch { /* none */ }
+    if (after === 'emp') { ui.attTab = 'emp'; go('att'); try { sessionStorage.setItem(AFTER, 'done'); } catch { /* once */ } } else go('today');   // 2.43.1: back to Candidate, once
     checkStatus(); devCheck(true); inboxCheck(true);
     goLive(takeGoogleToken());
   } catch (e) {
@@ -861,6 +863,7 @@ async function fetchWeather() {
 /* ---------- actions ---------- */
 
 const go = to => { location.hash = to; };
+const AFTER = 'fr2_after';   // 2.43.1: the page to return to after the Central Hub sign-in
 function toast(msg) {
   ui.toast = msg; draw();
   clearTimeout(toast.t); toast.t = setTimeout(() => { ui.toast = ''; draw(); }, 2600);
@@ -1328,6 +1331,12 @@ const ACTS = {
   // 2.16.0: the Office page tabs: Today, Crew attendance, Employee data
   attTab(d) {
     ui.attTab = d.v; ui.regEdit = null;
+    // 2.43.1 (owner): Candidate never asks to connect: the Central Hub sign-in starts by itself (once per visit) and comes back here
+    if (d.v === 'emp' && !demo && ui.live !== 'on' && L.LIVE.has(ui.liveRoute) && !sessionStorage.getItem(AFTER)) {
+      try { sessionStorage.setItem(AFTER, 'emp'); } catch { /* the Connect button stays */ }
+      const a = store.get().auth || {};
+      return signedIn(signIn(store.get().profile.name || '', a.email || ''));
+    }
     if (d.v === 'sheet' && (!ui.reg || ui.reg.code !== (project() || {}).code)) regLoad();
     draw();
   },
