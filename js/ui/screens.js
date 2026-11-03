@@ -293,7 +293,9 @@ function sheetView(c) {
 /** 2.16.0: Employee data: the crew form, opened inside the app and filled in by the engineer (nothing to share). */
 function empView(c) {
   if (!(crewBoss(c) || linkMaker(c))) return html`<p class="callout">Candidate data is filled in by the project's engineers.</p>`;
-  if (c.ui.live !== 'on' && !isDemo()) return html`<p class="callout warn">The Candidate form needs live updates (the Central Hub sign-in). Open Me to switch them on.</p>`;
+  // 2.42.9 (owner): no trip to Me: one tap here signs in to live updates
+  if (c.ui.live !== 'on' && !isDemo()) return html`<div class="box pad center"><p class="muted small">Connect to Central Hub to add a candidate.</p>
+    <button type="button" class="btn p" data-act="liveConnect" ${c.ui.busy ? 'disabled' : ''}>${c.ui.busy ? 'Connecting…' : 'Connect'}</button></div>`;
   return html`<div class="box pad"><b>Candidate form</b>
     <p class="muted small">The same form as the crew form link: one form per person, with the photo and the Fayda ID or passport. It opens here, nothing to share. Each form goes to Central Hub, Crew forms, for the office to review.</p>
     <button type="button" class="btn p" data-act="empOpen" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Open the employee form</button>${formLink(c)}</div>`;   // 2.39.0: the crew form link here
