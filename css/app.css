@@ -537,5 +537,5 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .signin-page { position: relative; isolation: isolate; }
 .signin-page::before {
   content: ''; position: fixed; z-index: -1; left: 25%; top: 0; width: 150vw; height: 100vh;
-  background: url('../img/watermark.webp') 0 50% / contain no-repeat; opacity: .11; mix-blend-mode: multiply; pointer-events: none;
+  background: url('../img/watermark.webp') 0 0 / 100% 100% no-repeat; opacity: .11; mix-blend-mode: multiply; pointer-events: none;
 }
