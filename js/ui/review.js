@@ -30,7 +30,8 @@ const pill = st => { const s = STATUS[st] || STATUS.submitted; return html`<span
 export function review(c) {
   // 2.17.0: the GM's All projects; each line with when it was sent and the last answer
   const all = !!c.ui.allProj && isGM(c);
-  const rv = c.ui.rv || {}, f = rv.f ?? '',   // 2.37.0 (owner): All first list = reviewRows(rv.list, all ? '' : c.project.code, f);
+  // 2.37.0 (owner): the list opens on All
+  const rv = c.ui.rv || {}, f = rv.f ?? '', list = reviewRows(rv.list, all ? '' : c.project.code, f);
   const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
   return {
     tab: c.kind === 'viewer' ? 'review' : 'me',

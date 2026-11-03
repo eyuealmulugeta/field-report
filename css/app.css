@@ -446,7 +446,11 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .wide .li .n b { font-size: 13px; } .wide .li .n span { font-size: 11.5px; }
 .wide .fld { font-size: 13px; }
 .wide .k { margin-top: 4px; }
-.wide .ws.solo .bd > .box:has(> .li:nth-child(6)) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; column-span: all; }
+/* 2.38.0 (owner): a long list reads down the first column, then the second (was across, row by row) */
+.wide .ws.solo .bd > .box:has(> .li:nth-child(6)) { display: block; column-count: 2; column-gap: 12px; column-span: all; }
+.wide .ws.solo .bd > .box:has(> .li:nth-child(6)) > * { break-inside: avoid; }
+/* 2.38.0 (owner): smaller type on a computer */
+.app.wide { zoom: .9; height: calc(100% / .9); }
 
 /* 2.17.2: no page scrolls sideways: tables fit, long words wrap */
 html, body, .app, .ws, .bd { overflow-x: hidden; }

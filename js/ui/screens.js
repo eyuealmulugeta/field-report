@@ -229,7 +229,6 @@ export function att(c) {
   const staff = c.project.staff || [], started = c.report && c.report.start && !c.report.nowork;
   const sub = `${c.project.name || c.project.code} · crew from Central Hub${c.ui.attAt ? ` · checked ${c.ui.attAt}` : ''}`;
   // 2.16.0: three tabs: Today, Crew attendance (Central Hub's sheet), Employee data (the crew form, filled in here)
-  if (c.ui.attTab === 'sheet') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · the same sheet as Central Hub`), body: html`${attTabs(c)}${sheetView(c)}` };
   if (c.ui.attTab === 'emp') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · employee data`), body: html`${attTabs(c)}${empView(c)}` };
   if (started) {
     const v = crew(c);
@@ -247,7 +246,8 @@ export function att(c) {
       ${crewListBox(c)}`,
   };
 }
-const ATT_TABS = [['', 'Today'], ['sheet', 'Crew attendance'], ['emp', 'Candidate']];   // 2.26.0: was Employee data
+// 2.26.0: was Employee data. 2.38.0 (owner): the project sheet (Crew attendance) is gone; Central Hub keeps it
+const ATT_TABS = [['', 'Today'], ['emp', 'Candidate']];
 const attTabs = c => html`<div class="seg wide att-tabs" role="group" aria-label="Office">${ATT_TABS.map(([k, t]) => html`<button type="button" class="${(c.ui.attTab || '') === k ? 'on' : ''}" data-act="attTab" data-v="${k}" aria-pressed="${(c.ui.attTab || '') === k}">${t}</button>`)}</div>`;
 const SHEET_MARK = { present: 'P', absent: 'A', sick: 'S', leave: 'L' };
 const SHEET_WORD = { present: 'Present', absent: 'Absent', sick: 'Sick', leave: 'On leave', none: 'No mark' };
