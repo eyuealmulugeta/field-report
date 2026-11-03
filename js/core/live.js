@@ -258,14 +258,16 @@ export async function saveRequest(q, { date, byName = '' }) {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString(), id = `fr_${q.id}`;
   const ref = F.doc(db, 'projects', pid, 'requests', id), old = await F.getDoc(ref);
-  if (old.exists() && old.data().status !== 'draft') throw new Error('the office has it already; ask them to change it');
+  // 2.40.0 (owner): an asked request is changed too, and stays asked, until the office acts on it
+  const asked = old.exists() && old.data().status === 'requested';
+  if (old.exists() && !asked && old.data().status !== 'draft') throw new Error('the office has it already; ask them to change it');
   const fr = { id: q.id, at: q.at || '', date, category: q.category || 'Material', text: String(q.text || '').trim(), qty: q.qty ?? null, unit: q.unit || '', neededBy: q.neededBy || '', priority: q.priority || 'Normal', location: q.location || '' };
-  const base = { id, kind: KIND[fr.category] || 'material', priority: fr.priority === 'Urgent' ? 'urgent' : 'normal', status: 'draft', date, neededBy: fr.neededBy, taskId: '',
+  const base = { id, kind: KIND[fr.category] || 'material', priority: fr.priority === 'Urgent' ? 'urgent' : 'normal', status: asked ? 'requested' : 'draft', date, neededBy: fr.neededBy, taskId: '',
     purpose: fr.location ? `Where on site: ${fr.location}` : '', lines: [{ id: `${id}_1`, description: fr.text, qty: Number(fr.qty) || 0, unit: fr.unit, note: '' }],
     projectId: pid, site: true, fr, editedBy: byName || email, editedAt: at };
   // 2.29.0: an expense carries its amount, currency, Ledger category, who was paid and the receipt photo (Central Hub's shape)
   if (fr.category === 'Expense') Object.assign(base, { amount: Number(q.amount) || 0, currency: q.currency === 'USD' ? 'USD' : 'ETB', category: COST[q.cost] || 'material', vendor: String(q.vendor || '').trim(), receipt: q.receipt || '', lines: [{ id: `${id}_1`, description: fr.text, qty: 1, unit: '', note: '' }] });
-  const entry = { at, by: email, byName: byName || email, status: 'draft', note: old.exists() ? 'Changed on site' : 'Written on site' };
+  const entry = { at, by: email, byName: byName || email, status: asked ? 'requested' : 'draft', note: old.exists() ? 'Changed on site' : 'Written on site' };
   if (old.exists()) await F.updateDoc(ref, { ...base, log: F.arrayUnion(entry) });
   else await F.setDoc(ref, { ...base, number: `SITE-${String(q.id).slice(-4).toUpperCase()}`, by: email, byName: byName || email, byTitle: 'Field Report', log: [entry] });
   return true;

@@ -885,6 +885,10 @@ function openReq(id) {
   const r = ensureReport();
   const found = id && (r.requests || []).find(x => x.id === id);
   const shared = !found && id && (ui.liveReqs || []).find(d => d.fr && d.fr.id === id && d.status === 'draft');   // 2.14.0
+  // 2.40.0 (owner): an asked request is changed too, until the office acts on it
+  const asked = id && (ui.liveReqs || []).find(d => d.fr && d.fr.id === id && d.status === 'requested');
+  ui.reqAsked = !!asked;
+  if (asked) { ui.req = { ...fromLive(asked), live: true }; ui.reqDate = asked.fr.date; if (location.hash.slice(1) === 'request') draw(); else go('request'); return; }
   const queued = !found && !shared && id && (store.get().reqQueue || []).find(x => x.q.id === id);   // 2.25.0
   ui.req = found ? structuredClone(found) : shared ? fromLive(shared) : queued ? structuredClone(queued.q) : newRequest(now());
   ui.reqDate = shared ? shared.fr.date : queued ? queued.date : '';
@@ -1563,6 +1567,11 @@ const ACTS = {
     // 2.14.0: shared with the project's phones and Central Hub (a draft until the report is sent)
     const by = { date: ui.reqDate || report().date, byName: (store.get().profile || {}).name || '' };
     // 2.25.0: when sharing fails the request stays on the phone (shown as "On this phone") and goes again by itself
+    if (ui.reqAsked) {   // 2.40.0: an asked request: changed in the shared list only
+      if (!L.liveOn()) return toast('Connect to the internet to change an asked request.');
+      L.saveRequest(q, by).then(() => toast('Request changed.')).catch(e => toast(`Not changed: ${e.message}`));
+      return go('requests');
+    }
     const otherDay = !!ui.reqDate && ui.reqDate !== report().date;
     if (otherDay) queueReq(q, by.date);
     if (L.liveOn()) { q.live = true; L.saveRequest(q, by).then(ok => { if (ok) dropQueued(q.id); }).catch(e => toast(`Saved on this phone; it is shared when the connection is back (${e.message}).`)); }
@@ -1576,7 +1585,7 @@ const ACTS = {
     const id = ui.req.id;
     if (ui.req.live) L.requestStatus(id, 'deleted', { byName: (store.get().profile || {}).name || '' }).catch(e => toast(`Not deleted for the others: ${e.message}`));   // 2.14.0
     dropQueued(id);   // 2.25.0
-    if (ui.reqDate && ui.reqDate !== report().date) return go('requests');
+    if (ui.reqAsked || (ui.reqDate && ui.reqDate !== report().date)) return go('requests');
     edit(r => { r.requests = (r.requests || []).filter(y => y.id !== id); });
     go('end');
   },
@@ -1859,6 +1868,9 @@ function route() {
 }
 
 function draw() {
+  // 2.40.0 (owner): an open list (the project list on Requests) is not closed by a live update; the page is drawn when it closes
+  if (document.activeElement && document.activeElement.tagName === 'SELECT') { ui.drawLater = true; return; }
+  ui.drawLater = false;
   clSync();
   const r = route(), c = context();
   if (r === 'photos' || r === 'send') fitSoon();   // 2.11.0
@@ -2001,6 +2013,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 try { navigator.storage?.persist?.().catch(() => {}); } catch { /* 2.2.0: asks the phone not to clear the app's data (the device id) */ }
 store.subscribe(draw);
+// 2.40.0: a choice made in a list is drawn at once; a page held back while a list was open is drawn when it closes
+document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') e.target.blur(); }, true);
+document.addEventListener('focusout', e => { if (ui.drawLater && e.target.tagName === 'SELECT') setTimeout(draw, 0); });
+// 2.40.0 (owner): the app always opens on Today (a link from a notification still opens its page)
+if (location.hash && !location.hash.startsWith('#go=')) history.replaceState(null, '', location.pathname + location.search);
 // 2.7.0: the app opened from a notification
 if (location.hash.startsWith('#go=')) setTimeout(() => { if (!openLink(location.hash.slice(1))) go('today'); }, 300);
 

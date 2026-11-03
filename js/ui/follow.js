@@ -126,14 +126,17 @@ function sharedRequests(c) {
         <div class="n"><b>${all ? `${nameOf(c.project.code)} · ` : ''}${q.text}</b><span>${requestLine(q)}</span><span class="tiny muted">Saved on this phone · sharing with the other phones and the office</span></div>
         <span class="pill warn">On this phone</span>
         <button type="button" class="btn t slim" data-act="openReq" data-v="${q.id}">Edit</button></div>`)}</div>` : ''}
-      ${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
-        <span class="time ${d.fr.priority === 'Urgent' ? 'urgent' : ''}">${d.fr.priority === 'Urgent' ? 'Urgent' : String(d.fr.date || '').slice(5)}</span>
-        <div class="n"><b>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
-          ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status}${x.level ? ` (${x.level})` : ''} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
-        <span class="pill ${REQ_TONE[d.status] || ''}">${reqWord(d)}</span>
-        ${d.status === 'draft' && d._p === c.project.code ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
-        ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}
-        ${['draft', 'requested'].includes(d.status) && d._p === c.project.code && c.kind !== 'viewer' ? html`<button type="button" class="btn t slim bad-t" data-act="reqDelete" data-v="${d.fr.id}">Delete</button>` : ''}</div>`)}</div>`
+      ${list.length ? html`<div class="box">${list.map(d => {
+        // 2.40.0 (owner): the tag on top, the details in one line, Edit and Delete while the office has not acted
+        const open = ['draft', 'requested'].includes(d.status) && d._p === c.project.code && c.kind !== 'viewer';
+        const facts = [d.fr.category, d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location, String(d.fr.date || '').slice(5)].filter(Boolean);
+        return html`<div class="li req-card">
+        <div class="req-top"><span class="pill ${REQ_TONE[d.status] || ''}">${reqWord(d)}</span>${d.fr.priority === 'Urgent' ? html`<span class="pill bad">Urgent</span>` : ''}${all ? html`<span class="tiny muted">${nameOf(d._p)}</span>` : ''}</div>
+        <b>${d.fr.text}</b>
+        <div class="req-facts">${facts.map(f => html`<span>${f}</span>`)}</div>
+        ${(d.log || []).length ? html`<div class="req-log">${(d.log || []).slice(-4).reverse().map(x => html`<span>${REQ_WORD[x.status] || x.status}${x.level ? ` (${x.level})` : ''} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>` : ''}
+        ${open ? html`<div class="req-acts"><button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button><button type="button" class="btn t slim bad-t" data-act="reqDelete" data-v="${d.fr.id}">Delete</button></div>` : ''}</div>`;
+      })}</div>`
       : wait.length ? '' : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
       ${gone.length ? html`<div class="k">Removed · ${gone.length}</div><div class="box">${gone.map(d => html`<div class="li item gone"><div class="n"><b><s>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</s></b><span class="tiny muted">Removed by ${d.editedBy || 'site'} · ${stampOf(d.editedAt)}</span></div></div>`)}</div>` : ''}
       <p class="muted tiny">Drafts are shared with every phone of this project and go to the office with the day's report. Central Hub's answers show here.</p>`,
