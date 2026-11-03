@@ -2035,7 +2035,9 @@ document.addEventListener('focusout', e => { if (ui.drawLater && e.target.tagNam
 // 2.40.0 (owner): the app opens on Today (a link from a notification still opens its page)
 // 2.42.0 (owner): a reload of the page stays on the page it was on
 const reloaded = (() => { try { return performance.getEntriesByType('navigation')[0]?.type === 'reload'; } catch { return false; } })();
-if (location.hash && !location.hash.startsWith('#go=') && !reloaded) history.replaceState(null, '', location.pathname + location.search);
+// 2.42.1: never the answer of the Google sign-in (#state=…&access_token=…): signInReturn reads it below (2.40.0 wiped it)
+const googleBack = /(^#|&)(state|access_token|error)=/.test(location.hash);
+if (location.hash && !location.hash.startsWith('#go=') && !reloaded && !googleBack) history.replaceState(null, '', location.pathname + location.search);
 // 2.42.0 (owner): notifications are on by default: switched on at once when already allowed, else at the first tap
 // (the phone asks the person once); someone who turned them off stays off
 const autoPush = () => {
