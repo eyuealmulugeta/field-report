@@ -8,7 +8,7 @@ import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
 import { inboxLink } from '../model/follow.js';
-import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses } from '../model/crew.js';
+import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses, dayConfirm } from '../model/crew.js';
 import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop } from './parts.js';
 
@@ -209,6 +209,7 @@ export function crew(c) {
       <div class="k">Day workers without names</div>
       <div class="box">${cr.extra.map((x, i) => html`<div class="li"><input class="fld slim" data-f="crew.extra.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">${stepper('extra', x.qty, x.qty, i)}</div>`)}
         <button type="button" class="li" data-act="addExtra"><span class="ic">${icon('plus')}</span><div class="n"><b>Add day workers</b><span>Trade and count</span></div></button></div>
+      ${confirmBox(c)}
       ${crewListBox(c)}`,
     foot: html`<button type="button" class="btn p" data-act="crewDone">Done · ${t.present} present</button>${c.ui.attNote ? html`<div class="center muted small">${c.ui.attNote}</div>` : ''}`,
   };
@@ -339,6 +340,16 @@ function tradeField(c, v, path) {
 }
 
 /** 2.5.0: names and trades sent for approval as the crew of this project. 2.6.0: only a reviewer sees and gives wages. */
+/** 2.33.0: the reporter confirms that today's attendance is correct; Central Hub's sheet shows it. */
+function confirmBox(c) {
+  if (c.ui.date || c.kind === 'viewer' || !L.liveOn() || !c.report.crew.rows.length) return '';
+  const ok = c.ui.dayOk, st = dayConfirm(c.ui.marks, ok);
+  const when = ok ? new Date(Number(ok.at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  if (st === 'ok') return html`<p class="callout">${icon('check')} Confirmed correct by ${ok.by || 'the reporter'} at ${when}.</p>`;
+  return html`<div class="box pad">${st === 'changed' ? html`<p class="callout warn">Changed since ${ok.by || 'you'} confirmed at ${when}. Confirm again.</p>` : html`<p class="muted small">When everyone is marked, confirm the attendance is correct. Central Hub's sheet shows it.</p>`}
+    <button type="button" class="btn p" data-act="crewConfirm">${icon('check')}Confirm the attendance is correct</button></div>`;
+}
+
 function crewListBox(c) {
   const cl = c.ui.cl || { trades: [], people: [] }, wait = c.project.crewWait || [], paid = c.kind === 'reviewer';
   return html`<div class="k">Add labour on site for approval</div>

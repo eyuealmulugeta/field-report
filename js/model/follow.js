@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['users', 'Attendance shared and confirmed (2.33.0)', "Today's marks show at once on Central Hub's attendance sheet. When everyone is marked, tap Confirm the attendance is correct; if a mark changes later, confirm again."],
   ['check', 'Install, red steps, Gallery (2.32.0)', 'Opened in a browser, Field Report offers to install itself on the phone. A step with nothing in yet is red. The GM can add report photos from the Gallery; they are marked as such.'],
   ['money', 'Who approves an expense (2.31.0)', 'The Site Engineer approves up to 5,000 ETB, the Project Engineer up to 20,000 ETB; above that, and any amount in USD, the GM. Each expense says whom it is waiting for.'],
   ['money', 'Expenses (2.29.0)', 'In Requests choose Expense: the amount in ETB or USD, the category, who was paid and a photo of the receipt. It is approved in Central Hub by position and amount (2.31.0); you see each step here.'],

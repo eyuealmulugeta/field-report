@@ -138,7 +138,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
     stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
     // 2.15.0: today's attendance marks from every phone and computer of the project
-    if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}), () => {}));
+    if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}, (d.data() || {}).confirmed || null), () => {}));   // 2.33.0: and the reporter's check
     // 2.14.0: the project's site requests, drafts included, from every phone
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
     // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
@@ -280,6 +280,14 @@ export async function requestStatus(qid, status, { byName = '', note = '' } = {}
 export async function shareMarks(day, marks) {
   if (!signedIn() || !day || !Object.keys(marks).length) return false;
   const { F, db } = fb;
-  await F.setDoc(F.doc(db, 'projects', pid, 'fieldDay', day), { rows: marks, at: new Date().toISOString() }, { merge: true });
+  await F.setDoc(F.doc(db, 'projects', pid, 'fieldDay', day), { rows: marks, date: day, at: new Date().toISOString() }, { merge: true });
+  return true;
+}
+
+/** 2.33.0: the reporter confirms the day's attendance is correct (Central Hub shows it on its sheet). */
+export async function confirmDay(day, by) {
+  if (!signedIn() || !day) return false;
+  const { F, db } = fb;
+  await F.setDoc(F.doc(db, 'projects', pid, 'fieldDay', day), { date: day, confirmed: { by: by || '', at: Date.now() } }, { merge: true });
   return true;
 }

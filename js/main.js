@@ -267,7 +267,7 @@ async function goLive(at = '') {
       if (d.crew && d.crew !== seen.crew) crewSoon();   // 2.16.0: now and again a little later
     },
     onTeam: team => { ui.team = team; ui.teamOf = p.code; crewFollow(); draw(); },
-    onDay: marks => { ui.marks = marks; ui.marksOf = p.code; crewFollow(); draw(); },
+    onDay: (marks, ok) => { ui.marks = marks; ui.dayOk = ok; ui.marksOf = p.code; crewFollow(); draw(); },
     day: realToday(),
     onPhotos: m => { ui.photos = m; draw(); },
     onRequests: list => liveRequests(list),
@@ -374,7 +374,7 @@ function crewFollow() {
 /** 2.15.0: the marks of these rows to the project's other devices (today only). */
 function shareRows(rows) {
   if (ui.date || !L.liveOn()) return;
-  L.shareMarks(realToday(), Object.fromEntries(rows.map(x => [markKey(x), { state: x.state || '', ot: Number(x.ot) || 0, at: x.markAt || Date.now(), by: (store.get().profile || {}).name || '' }]))).catch(() => {});
+  L.shareMarks(realToday(), Object.fromEntries(rows.map(x => [markKey(x), { id: x.id || '', name: x.name || '', state: x.state || '', ot: Number(x.ot) || 0, at: x.markAt || Date.now(), by: (store.get().profile || {}).name || '' }]))).catch(() => {});
 }
 
 /** 2.14.0: the project's shared requests: shown on Requests, and today's drafts kept in today's report. */
@@ -1336,6 +1336,12 @@ const ACTS = {
   mark: d => { edit(r => { const x = r.crew.rows[d.i]; x.state = d.v; x.markAt = Date.now(); if (d.v !== 'present') x.ot = 0; }); ui.ot = null; shareRows([report().crew.rows[d.i]]); },
   otOpen: d => { ui.ot = ui.ot === Number(d.i) ? null : Number(d.i); draw(); },
   ot: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const x = r.crew.rows[i]; x.ot = Math.max(0, Math.min(12, (Number(x.ot) || 0) + Number(d.d) * 0.5)); x.markAt = Date.now(); }); shareRows([report().crew.rows[i]]); },
+  // 2.33.0: the reporter confirms today's attendance is correct
+  crewConfirm: () => {
+    if (ui.date || !L.liveOn()) { toast('Confirm the attendance when you are online, on today.'); return; }
+    shareRows(report().crew.rows);
+    L.confirmDay(realToday(), (store.get().profile || {}).name || '').then(() => toast('Attendance confirmed. Central Hub shows it.')).catch(() => toast('Not sent. Check the connection and try again.'));
+  },
   allPresent: () => { edit(r => { const away = r.crew.rows.some(x => x.state !== 'present'); if (away) { const t = Date.now(); r.crew.rows.forEach(x => { x.state = 'present'; x.markAt = t; }); } }); shareRows(report().crew.rows); },
   filter: d => { ui.filter = d.v; draw(); },
   addExtra: () => edit(r => { r.crew.extra.push({ trade: '', qty: 1 }); }),
