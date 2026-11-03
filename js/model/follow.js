@@ -47,7 +47,7 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       row.comment = k && k.comments && k.comments.length ? k.comments[k.comments.length - 1] : null;
       row.changed = r.updated > r.sentAt + 1000;
       row.last = lastStep(k && k.history) || { kind: 'submit', at: r.sentAt };   // 2.17.0
-      row.late = lateTag(d, r.sentAt);
+      row.late = lateTag(d, r.sentAt, lateAfter(project));
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
@@ -59,7 +59,7 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true });
       if (ko.comments && ko.comments.length) row.comment = ko.comments[ko.comments.length - 1];
       row.last = lastStep(ko.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null);   // 2.17.0
-      row.late = lateTag(d, o.at || (row.last && row.last.kind === 'submit' ? row.last.at : ''));
+      row.late = lateTag(d, o.at || (row.last && row.last.kind === 'submit' ? row.last.at : ''), lateAfter(project));
     }
     out.push(row);
   }
@@ -71,12 +71,18 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
  * says the day it was sent. '' when on time or not known. Addis Ababa time (UTC+3).
  */
 export const LATE_AFTER = '19:00';
-export function lateTag(date, at) {
+/** 2.42.8 (owner): late is 30 minutes after the project's work finish time (Crew & Hours), else 17:00 + 30. */
+export function lateAfter(project) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String((project && project.defEnd) || '17:00')) || [0, 17, 0];
+  const t = Math.min(23 * 60 + 59, Number(m[1]) * 60 + Number(m[2]) + 30);
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+export function lateTag(date, at, after = LATE_AFTER) {
   const t = Number(at) || Date.parse(at);
   if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return '';
   const a = new Date(t + 3 * 36e5).toISOString(), day = a.slice(0, 10), hm = a.slice(11, 16);
   if (day > date) return `Late submission · sent ${Number(day.slice(8))} ${new Date(`${day}T00:00:00Z`).toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
-  return day === date && hm >= LATE_AFTER ? 'Late submission' : '';
+  return day === date && hm >= after ? 'Late submission' : '';
 }
 
 /** 2.17.0: the newest step of a report's history (sent, approved, sent back…) with who and when. */
