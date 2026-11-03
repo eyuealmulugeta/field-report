@@ -47,20 +47,36 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       row.comment = k && k.comments && k.comments.length ? k.comments[k.comments.length - 1] : null;
       row.changed = r.updated > r.sentAt + 1000;
       row.last = lastStep(k && k.history) || { kind: 'submit', at: r.sentAt };   // 2.17.0
+      row.late = lateTag(d, r.sentAt);
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
     const o = sent.get(d);
-    if (o && ['today', 'draft', 'missing', 'off'].includes(row.kind)) {
+    // 2.41.0: 'queued' too: a report this phone kept but the Admin or another phone sent is sent, not "Not sent yet"
+    if (o && ['today', 'draft', 'missing', 'off', 'queued'].includes(row.kind)) {
       // 2.12.2: a live answer from Central Hub (known) wins over the script's list of the project's reports
       const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
       Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true });
       if (ko.comments && ko.comments.length) row.comment = ko.comments[ko.comments.length - 1];
       row.last = lastStep(ko.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null);   // 2.17.0
+      row.late = lateTag(d, o.at || (row.last && row.last.kind === 'submit' ? row.last.at : ''));
     }
     out.push(row);
   }
   return out;
+}
+
+/**
+ * 2.41.0 (owner, 3 Nov): a report sent after 19:00 on its day is a late submission; sent on a later day, the tag
+ * says the day it was sent. '' when on time or not known. Addis Ababa time (UTC+3).
+ */
+export const LATE_AFTER = '19:00';
+export function lateTag(date, at) {
+  const t = Number(at) || Date.parse(at);
+  if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return '';
+  const a = new Date(t + 3 * 36e5).toISOString(), day = a.slice(0, 10), hm = a.slice(11, 16);
+  if (day > date) return `Late submission · sent ${Number(day.slice(8))} ${new Date(`${day}T00:00:00Z`).toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
+  return day === date && hm >= LATE_AFTER ? 'Late submission' : '';
 }
 
 /** 2.17.0: the newest step of a report's history (sent, approved, sent back…) with who and when. */
@@ -136,6 +152,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['users', 'Crew changes need the Project engineer or the GM (2.41.0)', 'A Site engineer asks to delete a crew member or add labour; the Project engineer or the GM confirms, and a deleted person leaves the list here and in Central Hub. Reports sent after 19:00 are tagged Late submission, with the day sent when it was a later day. Check again is now Refresh.'],
   ['plus', 'Log now is in Quick (2.39.0)', 'Quick holds Log now (work, photo, delay, delivery, request, incident, say it) and your shortcuts. Requests show the same on every phone and can be deleted (the list says who removed it and when). Opened notifications leave the count.'],
   ['doc', 'Easier to read on a computer (2.38.0)', 'On a computer the Reports list reads down the first column, then the second, and the text is a little smaller. Office attendance no longer shows the project sheet.'],
   ['bell', 'Notifications circle and the new rating (2.37.0)', 'Notifications now sit in a circle at the top right: tap it to read them, Clear to empty it. Review and Crew & Hours open from Me. Check again shows All first. The rating wants the report sent before 17:30 and asks for the progress of each work item.'],

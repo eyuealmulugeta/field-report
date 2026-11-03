@@ -84,7 +84,7 @@ export function chooseProject(c) {
     body: c.s.projects.length ? html`<div class="box">${c.s.projects.map(p => html`
       <button type="button" class="li" data-act="pickProject" data-v="${p.code}"><span class="ic">${icon('pin')}</span><div class="n"><b>${p.name}</b><span>${[p.location || p.address, p.code].filter(Boolean).join(' · ')}</span></div>${icon('chev')}</button>`)}</div>`
       : html`<p class="callout warn">No project is linked to your account yet. Ask the office to link you in Central Hub.</p>`,
-    foot: html`<button type="button" class="btn o" data-act="refresh">Check again</button>`,
+    foot: html`<button type="button" class="btn o" data-act="refresh">Refresh</button>`,
   };
 }
 
@@ -310,7 +310,7 @@ const stampAt = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLoca
 const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
 /** 2.13.0: crew the site added can be corrected or taken off from here (live updates on). */
 // 2.17.0: delete from the list: anyone of the site asks, the PM or the GM confirms
-const dropOk = c => c.kind === 'reviewer' || isGM(c) || /site engineer|\bse\b/i.test((c.s.profile || {}).position || '');   // 2.17.1: SE too
+const dropOk = c => c.kind === 'reviewer' || isGM(c);   // 2.41.0 (owner): the Project engineer or the GM, not the Site engineer
 /** 2.17.1: Office: the project's crew with Delete, and who was deleted, by whom and when (last 30 days). */
 function crewAdmin(c, started) {
   const staff = c.project.staff || [], since = Date.now() - 30 * 864e5;
@@ -322,13 +322,13 @@ function crewAdmin(c, started) {
 function staffRow(c, x) {
   // 2.36.0 (owner): every crew member of the project, not only those added on site
   const mine = !!x.id && c.ui.live === 'on' && crewBoss(c), del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
-  const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the PM or GM</span>`}</div>` : '';
+  const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>` : '';
   if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${[...new Set([...TRADES, x.trade].filter(Boolean))].map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <input class="fld slim" data-ui="cePhone" value="${c.ui.cePhone ?? (x.phone || '')}" placeholder="Phone" inputmode="tel" aria-label="Phone"><button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
     ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
-const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
+const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Refresh'}</button></div>`;
 
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
 function crewPhotoBox(c) {
@@ -356,7 +356,7 @@ function confirmBox(c) {
   const ok = c.ui.dayOk, st = dayConfirm(c.ui.marks, ok);
   const when = ok ? new Date(Number(ok.at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   if (st === 'ok') return html`<p class="callout">${icon('check')} Confirmed correct by ${ok.by || 'the reporter'} at ${when}.</p>`;
-  return html`<div class="box pad">${st === 'changed' ? html`<p class="callout warn">Changed since ${ok.by || 'you'} confirmed at ${when}. Confirm again.</p>` : html`<p class="muted small">When everyone is marked, confirm the attendance is correct. Central Hub's sheet shows it.</p>`}
+  return html`<div class="box pad">${st === 'changed' ? html`<p class="callout warn">Changed since ${ok.by || 'you'} confirmed at ${when}. Confirm again.</p>` : ''}
     <button type="button" class="btn p" data-act="crewConfirm">${icon('check')}Confirm the attendance is correct</button></div>`;
 }
 

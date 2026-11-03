@@ -111,7 +111,7 @@ function ensureReport() {
   if (report() && report().start) return report();
   const p = project(), prof = store.get().profile;
   const r = newReport({ ...p, defStart: prof.defStart || p.defStart, defEnd: prof.defEnd || p.defEnd }, today(), nextNo(p), lastReport(p.code, today()));
-  r.crew.rows = applyMarks(mergeStaff([], p.staff), !ui.date && ui.marksOf === p.code ? ui.marks : null);   // 2.15.0: marks made on another device
+  r.crew.rows = applyMarks(mergeStaff([], p.staff, p.gone), !ui.date && ui.marksOf === p.code ? ui.marks : null);   // 2.15.0: marks made on another device
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
   syncNo(key()).catch(() => {});   // offline: checked again when it is sent
   return r;
@@ -177,7 +177,7 @@ async function loadProjects() {
   for (const p of projects) {
     const k = draftKey(p.code, t), r = drafts[k];
     if (!r || r.sentAt || r.nowork || !r.crew || !p.staff.length) continue;
-    const rows = mergeStaff(r.crew.rows, p.staff);
+    const rows = mergeStaff(r.crew.rows, p.staff, p.gone);
     if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) { drafts[k] = { ...r, crew: { ...r.crew, rows }, updated: Date.now() }; changed = true; }
   }
   if (changed) store.set({ drafts });
@@ -395,7 +395,7 @@ function crewFollow() {
   const p = project();
   const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
   if (!r || r.sentAt || r.nowork || !r.crew) return;
-  let rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
+  let rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff, p.gone) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
   // 2.17.0: only Central Hub's crew (and labour added on site today) once the team is known
   if (ui.teamOf === p.code) { const ok = new Set(p.staff.map(s => String(s.id || s.name).toLowerCase())); rows = rows.filter(x => x.added || ok.has(String(x.id || x.name).toLowerCase())); }
   if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) editKey(k, x => { x.crew.rows = rows; });
@@ -1406,11 +1406,11 @@ const ACTS = {
   },
   // 2.17.0: delete from the crew list: the site asks, the PM or the GM confirms (the server takes them off in Central Hub too)
   async crewOff(d) {
-    // 2.17.1: the Site engineer, the PM and the GM delete at once (with who and when); anyone else asks them
-    const boss = kind() === 'reviewer' || P.isGM({ s: store.get() }) || /site engineer|\bse\b/i.test((store.get().profile || {}).position || '');
+    // 2.41.0 (owner, 3 Nov): the Project engineer and the GM delete at once (with who and when); the Site engineer and anyone else ask them
+    const boss = kind() === 'reviewer' || P.isGM({ s: store.get() });
     if (boss) return ACTS.crewDropOk(d);
-    if (!confirm(`Ask the PM or the GM to delete ${d.n} from this project?`)) return;
-    try { await L.editTeam(d.v, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString() } }); toast(`Asked. ${d.n} stays until the PM or the GM confirms.`); }
+    if (!confirm(`Ask the Project engineer or the GM to delete ${d.n} from this project?`)) return;
+    try { await L.editTeam(d.v, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString() } }); toast(`Asked. ${d.n} stays until the Project engineer or the GM confirms.`); }
     catch (e) { toast(`Not asked: ${e.message}`); }
   },
   async crewDropOk(d) {
