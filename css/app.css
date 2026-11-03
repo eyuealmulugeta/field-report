@@ -532,3 +532,10 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .req-facts { font-size: 13px; color: var(--muted); } .req-facts span + span::before { content: "·"; margin-right: 12px; }
 .req-log { font-size: 11.5px; color: var(--muted); } .req-log span + span::before { content: "|"; margin-right: 12px; opacity: .5; }
 .req-acts { justify-content: flex-end; }
+
+/* 2.42.3 (owner): the letters' watermark, large and very faint, behind the sign-in page, running off the right edge */
+.signin-page { position: relative; isolation: isolate; }
+.signin-page::before {
+  content: ''; position: fixed; z-index: -1; left: 25%; top: 0; width: 150vw; height: 100vh;
+  background: url('../img/watermark.webp') 0 50% / contain no-repeat; opacity: .11; mix-blend-mode: multiply; pointer-events: none;
+}

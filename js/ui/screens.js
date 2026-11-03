@@ -54,7 +54,7 @@ export function signin(c) {
       <button type="button" class="btn t" data-act="signupBack">Use another account</button>`,
   };
   return {
-    body: html`<div class="center-page">
+    body: html`<div class="center-page signin-page">
       <img class="logo big" src="icon-192.png" alt="Amistad Prefab">
       <div><b class="title">Amistad Prefab</b><div class="muted">Field Report</div></div>
       ${su ? html`<p class="callout ok narrow">Please wait until your request is approved. You get an email when it is, then sign in again.</p>` : ''}
