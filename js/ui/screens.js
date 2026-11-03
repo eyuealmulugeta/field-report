@@ -322,12 +322,13 @@ function crewAdmin(c, started) {
 }
 function staffRow(c, x) {
   // 2.36.0 (owner): every crew member of the project, not only those added on site
-  const mine = !!x.id && c.ui.live === 'on' && crewBoss(c), del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
+  // 2.43.0 (owner): every Site engineer renames crew at once, no approval (Central Hub copies it to the directory)
+  const may = !!x.id && (crewBoss(c) || c.kind === 'reporter'), mine = may && c.ui.live === 'on', del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
   const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>` : '';
   if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${[...new Set([...TRADES, x.trade].filter(Boolean))].map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <input class="fld slim" data-ui="cePhone" value="${c.ui.cePhone ?? (x.phone || '')}" placeholder="Phone" inputmode="tel" aria-label="Phone"><button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
-    ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
+    ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'crewEdit' : 'liveConnect'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
 const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Refreshing…' : 'Refresh'}</button></div>`;
 
