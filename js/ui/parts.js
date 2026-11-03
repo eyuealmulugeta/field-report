@@ -24,9 +24,10 @@ export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id
 
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
+// 2.42.0 (owner): live updates are on for everyone: whenever they are off, every page asks for the one tap that signs in
 export const dbBar = (ui, waiting = 0) => (ui.liveRoute === 'both' && ui.live === 'signin'
   ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Not connected to the database.</b> Tap to sign in again${waiting ? ` · ${waiting} report${waiting > 1 ? 's' : ''} waiting` : ''}</button>`
-  : '');
+  : ui.liveRoute === 'read' && ui.live === 'signin' ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Live updates are off.</b> Tap to turn them on</button>` : '');
 
 export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
 export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'review']);

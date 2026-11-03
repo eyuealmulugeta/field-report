@@ -35,9 +35,9 @@ export function review(c) {
   const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
   return {
     tab: c.kind === 'viewer' ? 'review' : 'me',
-    head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
+    head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Refreshing…' : ''),
     body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
-        <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Refresh' : 'Show the reports'}</button>
+        <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Refreshing…' : rv.list ? 'Refresh' : 'Show the reports'}</button>
         ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}</div>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`

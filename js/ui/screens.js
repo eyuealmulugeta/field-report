@@ -84,7 +84,7 @@ export function chooseProject(c) {
     body: c.s.projects.length ? html`<div class="box">${c.s.projects.map(p => html`
       <button type="button" class="li" data-act="pickProject" data-v="${p.code}"><span class="ic">${icon('pin')}</span><div class="n"><b>${p.name}</b><span>${[p.location || p.address, p.code].filter(Boolean).join(' · ')}</span></div>${icon('chev')}</button>`)}</div>`
       : html`<p class="callout warn">No project is linked to your account yet. Ask the office to link you in Central Hub.</p>`,
-    foot: html`<button type="button" class="btn o" data-act="refresh">Refresh</button>`,
+    foot: html`<button type="button" class="btn o" data-act="refresh" ${c.ui.refreshing ? 'disabled' : ''}>${c.ui.refreshing ? 'Refreshing…' : 'Refresh'}</button>`,
   };
 }
 
@@ -314,7 +314,7 @@ const dropOk = c => c.kind === 'reviewer' || isGM(c);   // 2.41.0 (owner): the P
 /** 2.17.1: Office: the project's crew with Delete, and who was deleted, by whom and when (last 30 days). */
 function crewAdmin(c, started) {
   const staff = c.project.staff || [], since = Date.now() - 30 * 864e5;
-  const gone = (c.ui.teamOf === c.project.code ? c.ui.team || [] : []).filter(m => m.active === false && m.dropOk && Date.parse(m.dropOk.at) > since)
+  const gone = (c.ui.teamOf === c.project.code ? c.ui.team || [] : []).filter(m => m.active === false && m.dropOk && Date.parse(m.dropOk.at) > since && L.seenFrom(m.dropOk.at))   // 2.42.0: not before joining
     .sort((a, b) => String(b.dropOk.at).localeCompare(String(a.dropOk.at)));
   return html`${started && staff.length ? html`<div class="k">Crew on this project · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>` : ''}
     ${gone.length ? html`<div class="k">Deleted from this project</div><div class="box">${gone.map(m => html`<div class="li"><div class="n"><b>${m.name}</b><span>${m.role || 'No trade'} · deleted by ${m.dropOk.byName || m.dropOk.by} · ${stampAt(m.dropOk.at)}${m.dropOk.asked ? ` · asked by ${m.dropOk.asked.byName || m.dropOk.asked.by}` : ''}</span></div></div>`)}</div>` : ''}`;
@@ -328,7 +328,7 @@ function staffRow(c, x) {
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
     ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
-const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Refresh'}</button></div>`;
+const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Refreshing…' : 'Refresh'}</button></div>`;
 
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
 function crewPhotoBox(c) {
@@ -431,26 +431,25 @@ export function me(c) {
     tab: 'me',
     head: head('Me', a.email || ''),
     // 2.37.0 (owner): Review and Crew & Hours live in Me for reviewers
-    body: html`${c.kind === 'reviewer' ? html`<div class="k">Review</div><div class="row2"><button type="button" class="btn o" data-act="go" data-to="review">${icon('doc')}Review reports</button><button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(pr && pr.crewWait || []).length ? ` · ${pr.crewWait.length}` : ''}</button></div>` : ''}<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
+    // 2.42.0 (owner): no Review button here; Crew & Hours where the usual day was; the page is compact
+    body: html`<div class="me-page"><label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
       <label class="lab" for="mp">Position</label><input id="mp" class="fld" value="${p.position}" readonly>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : html`<p class="muted tiny">Your position is set by the office in Central Hub (2.20.0).</p>`}
       <div class="k">Signature</div>
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
         : sigLine(p)}
       <div class="k">Project</div>
       ${isGM(c) ? html`<div class="box pad">${projTop(c)}</div>` : ''}<div class="box ${isGM(c) ? 'hide' : ''}">${c.s.projects.map(x => html`<button type="button" class="li" data-act="pickProject" data-v="${x.code}"><span class="ic ${x.code === c.s.proj ? 'ok' : ''}">${icon(x.code === c.s.proj ? 'check' : 'pin')}</span><div class="n"><b>${x.name}</b><span>${x.code}</span></div></button>`)}</div>
-      <div class="k">Your usual day</div>
-      <div class="two"><label class="small">Start<input class="fld" type="time" data-f="profile.defStart" value="${p.defStart || (pr && pr.defStart) || '08:00'}"></label>
-        <label class="small">End<input class="fld" type="time" data-f="profile.defEnd" value="${p.defEnd || (pr && pr.defEnd) || '17:00'}"></label></div>
-      <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
+      ${c.kind === 'reviewer' ? html`<div class="k">Crew & Hours</div><button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(pr && pr.crewWait || []).length ? ` · ${pr.crewWait.length} waiting` : ''}</button>
+      <p class="muted tiny">Working hours, days off and the crew the site sent. Days off for this project: ${off || 'none'}.</p>` : ''}
       ${liveLine(c.ui, c.ui.liveWhy || '', L.liveLast())}
       <div class="k">Reminders and look</div>
       <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Me, Crew & Hours): ${(pr && pr.remindAt) || '17:00'}.</p>
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}
-      <button type="button" class="btn o" data-act="refresh">Refresh lists from the office</button>
+      <button type="button" class="btn o" data-act="refresh" ${c.ui.refreshing ? 'disabled' : ''}>${c.ui.refreshing ? 'Refreshing…' : 'Refresh lists from the office'}</button>
       <button type="button" class="btn t" data-act="signout">Sign out</button>
-      <div class="muted tiny center">Field Report ${APP_VERSION}${isDemo() ? ' · demo' : ''}</div>`,
+      <div class="muted tiny center">Field Report ${APP_VERSION}${isDemo() ? ' · demo' : ''}</div></div>`,
   };
 }
 

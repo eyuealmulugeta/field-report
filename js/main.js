@@ -63,7 +63,14 @@ const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'pho
 /* ---------- state helpers ---------- */
 
 // 2.13.0: with Central Hub's team overlaid (live)
-const project = () => { const p = store.get().projects.find(x => x.code === store.get().proj) || null; return p && ui.teamOf === p.code ? withTeam(p, ui.team) : p; };
+// 2.42.0: until Central Hub's team arrives, the people deleted last time stay out (no flash of a deleted person on refresh)
+const project = () => {
+  const p = store.get().projects.find(x => x.code === store.get().proj) || null;
+  if (!p) return p;
+  if (ui.teamOf === p.code) return withTeam(p, ui.team);
+  const gone = (store.get().gone || {})[p.code] || [];
+  return gone.length ? { ...p, staff: (p.staff || []).filter(s => !gone.includes(s.id)), gone } : p;
+};
 const key = () => draftKey(store.get().proj, today());
 const report = () => store.get().drafts[key()] || null;
 const working = () => { const r = report(); return r && r.start ? r : null; };
@@ -267,7 +274,7 @@ async function goLive(at = '') {
       if (d.lists && d.lists !== seen.lists) loadSetup();
       if (d.crew && d.crew !== seen.crew) crewSoon();   // 2.16.0: now and again a little later
     },
-    onTeam: team => { ui.team = team; ui.teamOf = p.code; crewFollow(); draw(); },
+    onTeam: team => { ui.team = team; ui.teamOf = p.code; store.set({ gone: { ...(store.get().gone || {}), [p.code]: team.filter(m => m.active === false).map(m => m.id) } }); crewFollow(); draw(); },
     onUrgent: list => showUrgent(list, a.email, (store.get().profile || {}).name || '', L.answerUrgent),   // 2.34.0
     onDay: (marks, ok) => { ui.marks = marks; ui.dayOk = ok; ui.marksOf = p.code; crewFollow(); draw(); },
     day: realToday(),
@@ -1178,7 +1185,8 @@ const ACTS = {
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
-    try { await loadProjects(); toast('Lists updated from the office.'); } catch (e) { toast(e.message); }
+    ui.refreshing = true; draw();   // 2.42.0: the button says Refreshing…
+    try { await loadProjects(); toast('Lists updated from the office.'); } catch (e) { toast(e.message); } finally { ui.refreshing = false; draw(); }
   },
   signout() {
     if (!confirm('Sign out? Reports not yet sent stay on this phone.')) return;
@@ -1254,6 +1262,14 @@ const ACTS = {
   },
   attDrop(d) { if (confirm('Remove this Attention item from the report?')) edit(r => { r.attention = (r.attention || []).filter(x => x.id !== d.v); }); },
   /** 2.7.0: the site answers the office's comment; it goes to the person who wrote it. */
+  /** 2.42.0: a reviewer comments on or sends back a report from the Reports list (the same answer as in Review). */
+  dayRev(d) {
+    const x = monthDays(realToday(), project(), store.get().drafts, store.get().known, (store.get().others || {})[project().code]).find(y => y.name === d.n);
+    if (!x) return;
+    (ui.rv ||= {}).open = { name: x.name, no: x.no, date: x.date, preparedBy: x.by || '' };
+    ui.revText = ui.replyText || '';
+    return ACTS.revDo({ v: d.v }).then(() => { if (!ui.revText) { ui.replyText = ''; ui.sheet = ''; draw(); } });
+  },
   async replySend(d) {
     const text = String(ui.replyText || '').trim();
     if (!text) return toast('Write the reply first.');
@@ -2016,8 +2032,19 @@ store.subscribe(draw);
 // 2.40.0: a choice made in a list is drawn at once; a page held back while a list was open is drawn when it closes
 document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') e.target.blur(); }, true);
 document.addEventListener('focusout', e => { if (ui.drawLater && e.target.tagName === 'SELECT') setTimeout(draw, 0); });
-// 2.40.0 (owner): the app always opens on Today (a link from a notification still opens its page)
-if (location.hash && !location.hash.startsWith('#go=')) history.replaceState(null, '', location.pathname + location.search);
+// 2.40.0 (owner): the app opens on Today (a link from a notification still opens its page)
+// 2.42.0 (owner): a reload of the page stays on the page it was on
+const reloaded = (() => { try { return performance.getEntriesByType('navigation')[0]?.type === 'reload'; } catch { return false; } })();
+if (location.hash && !location.hash.startsWith('#go=') && !reloaded) history.replaceState(null, '', location.pathname + location.search);
+// 2.42.0 (owner): notifications are on by default: switched on at once when already allowed, else at the first tap
+// (the phone asks the person once); someone who turned them off stays off
+const autoPush = () => {
+  const pr = store.get().profile || {};
+  if (demo || pr.push !== undefined || !store.get().auth || typeof Notification === 'undefined' || Notification.permission === 'denied') return;
+  ACTS.pushOn();
+};
+setTimeout(() => { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') autoPush(); }, 3000);
+document.addEventListener('pointerup', () => setTimeout(autoPush, 0), { once: true });
 // 2.7.0: the app opened from a notification
 if (location.hash.startsWith('#go=')) setTimeout(() => { if (!openLink(location.hash.slice(1))) go('today'); }, 300);
 

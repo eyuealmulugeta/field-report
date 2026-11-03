@@ -152,6 +152,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'One row of actions on a report (2.42.0)', 'Tap a report on Reports: View, Share, Edit, Comment, Send back (Project engineer and GM) and Remove. Me is shorter, with Crew & Hours where Your usual day was. Live updates and notifications are on by default. A page reloaded stays where it was.'],
   ['users', 'Crew changes need the Project engineer or the GM (2.41.0)', 'A Site engineer asks to delete a crew member or add labour; the Project engineer or the GM confirms, and a deleted person leaves the list here and in Central Hub. Reports sent after 19:00 are tagged Late submission, with the day sent when it was a later day. Check again is now Refresh.'],
   ['plus', 'Log now is in Quick (2.39.0)', 'Quick holds Log now (work, photo, delay, delivery, request, incident, say it) and your shortcuts. Requests show the same on every phone and can be deleted (the list says who removed it and when). Opened notifications leave the count.'],
   ['doc', 'Easier to read on a computer (2.38.0)', 'On a computer the Reports list reads down the first column, then the second, and the text is a little smaller. Office attendance no longer shows the project sheet.'],

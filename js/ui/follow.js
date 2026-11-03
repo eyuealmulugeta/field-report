@@ -4,6 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
 import { head, isGM } from './parts.js';
+import * as L from '../core/live.js';   // 2.42.0: seenFrom
 import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -27,7 +28,7 @@ function allReports(c) {
   const f = c.ui.rf || '', n = counts(rows), list = rows.filter(x => !f || x.kind === f);
   return {
     tab: 'reports',
-    head: head('Reports', 'All projects · last 31 days', c.ui.checking ? 'Checking…' : ''),
+    head: head('Reports', 'All projects · last 31 days', c.ui.checking ? 'Refreshing…' : ''),
     body: html`<div class="chips">${FILTERS.filter(([k]) => k !== 'missing').map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openAll" data-p="${x.p.code}" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
@@ -43,9 +44,9 @@ export function reports(c) {
   const list = rows.filter(x => !f || x.kind === f);
   return {
     tab: 'reports',
-    head: head('Reports', `${c.project.name} · this month`, c.ui.checking ? 'Checking…' : ''),
+    head: head('Reports', `${c.project.name} · this month`, c.ui.checking ? 'Refreshing…' : ''),
     // 2.1.1: the button sits at the top; a footer hides the bottom bar (Home, Today…) on a tab page
-    body: html`<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Checking with the office…' : 'Refresh'}</button>
+    body: html`<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Refreshing…' : 'Refresh'}</button>
       <div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
@@ -76,6 +77,7 @@ export function daySheet(c) {
   // 2.13.0: every step of the report with its date and time (approved, sent back, reopened, comments), newest first
   const steps = (k.history && k.history.length ? k.history : comments).filter(m => m.at).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const canWrite = x.kind !== 'approved' && x.kind !== 'nowork';
+  const may = c.kind === 'reviewer';   // 2.42.0 (owner): View, Share, Edit, Comment, Send back, Remove in one row
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Report of ${dayLabel(x.date)}">
     <div class="grab"></div><div class="spread"><b class="big-t">${dayLabel(x.date)}${x.no ? ` · #${x.no}` : ''}</b>${pill(x.kind)}</div>
     ${x.name ? html`<div class="muted tiny">${x.name}${x.version ? ` · version ${x.version}` : ''}</div>` : ''}
@@ -85,14 +87,17 @@ export function daySheet(c) {
     ${(x.report && x.report.edits || []).length ? html`<div class="k">Log · who entered and when</div><div class="box">${x.report.edits.slice().reverse().slice(0, 10).map(e => html`<div class="li"><span class="ic">${icon('doc')}</span><div class="n"><b>${e.by}</b><span>Entered · ${stampOf(new Date(e.at).toISOString())}</span></div></div>`)}</div>` : ''}
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
-    ${x.name && comments.length && x.kind !== 'approved' ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="Reply to the office">${c.ui.replyText || ''}</textarea>
-      <button type="button" class="btn o" data-act="replySend" data-v="${x.name}">${icon('send')}Send the reply</button>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
-    ${canWrite && x.date !== c.realToday ? html`<button type="button" class="btn p" data-act="openPast" data-v="${x.date}">${icon('doc')}${x.report && x.report.start ? 'Open and correct' : 'Write this report'}</button>` : ''}
-    ${x.date === c.realToday ? html`<button type="button" class="btn p" data-act="go" data-to="today">Open today</button>` : ''}
-    ${x.report && x.report.start ? html`<button type="button" class="btn o" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View the report</button>` : ''}
-    ${x.report && x.report.start && canPdf(c) ? html`<button type="button" class="btn t" data-act="dayPdf" data-v="${x.date}">${icon('send')}Share the PDF</button>` : ''}
-    ${x.kind !== 'missing' ? html`<button type="button" class="btn t" data-act="dayHide" data-v="${x.date}">Remove from phone</button>` : ''}
+    ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}
+    <div class="day-acts">
+      ${x.report && x.report.start ? html`<button type="button" class="btn o slim" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View</button>` : ''}
+      ${x.report && x.report.start && canPdf(c) ? html`<button type="button" class="btn o slim" data-act="dayPdf" data-v="${x.date}">${icon('send')}Share</button>` : ''}
+      ${x.date === c.realToday ? html`<button type="button" class="btn o slim" data-act="go" data-to="today">${icon('doc')}Edit</button>`
+        : canWrite ? html`<button type="button" class="btn o slim" data-act="openPast" data-v="${x.date}">${icon('doc')}${x.report && x.report.start ? 'Edit' : 'Write'}</button>` : ''}
+      ${x.name ? html`<button type="button" class="btn o slim" data-act="${may ? 'dayRev' : 'replySend'}" data-v="${may ? 'comment' : x.name}" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>Comment</button>` : ''}
+      ${may && x.name && x.kind !== 'approved' && x.kind !== 'changes' ? html`<button type="button" class="btn o slim bad-t" data-act="dayRev" data-v="changes" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>Send back</button>` : ''}
+      ${x.kind !== 'missing' ? html`<button type="button" class="btn t slim bad-t" data-act="dayHide" data-v="${x.date}">Remove</button>` : ''}
+    </div>
     <button type="button" class="btn t" data-act="closeSheet">Close</button></div>`;
 }
 
@@ -114,8 +119,11 @@ function sharedRequests(c) {
   let list = [...tag(c.ui.liveReqs, c.project.code), ...(all ? Object.entries(c.ui.reqAll || {}).filter(([k]) => k !== c.project.code).flatMap(([k, l]) => tag(l.filter(d => !mine.has(d.id)), k)) : [])]
     .filter(d => d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
   // 2.39.0 (owner): a deleted request stays, marked as removed by whom and when, under the others
-  const gone = list.filter(d => d.status === 'deleted');
+  const gone = list.filter(d => d.status === 'deleted' && L.seenFrom(d.editedAt));   // 2.42.0: not before joining
   list = list.filter(d => d.status !== 'deleted');
+  // 2.42.0 (owner): nothing from before this person joined the project
+  const fresh = d => L.seenFrom(d.fr && d.fr.date || d.date || d.editedAt);
+  list = list.filter(fresh);
   // 2.25.0: saved on this phone but not in the shared list yet: shown, never hidden, and shared again by itself
   const wait = unsharedRequests(c.project.code, c.s.drafts, c.ui.liveReqs, c.s.reqQueue || []);
   return {

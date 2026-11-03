@@ -65,6 +65,10 @@ export const liveState = () => state;
 export const liveWhy = () => why;
 let last = null;        // 2.12.3: the last change received { at, what }, shown on Me
 export const liveLast = () => last;
+let from = '';           // 2.42.0: when this person joined the open project (Central Hub's fieldAccess since / joined)
+export const liveFrom = () => from;
+/** 2.42.0: written on or after the joining (a date or a time); everything when the joining is not known. */
+export const seenFrom = (at, f = from) => !f || String(at || '') >= (String(at || '').length <= 10 ? f.slice(0, 10) : f);
 const fail = (e, where) => { state = 'error'; why = `${where}: ${String(e?.code || e?.message || e).replace(/^auth\/|^firestore\//, '').slice(0, 80)}`; };
 
 async function load() {
@@ -111,6 +115,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     if (mine !== gen) return 'stale';
     stops.forEach(f => f()); stops = [];
     pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
+    // 2.42.0 (owner): someone who joined later sees the posts and logs from their joining on ('' = all of them)
+    from = acc.exists() ? String((acc.data().joined || {})[String(code).toUpperCase()] || acc.data().since || '') : '';
     if (!pid) { state = 'off'; why = `no Central Hub project for ${String(code).toUpperCase()} on ${u.email}`; return 'none'; }
     const since = new Date(today.getTime() - DAYS * 864e5).toISOString().slice(0, 10);
     const q = F.query(F.collection(db, 'projects', pid, 'reports'), F.where('date', '>=', since));

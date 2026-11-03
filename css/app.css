@@ -86,7 +86,8 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 /* 2.41.0: on a computer the version is under the logo of the side bar only */
 .wide .hd .logo-v i { display: none; }
 .rail .ver { display: block; font-size: 10px; color: var(--muted); padding: 0 12px 6px; }
-.proj-pop { margin: 0 8px 8px; padding: 8px; border-radius: 10px; background: var(--card, #fff); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+/* 2.42.0: the project list opens over the side bar, nothing moves down */
+.rail { position: relative; } .proj-pop { position: absolute; left: 8px; right: 8px; z-index: 60; max-height: 70vh; overflow: auto; margin: 0; padding: 8px; border-radius: 10px; background: var(--card, #fff); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 /* 2.39.0 (owner): the top line is solid and stays while the list scrolls */
 .inbox-top { position: sticky; top: 0; z-index: 1; padding: 10px 0 6px; background: var(--card, #fff); border-bottom: 1px solid var(--line); }
 .li.inbox { width: 100%; text-align: left; }
@@ -389,6 +390,9 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .thumb.vid { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--soft, #eef1f6); color: var(--muted, #667); font-size: 10px; }
 /* 2.7.0: the Attention button reads in red */
 .btn.bad-t { color: var(--bad); border-color: var(--bad); }
+/* 2.42.0: the actions of a report in one row; Me compact */
+.day-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; } .day-acts .btn { flex: 1 1 30%; width: auto; margin: 0; justify-content: center; }
+.me-page .k { margin-top: 12px; } .me-page .lab { margin-top: 6px; } .me-page .btn { margin-top: 6px; } .me-page .box.pad, .me-page .box { margin-bottom: 6px; }
 /* 2.10.0: Done at the end of the Office attendance tab */
 .att-done { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 6px; }
 
@@ -418,6 +422,7 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .seg.att-tabs { border: 0; overflow: visible; gap: 6px; }
 .seg.att-tabs button { border: 1px solid var(--line); border-radius: 8px; height: 32px; }
 .seg.att-tabs button:first-child { border-left: 1px solid var(--line); }
+.seg.att-tabs button.on { background: var(--brand); border-color: var(--brand); color: #fff; }   /* 2.42.0: the open tab */
 .rg-top { gap: 6px; align-items: center; }
 .rg-scroll { overflow-x: auto; margin: 8px 0; border: 1px solid var(--line); border-radius: 8px; }
 .rg { border-collapse: collapse; font-size: 12px; min-width: 100%; }
