@@ -1536,7 +1536,8 @@ const ACTS = {
     } catch (e) { toast(e.message || String(e)); }
     finally { ui.pushBusy = false; draw(); }
   },
-  inboxClear() { store.set({ inboxSeen: ((store.get().inbox || [])[0] || {}).t || '' }); },
+  inboxClear() { ui.inboxOpen = false; store.set({ inboxSeen: ((store.get().inbox || [])[0] || {}).t || '' }); },
+  inboxToggle() { ui.inboxOpen = !ui.inboxOpen; draw(); },
   inboxMore() { ui.inboxAll = !ui.inboxAll; draw(); },
   async pushTest() {
     try { const r = await call('pushtest', {}); toast(r.ok ? 'Test sent. It should arrive in a few seconds.' : `Test failed: ${r.error || r.skipped || 'no answer'}`); }
@@ -1795,6 +1796,7 @@ addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== l
 
 /** The open step's tab in the menu. */
 const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
+if (true) { TAB_OF.review = TAB_OF.rev = TAB_OF.crewrev = 'me'; }   // 2.37.0: from Me (a viewer has no rail tab but Review)
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
 
@@ -1870,6 +1872,7 @@ function draw() {
     + `${v.fab ? '<button type="button" class="fab" data-act="fab" aria-label="Log now"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}`
     + `${v.tab ? nav(v.tab, {}, c.kind) : ''}`;
   }
+  if (!setup) root.insertAdjacentHTML('beforeend', S.inboxFab(c));   // 2.37.0: the floating notifications circle
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`
     + `${ui.toast ? `<div class="toast" role="status">${escText(ui.toast)}</div>` : ''}`

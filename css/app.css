@@ -76,6 +76,11 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .bar.gap { margin: 9px 0 6px; }
 .callout { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 .callout.warn { background: var(--warn-soft); color: var(--warn); } .callout.bad { background: var(--bad-soft); color: var(--bad); }
+/* 2.37.0: the floating notifications circle and its list */
+.inbox-fab { position: fixed; top: 64px; right: 14px; z-index: 30; width: 46px; height: 46px; border: 0; border-radius: 50%; background: var(--brand); color: #fff; display: grid; place-items: center; box-shadow: 0 4px 12px rgba(0,0,0,.25); cursor: pointer; }
+.inbox-fab .i { width: 22px; height: 22px; }
+.inbox-fab i { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--bad); color: #fff; font: 700 12px/20px inherit; font-style: normal; }
+.inbox-pop { position: fixed; top: 116px; right: 12px; left: 12px; max-width: 460px; margin-left: auto; z-index: 30; max-height: 65vh; overflow: auto; padding: 10px; border-radius: 12px; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 /* 2.35.0: not signed in to the database */
 .db-bar { display: block; width: 100%; margin: 0 0 10px; padding: 12px 14px; border: 0; border-radius: 10px; background: var(--bad); color: #fff; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

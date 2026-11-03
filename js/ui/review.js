@@ -30,10 +30,10 @@ const pill = st => { const s = STATUS[st] || STATUS.submitted; return html`<span
 export function review(c) {
   // 2.17.0: the GM's All projects; each line with when it was sent and the last answer
   const all = !!c.ui.allProj && isGM(c);
-  const rv = c.ui.rv || {}, f = rv.f ?? 'submitted', list = reviewRows(rv.list, all ? '' : c.project.code, f);
+  const rv = c.ui.rv || {}, f = rv.f ?? '',   // 2.37.0 (owner): All first list = reviewRows(rv.list, all ? '' : c.project.code, f);
   const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
   return {
-    tab: 'review',
+    tab: c.kind === 'viewer' ? 'review' : 'me',
     head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Checking…' : ''),
     body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
         <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Checking with the office…' : rv.list ? 'Check again' : 'Show the reports'}</button>

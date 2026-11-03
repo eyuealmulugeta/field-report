@@ -16,13 +16,20 @@ import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop } from
 const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Change</button></div></div>`
   : html`<div class="box pad sigbox"><span class="muted small">Draw it full screen, or choose a PNG from your phone. It signs every report you send.</span><button type="button" class="btn s slim" data-act="sigFull">Sign</button></div>`);
 
-/** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first, at the top of Today. */
+/** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first. 2.37.0: in a floating circle. */
 const when = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.toDateString().slice(4, 10)} · ${d.toTimeString().slice(0, 5)}`; };
+export const inboxItems = c => { const seen = c.s.inboxSeen || ''; return (c.s.inbox || []).filter(x => x.t > seen); };
+/** 2.37.0 (owner): a circle with the count, only when there are notifications; it opens the list. Clear empties it and the circle goes. */
+export function inboxFab(c) {
+  const n = inboxItems(c).length;
+  if (!n) return '';
+  return html`<button type="button" class="inbox-fab" data-act="inboxToggle" aria-label="Notifications: ${n}">${icon('bell')}<i>${n}</i></button>${c.ui.inboxOpen ? html`<div class="inbox-pop">${inboxBox(c)}</div>` : ''}`;
+}
 export function inboxBox(c) {
-  const seen = c.s.inboxSeen || '', items = (c.s.inbox || []).filter(x => x.t > seen);
+  const items = inboxItems(c);
   if (!items.length) return '';
   const shown = c.ui.inboxAll ? items : items.slice(0, 3);
-  return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><button type="button" class="btn t slim" data-act="inboxClear">Clear</button></div>
+  return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><span><button type="button" class="btn t slim" data-act="inboxClear">Clear</button><button type="button" class="btn t slim" data-act="inboxToggle">Close</button></span></div>
     <div class="box">${shown.map(x => { const inner = html`<span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div>`;
       const l = inboxLink(x);   // 2.8.1: older notifications open too
       return l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${l}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<div class="li inbox">${inner}</div>`; })}
@@ -113,7 +120,7 @@ export function today(c) {
     return {
       tab: 'today', fab: true,
       head: head(`Report #${no}`, `${dayLabel(c.today)} · saved on this phone`, `${n} of 9`),
-      body: html`${widget(c)}${sentBox(c)}${inboxBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
+      body: html`${widget(c)}${sentBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
         <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
@@ -122,7 +129,7 @@ export function today(c) {
   return {
     tab: 'today',
     head: head(p.name, sub, p.code),
-    body: html`${widget(c)}${sentBox(c)}${inboxBox(c)}<div class="soft">
+    body: html`${widget(c)}${sentBox(c)}<div class="soft">
         <div class="spread"><b class="big-t">Today · ${dayLabel(c.today)}</b><span class="k brand">Report #${no}</span></div>
         <div class="bar gap"><i style="width:0%"></i></div>
         <div class="muted small">${r && r.nowork ? `No work today: ${r.nowork.reason}` : c.dayOff ? 'A day off for this project · you can still report' : 'Not started · about 6 minutes in all'}</div>
@@ -132,8 +139,7 @@ export function today(c) {
         <button type="button" class="box pad tile" data-act="startCrew"><b>Attendance</b><span class="muted small">Take it now</span></button>
         <button type="button" class="box pad tile" data-act="noWork"><b>No work today</b><span class="muted small">Give the reason</span></button>
       </div>
-      <button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight: share an observation</button>
-      <button type="button" class="btn o bad-t" data-act="attOpen">${icon('alert')}Attention: a serious issue for the client</button>
+      <div class="row2"><button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight</button><button type="button" class="btn o bad-t" data-act="attOpen">${icon('alert')}Attention</button></div>
       <div class="k">This week</div>${weekStrip(c)}
       <div class="k">Needs you</div>${needsBox(c)}
       <div class="muted tiny center">File name: ${pdfName(p, c.today, no)}</div>`,
@@ -421,7 +427,8 @@ export function me(c) {
   return {
     tab: 'me',
     head: head('Me', a.email || ''),
-    body: html`<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
+    // 2.37.0 (owner): Review and Crew & Hours live in Me for reviewers
+    body: html`${c.kind === 'reviewer' ? html`<div class="k">Review</div><div class="row2"><button type="button" class="btn o" data-act="go" data-to="review">${icon('doc')}Review reports</button><button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(pr && pr.crewWait || []).length ? ` · ${pr.crewWait.length}` : ''}</button></div>` : ''}<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
       <label class="lab" for="mp">Position</label><input id="mp" class="fld" value="${p.position}" readonly>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : html`<p class="muted tiny">Your position is set by the office in Central Hub (2.20.0).</p>`}
       <div class="k">Signature</div>
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
@@ -434,7 +441,7 @@ export function me(c) {
       <p class="muted tiny">Used when there is no report from yesterday to copy. Days off for this project (set by the office): ${off || 'none'}.</p>
       ${liveLine(c.ui, c.ui.liveWhy || '', L.liveLast())}
       <div class="k">Reminders and look</div>
-      <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Review, Crew & Hours): ${(pr && pr.remindAt) || '17:00'}.</p>
+      <p class="muted tiny">The reminder to send the report is set for the whole project with its working hours (Me, Crew & Hours): ${(pr && pr.remindAt) || '17:00'}.</p>
       ${tog('pushOn', '', !!p.push || !!c.ui.pushBusy, 'Notifications', c.ui.pushBusy ? 'Turning on…' : p.push ? 'On: the office\'s answers come to this phone' : 'When the office approves or sends back a report')}
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}

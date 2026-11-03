@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['bell', 'Notifications circle and the new rating (2.37.0)', 'Notifications now sit in a circle at the top right: tap it to read them, Clear to empty it. Review and Crew & Hours open from Me. Check again shows All first. The rating wants the report sent before 17:30 and asks for the progress of each work item.'],
   ['users', 'Correct the crew (2.36.0)', "The project's Site Engineer, Project Engineer and the GM can correct any crew member's name, trade and phone in Office attendance (Edit). Central Hub and the Manpower Directory get it."],
   ['alert', 'Database copy of every report (2.35.0)', 'If the phone is no longer signed in to the database, a red bar says so: tap it to sign in again. Reports sent meanwhile are copied there once you are back.'],
   ['bell', 'Urgent notices (2.34.0)', "An urgent notice from the GM covers the screen until you tap I've read it, or send a different reply. It also comes as a phone notification."],

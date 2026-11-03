@@ -18,7 +18,8 @@ export const REVIEW_TABS = [
 ];
 /** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
 // 2.16.1: Review before Quick (owner, 1 Nov)
-export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : kind === 'reviewer' ? [...TABS.filter(t => t.id !== 'quick'), REVIEW_TABS[0], TABS.find(t => t.id === 'quick')] : TABS);
+// 2.37.0 (owner): a reviewer's Review and Crew & Hours open from Me, not the tab bar
+export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : TABS);
 
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
