@@ -36,6 +36,7 @@ import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { onSwipe } from './core/swipe.js';
 import { offerInstall } from './core/install.js';   // 2.32.0
+import { showUrgent } from './ui/urgent.js';   // 2.34.0
 
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
@@ -267,6 +268,7 @@ async function goLive(at = '') {
       if (d.crew && d.crew !== seen.crew) crewSoon();   // 2.16.0: now and again a little later
     },
     onTeam: team => { ui.team = team; ui.teamOf = p.code; crewFollow(); draw(); },
+    onUrgent: list => showUrgent(list, a.email, (store.get().profile || {}).name || '', L.answerUrgent),   // 2.34.0
     onDay: (marks, ok) => { ui.marks = marks; ui.dayOk = ok; ui.marksOf = p.code; crewFollow(); draw(); },
     day: realToday(),
     onPhotos: m => { ui.photos = m; draw(); },

@@ -97,7 +97,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -138,6 +138,9 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
     stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
     // 2.15.0: today's attendance marks from every phone and computer of the project
+    // 2.34.0: urgent notices from the GM sent to this account (Central Hub, urgent/<id>)
+    urgMe = u.email.toLowerCase();
+    stops.push(F.onSnapshot(F.query(F.collection(db, 'urgent'), F.where('emails', 'array-contains', urgMe)), snap => onUrgent(snap.docs.map(x => x.data())), () => {}));
     if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}, (d.data() || {}).confirmed || null), () => {}));   // 2.33.0: and the reporter's check
     // 2.14.0: the project's site requests, drafts included, from every phone
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
@@ -281,6 +284,15 @@ export async function shareMarks(day, marks) {
   if (!signedIn() || !day || !Object.keys(marks).length) return false;
   const { F, db } = fb;
   await F.setDoc(F.doc(db, 'projects', pid, 'fieldDay', day), { rows: marks, date: day, at: new Date().toISOString() }, { merge: true });
+  return true;
+}
+
+let urgMe = '';
+/** 2.34.0: this account's answer to an urgent notice: { kind: 'read' | 'reply', text, at, name }. */
+export async function answerUrgent(id, ans) {
+  if (!signedIn() || !urgMe || !id) throw new Error('offline');
+  const { F, db } = fb;
+  await F.setDoc(F.doc(db, 'urgent', id), { answers: { [urgMe]: ans } }, { merge: true });
   return true;
 }
 
