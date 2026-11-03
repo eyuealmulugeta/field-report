@@ -35,6 +35,7 @@ import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { onSwipe } from './core/swipe.js';
+import { offerInstall } from './core/install.js';   // 2.32.0
 
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
@@ -892,6 +893,15 @@ function stopListening() { if (stopVoice) stopVoice(); ui.listening = false; }
 const cam = document.getElementById('cam');
 function camera() { cam.value = ''; cam.multiple = false; cam.click(); }
 cam.addEventListener('change', () => addPhotos([...(cam.files || [])]));
+// 2.32.0 (owner): the GM may add report photos from the gallery too; they are marked as such (Central Hub shows "From gallery")
+const gal = document.getElementById('gal');
+gal.addEventListener('change', async () => {
+  if (!P.isGM({ s: store.get() })) return;
+  const files = [...(gal.files || [])].filter(f => /^image\//.test(f.type));
+  ui.camFor = 'photo';
+  for (const f of files) { ui.fromGallery = timeIn('Africa/Addis_Ababa', new Date(f.lastModified || Date.now())); await addPhoto(f); }
+  ui.fromGallery = '';
+});
 
 /** 2.5.0: report photos come from the camera only. A picture made more than a few minutes ago (from the gallery) is refused. */
 const FRESH_MS = 3 * 60000;
@@ -931,7 +941,7 @@ async function addPhoto(file) {
       edit(x => { x.photos.push({ id, o, at: now(), zone: '', captionKind: 'Delivery', caption: ui.recv.name ? `Delivery: ${ui.recv.name}` : 'Delivery note', itemId: '' }); });
     } else {
       const last = r.items.at(-1);
-      ui.photo = { id, o, at: now(), zone: last ? last.zone : '', captionKind: 'Progress', caption: '', itemId: '' };
+      ui.photo = { id, o, at: ui.fromGallery || now(), zone: last ? last.zone : '', captionKind: 'Progress', caption: '', itemId: '', ...(ui.fromGallery ? { gallery: true } : {}) };
       ui.photoEditing = false;
       ui.photoBack = route() === 'photos' ? 'photos' : 'today';
       if (location.hash.slice(1) === 'photo') draw(); else go('photo');
@@ -1699,6 +1709,7 @@ const ACTS = {
 
   /* photos */
   logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; camera(); },
+  galPhoto() { if (P.isGM({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0
   itemPhoto() { ui.camFor = 'item'; camera(); },
   photoItem: d => { ui.photo.itemId = ui.photo.itemId === d.v ? '' : d.v; draw(); },
   savePhoto(d) {
@@ -1944,3 +1955,4 @@ oldAppClear();
 cleanPhotos();
 if (route() === 'me') pushPreload();
 remindTick();
+if (!demo) offerInstall('Field Report');   // 2.32.0 (owner): offer to install the app

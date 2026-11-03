@@ -4,7 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { plural } from '../core/util.js';
 import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipmentChoices, materialChoices, photoNeedsCaption } from '../model/day.js';
-import { stepHead, chips, stepper } from './parts.js';
+import { stepHead, chips, stepper, isGM } from './parts.js';
 import { thumb } from './work.js';
 import { fitLine } from '../pdf.js';
 
@@ -117,7 +117,8 @@ export function photos(c) {
       ${missing ? html`<p class="callout warn">${plural(missing, 'photo')} without a caption or work item. Tap to add one, so the office knows what it shows.</p>` : ''}
       <div class="ptiles">${list.map(p => html`<button type="button" class="ptile ${photoNeedsCaption(p) ? 'need' : ''}" data-act="openPhoto" data-v="${p.id}">
         ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
-        <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button></div>`,
+        <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button>
+        ${isGM(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>`,
     foot: doneBtn(r, 'photos', r.photos.length ? `Done · ${plural(r.photos.length, 'photo')}` : 'No photos today'),
   };
 }

@@ -56,7 +56,8 @@ export function dayList(r, ready = new Set(), sel = '', keys = false) {
     <div class="steps">${steps.map(s => {
       const st = stepStatus(r, s.id);
       const open = ready.has(s.id);
-      return html`<button type="button" class="st ${open ? '' : 'later'} ${sel === s.id ? 'sel' : ''}" data-act="${open ? 'go' : 'later'}" data-to="${s.id}">
+      // 2.32.0 (owner): a step with nothing in yet is red, so the reporter sees what is left
+      return html`<button type="button" class="st ${open ? '' : 'later'} ${open && st.state === 'no' ? 'empty' : ''} ${sel === s.id ? 'sel' : ''}" data-act="${open ? 'go' : 'later'}" data-to="${s.id}">
         ${dot(st, s.i)}<div class="n"><b>${s.title}</b><span>${[st.line, stampLine((r && r.stamps || {})[s.id])].filter(Boolean).join(' · ')}</span></div>${keys ? html`<kbd>${s.i + 1}</kbd>` : open ? html`<span class="ch">${icon('chev')}</span>` : ''}</button>`;
     })}</div>`;
   });
