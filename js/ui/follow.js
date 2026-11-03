@@ -111,8 +111,11 @@ function sharedRequests(c) {
   const all = allOn(c), mine = new Set(c.ui.liveReqs.map(d => d.id));
   const nameOf = code => (c.s.projects.find(p => p.code === code) || {}).name || code;
   const tag = (list, code) => list.map(d => ({ ...d, _p: code }));
-  const list = [...tag(c.ui.liveReqs, c.project.code), ...(all ? Object.entries(c.ui.reqAll || {}).filter(([k]) => k !== c.project.code).flatMap(([k, l]) => tag(l.filter(d => !mine.has(d.id)), k)) : [])]
-    .filter(d => d.status !== 'deleted' && d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
+  let list = [...tag(c.ui.liveReqs, c.project.code), ...(all ? Object.entries(c.ui.reqAll || {}).filter(([k]) => k !== c.project.code).flatMap(([k, l]) => tag(l.filter(d => !mine.has(d.id)), k)) : [])]
+    .filter(d => d.fr).sort((a, b) => String(b.editedAt || b.date).localeCompare(String(a.editedAt || a.date)));
+  // 2.39.0 (owner): a deleted request stays, marked as removed by whom and when, under the others
+  const gone = list.filter(d => d.status === 'deleted');
+  list = list.filter(d => d.status !== 'deleted');
   // 2.25.0: saved on this phone but not in the shared list yet: shown, never hidden, and shared again by itself
   const wait = unsharedRequests(c.project.code, c.s.drafts, c.ui.liveReqs, c.s.reqQueue || []);
   return {
@@ -129,14 +132,17 @@ function sharedRequests(c) {
           ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status}${x.level ? ` (${x.level})` : ''} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
         <span class="pill ${REQ_TONE[d.status] || ''}">${reqWord(d)}</span>
         ${d.status === 'draft' && d._p === c.project.code ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
-        ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
+        ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}
+        ${['draft', 'requested'].includes(d.status) && d._p === c.project.code && c.kind !== 'viewer' ? html`<button type="button" class="btn t slim bad-t" data-act="reqDelete" data-v="${d.fr.id}">Delete</button>` : ''}</div>`)}</div>`
       : wait.length ? '' : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
+      ${gone.length ? html`<div class="k">Removed · ${gone.length}</div><div class="box">${gone.map(d => html`<div class="li item gone"><div class="n"><b><s>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</s></b><span class="tiny muted">Removed by ${d.editedBy || 'site'} · ${stampOf(d.editedAt)}</span></div></div>`)}</div>` : ''}
       <p class="muted tiny">Drafts are shared with every phone of this project and go to the office with the day's report. Central Hub's answers show here.</p>`,
   };
 }
 
 export function requests(c) {
-  if (c.ui.liveReqs) return sharedRequests(c);
+  const live = c.ui.liveReqs || (c.s.reqCache || {})[c.project.code];   // 2.39.0: the last shared list until the database answers
+  if (live) return sharedRequests({ ...c, ui: { ...c.ui, liveReqs: live } });
   const list = allRequests(c.project.code, c.s.drafts);
   const late = list.filter(q => lateRequest(q, c.realToday)).length;
   return {

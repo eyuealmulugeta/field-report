@@ -18,7 +18,8 @@ const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig
 
 /** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first. 2.37.0: in a floating circle. */
 const when = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.toDateString().slice(4, 10)} · ${d.toTimeString().slice(0, 5)}`; };
-export const inboxItems = c => { const seen = c.s.inboxSeen || ''; return (c.s.inbox || []).filter(x => x.t > seen); };
+// 2.39.0 (owner): a message opened is read, so the count goes down
+export const inboxItems = c => { const seen = c.s.inboxSeen || '', read = new Set(c.s.inboxRead || []); return (c.s.inbox || []).filter(x => x.t > seen && !read.has(x.t)); };
 /** 2.37.0 (owner): a circle with the count, only when there are notifications; it opens the list. Clear empties it and the circle goes. */
 export function inboxFab(c) {
   const n = inboxItems(c).length;
@@ -29,10 +30,10 @@ export function inboxBox(c) {
   const items = inboxItems(c);
   if (!items.length) return '';
   const shown = c.ui.inboxAll ? items : items.slice(0, 3);
-  return html`<div class="spread"><div class="k">Notifications · ${items.length}</div><span><button type="button" class="btn t slim" data-act="inboxClear">Clear</button><button type="button" class="btn t slim" data-act="inboxToggle">Close</button></span></div>
+  return html`<div class="spread inbox-top"><div class="k">Notifications · ${items.length}</div><span><button type="button" class="btn t slim" data-act="inboxClear">Clear</button><button type="button" class="btn t slim" data-act="inboxToggle">Close</button></span></div>
     <div class="box">${shown.map(x => { const inner = html`<span class="ic">${icon('bell')}</span><div class="n"><b>${x.h}</b><span class="pre">${x.m}</span><span class="muted tiny">From ${x.f || 'Field Report'} · ${when(x.t)}</span></div>`;
       const l = inboxLink(x);   // 2.8.1: older notifications open too
-      return l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${l}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<div class="li inbox">${inner}</div>`; })}
+      return l ? html`<button type="button" class="li inbox" data-act="inboxGo" data-v="${l}" data-t="${x.t}">${inner}<span class="ch">${icon('chev')}</span></button>` : html`<button type="button" class="li inbox" data-act="inboxRead" data-t="${x.t}">${inner}</button>`; })}
     ${items.length > 3 ? html`<button type="button" class="li more" data-act="inboxMore">${c.ui.inboxAll ? 'Show fewer' : `Show all ${items.length}`}</button>` : ''}</div>`;
 }
 
@@ -192,20 +193,22 @@ export function start(c) {
 const seg = (r, i) => html`<div class="seg" role="group" aria-label="${r.name}">${STATES.map(st => html`
   <button type="button" class="${r.state === st ? STATE_LETTER[st] : ''}" data-act="mark" data-i="${i}" data-v="${st}" aria-pressed="${r.state === st}" title="${st}">${STATE_LETTER[st]}</button>`)}</div>`;
 
+/** 2.39.0 (owner): the Site Engineer is not in the crew attendance (they write the report). */
+export const NOT_CREW = /^site engineer$/i;
 export function crew(c) {
   const cr = c.report.crew, s = c.report.start;
   const t = totals(cr, s.start, s.end);
-  const trades = [...new Set(cr.rows.map(r => r.trade || 'Other'))];
+  const trades = [...new Set(cr.rows.filter(r => !NOT_CREW.test(r.trade || '')).map(r => r.trade || 'Other'))];
   const f = c.ui.filter || '';
   const q = (c.ui.q || '').toLowerCase();
-  const list = cr.rows.map((r, i) => ({ r, i })).filter(({ r }) => (!f || (r.trade || 'Other') === f) && (!q || r.name.toLowerCase().includes(q)));
+  const list = cr.rows.map((r, i) => ({ r, i })).filter(({ r }) => !NOT_CREW.test(r.trade || '')).filter(({ r }) => (!f || (r.trade || 'Other') === f) && (!q || r.name.toLowerCase().includes(q)));
   return {
     head: stepHead('Office attendance', 'Step 2 of 9 · Morning'),
     body: html`<div class="kpis">${kpi(t.present, 'Present')}${kpi(t.away, 'Not here', t.away ? 'warn' : '')}${kpi(html`${t.manHours}<small>h</small>`, 'Man-hours')}</div>
       ${crewPhotoBox(c)}
       ${cr.rows.length ? html`
       <button type="button" class="box pad tog" data-act="allPresent"><b>Everyone present</b><span class="sw ${t.away ? '' : 'on'}"></span></button>
-      <div class="chips"><button type="button" class="chip ${f ? '' : 'on'}" data-act="filter" data-v="">All ${cr.rows.length}</button>${trades.map(tr => html`<button type="button" class="chip ${f === tr ? 'on' : ''}" data-act="filter" data-v="${tr}">${tr} ${cr.rows.filter(r => (r.trade || 'Other') === tr).length}</button>`)}</div>
+      <div class="chips"><button type="button" class="chip ${f ? '' : 'on'}" data-act="filter" data-v="">All ${cr.rows.filter(r => !NOT_CREW.test(r.trade || '')).length}</button>${trades.map(tr => html`<button type="button" class="chip ${f === tr ? 'on' : ''}" data-act="filter" data-v="${tr}">${tr} ${cr.rows.filter(r => (r.trade || 'Other') === tr).length}</button>`)}</div>
       <div class="fld-ic">${icon('search')}<input class="fld" data-ui="q" value="${c.ui.q || ''}" placeholder="Find a name" aria-label="Find a name"></div>
       ${c.wide ? crewTables(c, list) : html`<div class="box">${list.map(({ r, i }) => html`<div class="li">${av(c, r)}<div class="n"><b>${r.name}</b><span>${r.trade || 'No trade'}${r.ot ? ` · overtime ${r.ot}h` : ''}</span></div>
         ${r.state === 'present' && c.ui.ot === i ? stepper('ot', r.ot, `${r.ot}h`, i) : seg(r, i)}
@@ -294,7 +297,7 @@ function empView(c) {
   if (c.ui.live !== 'on' && !isDemo()) return html`<p class="callout warn">The Candidate form needs live updates (the Central Hub sign-in). Open Me to switch them on.</p>`;
   return html`<div class="box pad"><b>Candidate form</b>
     <p class="muted small">The same form as the crew form link: one form per person, with the photo and the Fayda ID or passport. It opens here, nothing to share. Each form goes to Central Hub, Crew forms, for the office to review.</p>
-    <button type="button" class="btn p" data-act="empOpen" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Open the employee form</button></div>`;
+    <button type="button" class="btn p" data-act="empOpen" ${c.ui.busy ? 'disabled' : ''}>${icon('users')}Open the employee form</button>${formLink(c)}</div>`;   // 2.39.0: the crew form link here
 }
 const crewBoss = c => c.kind === 'reviewer' || /engineer|manager|\bgm\b/i.test((c.s.profile || {}).position || '');   // 2.13.1: GM too
 // 2.13.0: made here when live updates are on (no Central Hub sign-in); the old way otherwise
@@ -325,16 +328,16 @@ function staffRow(c, x) {
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
     ${mine ? html`<button type="button" class="btn t slim" data-act="crewEdit" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
-const refreshRow = c => html`${formLink(c)}<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
+const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Checking…' : 'Check the office list'}</button></div>`;
 
 /** 2.5.0: the morning crew photo: from the camera, with the time and place; as many as needed. */
 function crewPhotoBox(c) {
   const list = (c.report.photos || []).filter(p => p.captionKind === 'Crew');
-  return html`<div class="k">Morning crew photo</div>
+  return html`<div class="crew-photo"><div class="k">Morning crew photo</div>
     <div class="box pad">${list.length ? html`<div class="thumbs">${list.map(p => thumb(p, 'sm'))}</div>
       <ul class="plain small">${list.map(p => html`<li><b>${p.at}</b> · ${p.crew ? html`<span class="pill ${p.crew.st === 'ontime' ? 'ok' : 'warn'}">${CREW_ST_WORD[p.crew.st]}</span>${p.crew.tags.map(x => html` <span class="pill warn">${x}</span>`)}${p.crew.geo ? ' · location kept' : ' · no location'}` : html`<span class="muted">checking the time…</span>`}</li>`)}</ul>` : ''}
       <button type="button" class="btn s" data-act="crewPhoto">${icon('cam')}Take attendance photo</button>
-      <p class="muted tiny">On time until ${c.project.defStart || '08:00'}, late attendance until ${crewCloses(c.project.defStart || '08:00')}, closed after. The office's clock decides.</p></div>`;
+      <p class="muted tiny">On time until ${c.project.defStart || '08:00'}, late attendance until ${crewCloses(c.project.defStart || '08:00')}, closed after. The office's clock decides.</p></div></div>`;
 }
 
 /** 2.8.0: the usual trades on site; the project's own (wages, crew) are added to them. */
@@ -446,7 +449,6 @@ export function me(c) {
       ${p.push ? html`<button type="button" class="btn t" data-act="pushTest">Send a test notification</button>` : ''}
       ${tog('flipPref', 'dark', !!p.dark, 'Dark mode', 'Easier on the eyes at night')}
       <button type="button" class="btn o" data-act="refresh">Refresh lists from the office</button>
-      <button type="button" class="btn t" data-act="showNew">What's new</button>
       <button type="button" class="btn t" data-act="signout">Sign out</button>
       <div class="muted tiny center">Field Report ${APP_VERSION}${isDemo() ? ' · demo' : ''}</div>`,
   };

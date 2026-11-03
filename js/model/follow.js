@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['plus', 'Log now is in Quick (2.39.0)', 'Quick holds Log now (work, photo, delay, delivery, request, incident, say it) and your shortcuts. Requests show the same on every phone and can be deleted (the list says who removed it and when). Opened notifications leave the count.'],
   ['doc', 'Easier to read on a computer (2.38.0)', 'On a computer the Reports list reads down the first column, then the second, and the text is a little smaller. Office attendance no longer shows the project sheet.'],
   ['bell', 'Notifications circle and the new rating (2.37.0)', 'Notifications now sit in a circle at the top right: tap it to read them, Clear to empty it. Review and Crew & Hours open from Me. Check again shows All first. The rating wants the report sent before 17:30 and asks for the progress of each work item.'],
   ['users', 'Correct the crew (2.36.0)', "The project's Site Engineer, Project Engineer and the GM can correct any crew member's name, trade and phone in Office attendance (Edit). Central Hub and the Manpower Directory get it."],

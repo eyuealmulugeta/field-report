@@ -2,6 +2,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { PHASES, STEPS, stepStatus, stampLine } from '../model/report.js';
+import { APP_VERSION } from '../core/api.js';
 
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
@@ -38,7 +39,8 @@ export const nav = (on, badges = {}, kind = 'reporter') => html`<nav class="nav"
 </nav>`;
 
 /** Header for a tab: logo, title, subtitle and an optional pill on the right. */
-export const head = (title, sub, pill) => html`<header class="hd"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="hd-t"><b>${title}</b><span>${sub}</span></div>${pill ? html`<span class="r pill info">${pill}</span>` : ''}<button type="button" class="mebtn" data-act="go" data-to="me" aria-label="Me: your name, signature and settings">${icon('user')}</button></header>`;
+// 2.39.0 (owner): the version under the logo
+export const head = (title, sub, pill) => html`<header class="hd"><span class="logo-v"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><i>${APP_VERSION}</i></span><div class="hd-t"><b>${title}</b><span>${sub}</span></div>${pill ? html`<span class="r pill info">${pill}</span>` : ''}<button type="button" class="mebtn" data-act="go" data-to="me" aria-label="Me: your name, signature and settings">${icon('user')}</button></header>`;
 
 /** Header for a step: a back button, the step and where it sits in the day. */
 export const stepHead = (title, sub, back = 'today') => html`<header class="hd"><button type="button" class="bk" data-act="go" data-to="${back}" aria-label="Back">${icon('back')}</button><div class="hd-t"><b>${title}</b><span>${sub}</span></div></header>`;

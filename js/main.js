@@ -411,6 +411,8 @@ function shareRows(rows) {
 function liveRequests(list) {
   ui.liveReqs = list;
   const p = project();
+  // 2.39.0 (owner): the last shared list is kept, so a refresh shows the same requests before the database answers
+  if (p) store.set({ reqCache: { ...(store.get().reqCache || {}), [p.code]: list } });
   const k = p && draftKey(p.code, realToday()), r = k && store.get().drafts[k];
   if (r && !r.sentAt) {
     const cur = r.requests || [], next = mergeRequests(cur, list, r.date);
@@ -1167,6 +1169,8 @@ const ACTS = {
     store.set({ hidden: { ...(store.get().hidden || {}), [`${p.code}|${d.v}`]: Date.now() } });
     ui.sheet = ''; toast('Removed from this phone.'); draw();
   },
+  projPop: () => { ui.projPop = !ui.projPop; draw(); },
+  projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
@@ -1260,7 +1264,8 @@ const ACTS = {
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
     finally { ui.busy = false; draw(); }
   },
-  inboxGo(d) { if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.8.1: the same link twice opens again
+  inboxRead(d) { if (d.t) store.set({ inboxRead: [...new Set([...(store.get().inboxRead || []), d.t])].slice(-200) }); draw(); },   // 2.39.0
+  inboxGo(d) { if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.8.1: the same link twice opens again
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   spotCat(d) { ui.spot.cat = d.v; draw(); },
@@ -1469,7 +1474,7 @@ const ACTS = {
     } catch (e) { toast(`Attendance not sent: ${e.message}`); }
   },
   noWork: () => { ui.sheet = 'nowork'; ui.sheetNew = true; ui.nwReason = ''; ui.nwNote = ''; draw(); },
-  fab: () => { ui.sheet = 'log'; ui.sheetNew = true; draw(); },
+  fab: () => go('quick'),   // 2.39.0: Log now is in Quick
   later: () => toast('This part comes in the next build.'),
 
   /* slice 5: reports, corrections, drafts, preferences */
@@ -1574,6 +1579,15 @@ const ACTS = {
     if (ui.reqDate && ui.reqDate !== report().date) return go('requests');
     edit(r => { r.requests = (r.requests || []).filter(y => y.id !== id); });
     go('end');
+  },
+  // 2.39.0 (owner): delete a draft or an asked request; it stays in the list as removed by whom and when
+  async reqDelete(d) {
+    if (!confirm('Delete this request? It shows as removed, with your name and the time.')) return;
+    try { await L.requestStatus(d.v, 'deleted', { byName: (store.get().profile || {}).name || '', note: 'Removed on site' }); toast('Removed.'); }
+    catch (e) { return toast(`Not removed: ${e.message}`); }
+    dropQueued(d.v);
+    const k = draftKey(project().code, realToday());
+    if (store.get().drafts[k]) editKey(k, x => { x.requests = (x.requests || []).filter(y => y.id !== d.v); });
   },
   async reqCancel(d) {
     if (!confirm('Withdraw this request? The office is told.')) return;
@@ -1931,7 +1945,7 @@ addEventListener('keydown', e => {
   }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
-  if (k === 'n' && working()) { e.preventDefault(); ui.sheet = 'log'; ui.sheetNew = true; draw(); return; }
+  if (k === 'n' && working()) { e.preventDefault(); go('quick'); return; }
   if (/^[1-9]$/.test(k) && working()) {
     const step = STEPS[Number(k) - 1];
     if (S.READY.has(step.id)) go(step.id); else toast('This part comes in the next build.');
