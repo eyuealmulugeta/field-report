@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.42.1';
+export const APP_VERSION = '2.42.2';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -79,7 +79,7 @@ async function signinPost(body) {
     }
     if (e.code !== 'DEVICE') throw e;
     sendWhere(e.reply);
-    throw new ApiError(e.message || 'Unauthorized user', 'DEVICE');   // 2.2.0: the script says why (waiting, refused, ...)
+    throw new ApiError('Unauthorized user. Please contact the Admin.', 'DEVICE');   // 2.42.2 (owner): one short line for a new or refused phone
   }
 }
 

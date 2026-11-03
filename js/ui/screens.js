@@ -56,12 +56,11 @@ export function signin(c) {
   return {
     body: html`<div class="center-page">
       <img class="logo big" src="icon-192.png" alt="Amistad Prefab">
-      <div><b class="title">Field Report</b><div class="muted">Amistad Prefab</div></div>
-      ${su ? html`<p class="callout ok narrow">Please wait until your request is approved. You get an email when it is, then sign in again.</p>`
-        : html`<p class="muted narrow">Sign in with your Google account. New here? Sign in, then send the sign-up form.</p>`}
+      <div><b class="title">Amistad Prefab</b><div class="muted">Field Report</div></div>
+      ${su ? html`<p class="callout ok narrow">Please wait until your request is approved. You get an email when it is, then sign in again.</p>` : ''}
       ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}
       <button type="button" class="btn o signin-btn" data-act="${su ? 'signupBack' : 'signin'}" ${c.ui.busy ? 'disabled' : ''}>${su ? 'Back' : html`<b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}`}</button>
-      <div class="center muted small">Works offline after the first sign-in${isDemo() ? ' · demo, nothing is sent' : ''}</div>
+      ${isDemo() ? html`<div class="center muted small">Demo, nothing is sent</div>` : ''}
     </div>`,
   };
 }
