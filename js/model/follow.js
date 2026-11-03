@@ -136,7 +136,8 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
-  ['money', 'Expenses (2.29.0)', 'In Requests choose Expense: the amount in ETB or USD, the category, who was paid and a photo of the receipt. The PM approves it in Central Hub (the GM too for large ones); you see each step here.'],
+  ['money', 'Who approves an expense (2.31.0)', 'The Site Engineer approves up to 5,000 ETB, the Project Engineer up to 20,000 ETB; above that, and any amount in USD, the GM. Each expense says whom it is waiting for.'],
+  ['money', 'Expenses (2.29.0)', 'In Requests choose Expense: the amount in ETB or USD, the category, who was paid and a photo of the receipt. It is approved in Central Hub by position and amount (2.31.0); you see each step here.'],
   ['bell', 'Reminder to send (2.28.0)', 'When today’s report has 8 or more of its 9 steps done but is not sent, the people who worked on it are reminded at 17:30, 18:00 and 18:30. Spotlight: the Gallery button.'],
   ['check', 'Who and when, and the new rating (2.27.0)', 'Each step on Today shows who changed it last and at what time. The engagement rating has four checks: photos in the morning, midday and afternoon; most sections filled in; attendance marked on time; the report sent before 18:00. They show on Review and send and in Reports. Spotlight takes photos and videos from the gallery too, several at once.'],
   ['user', 'Office attendance (2.10.0)', 'Attendance has its own tab, Office attendance. The list is the crew the office allocated in Central Hub and is checked again each time you open it. People working on site who are not on the list: Add labour on site for approval; once approved they join the list.'],

@@ -98,6 +98,10 @@ export function daySheet(c) {
 
 /** 2.14.0: the words and colours of a shared request's state (Central Hub's approval). */
 export const REQ_WORD = { gm: 'Waiting for the GM', paid: 'Paid', draft: 'Draft', requested: 'Waiting for approval', approved: 'Approved', arranging: 'Being arranged', fulfilled: 'Delivered', rejected: 'Rejected', cancelled: 'Cancelled', deleted: 'Deleted' };
+// 2.31.0 (owner, 3 Nov): who approves an expense, as in Central Hub 0.69.0: the Site Engineer up to 5,000 ETB, the
+// Project Engineer up to 20,000 ETB, above that and any USD amount the GM
+export const waitingFor = d => (d.currency === 'USD' || +d.amount > 20000 ? 'GM' : +d.amount > 5000 ? 'Project Engineer' : 'Site Engineer');
+export const reqWord = d => (d.kind === 'expense' && d.status === 'requested' ? `Waiting for the ${waitingFor(d)}` : REQ_WORD[d.status] || d.status);
 const REQ_TONE = { gm: 'info', paid: 'ok', draft: 'warn', requested: 'info', approved: 'ok', arranging: 'info', fulfilled: 'ok', rejected: 'bad' };
 
 /** 2.14.0: the project's requests from every phone, each with who did what and when. */
@@ -122,8 +126,8 @@ function sharedRequests(c) {
       ${list.length ? html`<div class="box">${list.map(d => html`<div class="li item">
         <span class="time ${d.fr.priority === 'Urgent' ? 'urgent' : ''}">${d.fr.priority === 'Urgent' ? 'Urgent' : String(d.fr.date || '').slice(5)}</span>
         <div class="n"><b>${all ? `${nameOf(d._p)} · ` : ''}${d.fr.text}</b><span>${[d.fr.qty ? `${d.fr.qty} ${d.fr.unit}` : '', d.fr.neededBy ? `needed by ${d.fr.neededBy}` : '', d.fr.location].filter(Boolean).join(' · ')}</span>
-          ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
-        <span class="pill ${REQ_TONE[d.status] || ''}">${REQ_WORD[d.status] || d.status}</span>
+          ${(d.log || []).slice(-4).reverse().map(x => html`<span class="tiny muted">${REQ_WORD[x.status] || x.status}${x.level ? ` (${x.level})` : ''} · ${x.byName || x.by} · ${stampOf(x.at)}${x.note ? ` · ${x.note}` : ''}</span>`)}</div>
+        <span class="pill ${REQ_TONE[d.status] || ''}">${reqWord(d)}</span>
         ${d.status === 'draft' && d._p === c.project.code ? html`<button type="button" class="btn t slim" data-act="openReq" data-v="${d.fr.id}">Edit</button>` : ''}
         ${d.status === 'requested' && d.by === me && d._p === c.project.code ? html`<button type="button" class="mini" data-act="reqCancel" data-v="${d.fr.id}" aria-label="Withdraw">✕</button>` : ''}</div>`)}</div>`
       : wait.length ? '' : html`<div class="box pad muted small">No requests yet. Add them with + Request.</div>`}
