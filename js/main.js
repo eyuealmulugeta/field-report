@@ -9,7 +9,7 @@ import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
-import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount } from './model/report.js';
+import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
@@ -282,7 +282,35 @@ async function goLive(at = '') {
   if (st === 'stale') return;   // 2.19.2: a newer start is in charge
   ui.live = st;
   ui.liveWhy = L.liveWhy();
-  if (ui.live === 'on') sigSync();   // 2.19.1
+  if (ui.live === 'on') { sigSync(); dbResend(); }   // 2.19.1; 2.35.0: database copies still missing
+  draw();
+}
+
+/**
+ * 2.35.0 (3 Nov): the database copy of a sent report (data route Both). Marked `dbAt` when the database answers;
+ * a phone that was not signed in sends it again later (dbResend), so Central Hub's Compare finds no gap.
+ */
+function dbBody(k) {
+  const r = store.get().drafts[k], p = store.get().projects.find(x => x.code === r.proj);
+  if (!p) return null;
+  const meta = reportMeta(r, p, store.get().profile);
+  return { proj: p.code, date: r.date, no: r.no, name: (r.sent && r.sent.name) || pdfName(p, r.date, r.no), script: 'ok', meta: L.reportLite(meta),
+    // a report sent before 2.35.0 has no signing time: without `full` the database keeps the copy it has
+    ...(r.signedAt ? { full: L.reportFull(r, p, store.get().profile, r.signedAt) } : {}) };
+}
+async function dbCopy(k) {
+  const body = dbBody(k);
+  if (!body || !L.liveOn()) return false;
+  const res = await L.now('report', body);
+  if (!res || !res.ok) return false;
+  editKey(k, x => { x.dbAt = Date.now(); });
+  return true;
+}
+let dbBusy = false;
+async function dbResend() {
+  if (dbBusy || demo || ui.liveRoute !== 'both' || !L.liveOn()) return;
+  dbBusy = true;
+  try { for (const k of dbWaiting(store.get().drafts)) await dbCopy(k); } finally { dbBusy = false; }
   draw();
 }
 
@@ -717,7 +745,8 @@ async function sendReport(k, step = () => {}) {
     L.now('reports', { proj: p.code });   // 2.13.0: Central Hub takes it now, not on its next run
     // 2.19.0 (Phase E3a): Data route Both: the report goes to the database too (Central Hub's Compare checks the two)
     // 2.23.0 (CH 20b): with the whole report, for Central Hub's copy of the PDF and its edits
-    if (ui.liveRoute === 'both') L.now('report', { proj: p.code, date: r.date, no: r.no, name, script: 'ok', meta: L.reportLite(meta), full: L.reportFull(store.get().drafts[k] || r, p, store.get().profile, pdfSignedAt) });
+    editKey(k, x => { x.signedAt = pdfSignedAt; });
+    if (ui.liveRoute === 'both') dbCopy(k);   // 2.35.0: marked when the database answers, else sent again later
     // 2.14.0: the day's shared requests go to the office with the report
     for (const q of (store.get().drafts[k] || {}).requests || []) if (q.live) L.requestStatus(q.id, 'requested', { byName: (store.get().profile || {}).name || '', note: `With report ${name}` }).catch(() => {});
     return 'sent';
@@ -1822,6 +1851,7 @@ function draw() {
   let v = r === 'signin' ? S.signin(c) : r === 'profile' ? S.profile(c) : r === 'choose' ? S.chooseProject(c)
     : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);
   if (ui.date && (r === 'today' || NEEDS_REPORT.has(r))) v = { ...v, body: html`${F.pastBand(c)}${v.body}` };
+  if (!demo && !setup) v = { ...v, body: html`${P.dbBar(ui, dbWaiting(c.s.drafts).length)}${v.body}` };   // 2.35.0
   if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c, P.ALL_PROJ.has(r))}` };   // 2.16.1; 2.17.0 All projects
   document.documentElement.dataset.theme = c.s.profile.dark ? 'dark' : '';
   const scroll = root.querySelector('.bd')?.scrollTop || 0;

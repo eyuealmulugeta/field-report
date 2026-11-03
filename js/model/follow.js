@@ -136,6 +136,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['alert', 'Database copy of every report (2.35.0)', 'If the phone is no longer signed in to the database, a red bar says so: tap it to sign in again. Reports sent meanwhile are copied there once you are back.'],
   ['bell', 'Urgent notices (2.34.0)', "An urgent notice from the GM covers the screen until you tap I've read it, or send a different reply. It also comes as a phone notification."],
   ['users', 'Attendance shared and confirmed (2.33.0)', "Today's marks show at once on Central Hub's attendance sheet. When everyone is marked, tap Confirm the attendance is correct; if a mark changes later, confirm again."],
   ['check', 'Install, red steps, Gallery (2.32.0)', 'Opened in a browser, Field Report offers to install itself on the phone. A step with nothing in yet is red. The GM can add report photos from the Gallery; they are marked as such.'],

@@ -76,6 +76,8 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .bar.gap { margin: 9px 0 6px; }
 .callout { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 .callout.warn { background: var(--warn-soft); color: var(--warn); } .callout.bad { background: var(--bad-soft); color: var(--bad); }
+/* 2.35.0: not signed in to the database */
+.db-bar { display: block; width: 100%; margin: 0 0 10px; padding: 12px 14px; border: 0; border-radius: 10px; background: var(--bad); color: #fff; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tile { display: flex; flex-direction: column; gap: 2px; text-align: left; }

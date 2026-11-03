@@ -21,6 +21,11 @@ export const REVIEW_TABS = [
 export const tabsFor = kind => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : kind === 'reviewer' ? [...TABS.filter(t => t.id !== 'quick'), REVIEW_TABS[0], TABS.find(t => t.id === 'quick')] : TABS);
 
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
+/** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
+export const dbBar = (ui, waiting = 0) => (ui.liveRoute === 'both' && ui.live === 'signin'
+  ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Not connected to the database.</b> Tap to sign in again${waiting ? ` · ${waiting} report${waiting > 1 ? 's' : ''} waiting` : ''}</button>`
+  : '');
+
 export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
 export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'review']);
 // 2.17.0: "All projects" on Reports, Requests and Review
