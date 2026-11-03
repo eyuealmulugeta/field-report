@@ -1839,8 +1839,18 @@ const ACTS = {
 const root = document.getElementById('app');
 // 2.26.0: on a phone, slide left or right for the next or previous tab of the bottom bar
 onSwipe(root, () => root.querySelectorAll('nav.nav > button'));
-let layout = D.layoutOf(innerWidth);
-addEventListener('resize', () => { const l = D.layoutOf(innerWidth); if (l !== layout) { layout = l; draw(); } });
+// 2.43.2 (owner: a phone opened in the computer layout until refreshed): when the app opens, a phone can report
+// the 980 px of a page without its viewport for a moment, and no resize follows. The screen's own width caps it,
+// and the width is asked again when the page has settled.
+const viewW = () => Math.min(innerWidth, document.documentElement.clientWidth || innerWidth, (screen && screen.width) || innerWidth);
+let layout = D.layoutOf(viewW());
+const relayout = () => { const l = D.layoutOf(viewW()); if (l !== layout) { layout = l; draw(); } };
+addEventListener('resize', relayout);
+addEventListener('orientationchange', relayout);
+addEventListener('pageshow', relayout);
+addEventListener('load', relayout);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
+[300, 1500].forEach(ms => setTimeout(relayout, ms));
 
 /** The open step's tab in the menu. */
 const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
