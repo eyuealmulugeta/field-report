@@ -425,6 +425,10 @@ img.logo { background: none; object-fit: cover; padding: 0; }
 .seg.att-tabs button { border: 1px solid var(--line); border-radius: 8px; height: 32px; }
 .seg.att-tabs button:first-child { border-left: 1px solid var(--line); }
 .seg.att-tabs button.on { background: var(--brand); border-color: var(--brand); color: #fff; }   /* 2.42.0: the open tab */
+/* 2.44.0: Today, Crew, Add people: a count beside a tab; the start box of Today */
+.seg.att-tabs button .cnt { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font-size: 11px; line-height: 18px; background: var(--line-2); color: var(--muted); }
+.seg.att-tabs button.on .cnt { background: rgba(255,255,255,.25); color: #fff; }
+.att-start { display: flex; flex-direction: column; gap: 12px; } .att-start .kpis { margin: 0; }
 .rg-top { gap: 6px; align-items: center; }
 .rg-scroll { overflow-x: auto; margin: 8px 0; border: 1px solid var(--line); border-radius: 8px; }
 .rg { border-collapse: collapse; font-size: 12px; min-width: 100%; }

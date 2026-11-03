@@ -43,7 +43,7 @@ if (demo) useFake(demoServer);
 const store = createStore(demo ? memoryStorage() : localStorage);
 if (demo) store.set({ drafts: demoDrafts() });
 
-const ui = { busy: false, error: '', sheet: '', toast: '' };
+const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
 const realToday = () => (demo ? DEMO_TODAY : todayIn());
 /** The day being reported: today, or an earlier day opened from Reports to write or correct. */
 const today = () => ui.date || realToday();
@@ -1331,6 +1331,7 @@ const ACTS = {
   // 2.16.0: the Office page tabs: Today, Crew attendance, Employee data
   attTab(d) {
     ui.attTab = d.v; ui.regEdit = null;
+    try { localStorage.setItem('fr2_attTab', d.v); } catch { /* private mode */ }   // 2.44.0: reopens on the last tab
     // 2.43.1 (owner): Candidate never asks to connect: the Central Hub sign-in starts by itself (once per visit) and comes back here
     if (d.v === 'emp' && !demo && ui.live !== 'on' && L.LIVE.has(ui.liveRoute) && !sessionStorage.getItem(AFTER)) {
       try { sessionStorage.setItem(AFTER, 'emp'); } catch { /* the Connect button stays */ }

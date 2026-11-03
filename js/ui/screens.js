@@ -194,7 +194,7 @@ const seg = (r, i) => html`<div class="seg" role="group" aria-label="${r.name}">
 
 /** 2.39.0 (owner): the Site Engineer is not in the crew attendance (they write the report). */
 export const NOT_CREW = /^site engineer$/i;
-export function crew(c) {
+export function crew(c, inAtt = false) {
   const cr = c.report.crew, s = c.report.start;
   const t = totals(cr, s.start, s.end);
   const trades = [...new Set(cr.rows.filter(r => !NOT_CREW.test(r.trade || '')).map(r => r.trade || 'Other'))];
@@ -218,7 +218,7 @@ export function crew(c) {
       <div class="box">${cr.extra.map((x, i) => html`<div class="li"><input class="fld slim" data-f="crew.extra.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">${stepper('extra', x.qty, x.qty, i)}</div>`)}
         <button type="button" class="li" data-act="addExtra"><span class="ic">${icon('plus')}</span><div class="n"><b>Add day workers</b><span>Trade and count</span></div></button></div>
       ${confirmBox(c)}
-      ${crewListBox(c)}`,
+      ${inAtt ? '' : crewListBox(c)}`,
     foot: html`<button type="button" class="btn p" data-act="crewDone">Done · ${t.present} present</button>${c.ui.attNote ? html`<div class="center muted small">${c.ui.attNote}</div>` : ''}`,
   };
 }
@@ -230,27 +230,35 @@ export function crew(c) {
 export function att(c) {
   const staff = c.project.staff || [], started = c.report && c.report.start && !c.report.nowork;
   const sub = `${c.project.name || c.project.code} · crew from Central Hub${c.ui.attAt ? ` · checked ${c.ui.attAt}` : ''}`;
-  // 2.16.0: three tabs: Today, Crew attendance (Central Hub's sheet), Employee data (the crew form, filled in here)
-  if (c.ui.attTab === 'emp') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · employee data`), body: html`${attTabs(c)}${empView(c)}` };
+  // 2.44.0 (owner): three tabs, one job each: Today (marking only), Crew (the list, edits, deletes), Add people (labour on site, candidate form)
+  const tab = c.ui.attTab || '';
+  if (tab === 'emp') return { tab: 'att', head: head('Attendance', `${c.project.name || c.project.code} · add people`), body: html`${attTabs(c)}${crewListBox(c)}<div class="k">Candidate form</div>${empView(c)}` };
+  if (tab === 'crew') return {
+    tab: 'att',
+    head: head('Attendance', sub),
+    body: html`${attTabs(c)}${refreshRow(c)}
+      ${staff.length ? html`<div class="k">Crew on this project · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
+        : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add people on site, or ask the office to allocate the crew.</p>`}
+      ${crewAdmin(c, false)}`,
+  };
   if (started) {
-    const v = crew(c);
+    const v = crew(c, true);
     // the tab bar stays: Done sits at the end of the page
-    return { tab: 'att', head: head('Attendance', sub), body: html`${attTabs(c)}${refreshRow(c)}${v.body}${crewAdmin(c, true)}<div class="att-done">${v.foot}</div>` };
+    return { tab: 'att', head: head('Attendance', sub), body: html`${attTabs(c)}${v.body}<div class="att-done">${v.foot}</div>` };
   }
   return {
     tab: 'att',
     head: head('Attendance', sub),
-    body: html`${attTabs(c)}${refreshRow(c)}
-      ${staff.length ? html`<div class="k">Allocated crew · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
-        : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add labour on site below, or ask the office to allocate the crew.</p>`}
-      ${crewAdmin(c, false)}
-      ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}
-      ${crewListBox(c)}`,
+    body: html`${attTabs(c)}
+      <div class="box pad att-start"><div class="kpis">${kpi(staff.length, 'On the crew')}${kpi((c.project.crewWait || []).length, 'Waiting approval')}</div>
+      ${c.report && c.report.nowork ? html`<p class="callout">Today is marked as no work.</p>` : html`<button type="button" class="btn p" data-act="startCrew">${icon('check')}Take today's attendance</button>`}</div>`,
   };
 }
 // 2.26.0: was Employee data. 2.38.0 (owner): the project sheet (Crew attendance) is gone; Central Hub keeps it
-const ATT_TABS = [['', 'Today'], ['emp', 'Candidate']];
-const attTabs = c => html`<div class="seg wide att-tabs" role="group" aria-label="Office">${ATT_TABS.map(([k, t]) => html`<button type="button" class="${(c.ui.attTab || '') === k ? 'on' : ''}" data-act="attTab" data-v="${k}" aria-pressed="${(c.ui.attTab || '') === k}">${t}</button>`)}</div>`;
+// 2.44.0 (owner): Today, Crew, Add people ('emp' keeps its key: the candidate form box and the sign-in return use it)
+const ATT_TABS = [['', 'Today'], ['crew', 'Crew'], ['emp', 'Add people']];
+const attCount = (c, k) => (k === 'crew' ? (c.project.staff || []).length : k === 'emp' ? (c.project.crewWait || []).length : 0);
+const attTabs = c => html`<div class="seg wide att-tabs" role="group" aria-label="Attendance">${ATT_TABS.map(([k, t]) => html`<button type="button" class="${(c.ui.attTab || '') === k ? 'on' : ''}" data-act="attTab" data-v="${k}" aria-pressed="${(c.ui.attTab || '') === k}">${t}${attCount(c, k) ? html` <span class="cnt">${attCount(c, k)}</span>` : ''}</button>`)}</div>`;
 const SHEET_MARK = { present: 'P', absent: 'A', sick: 'S', leave: 'L' };
 const SHEET_WORD = { present: 'Present', absent: 'Absent', sick: 'Sick', leave: 'On leave', none: 'No mark' };
 /** 2.16.0: Crew attendance: Central Hub's sheet of the pay period; a tapped day is corrected, and waits for the office. */
