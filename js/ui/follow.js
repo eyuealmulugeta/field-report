@@ -164,7 +164,7 @@ export function requests(c) {
         <div class="n"><b>${q.text}</b><span class="${lateRequest(q, c.realToday) ? 'late' : ''}">${requestLine(q)}${lateRequest(q, c.realToday) ? ' · late' : ''}</span></div>
         <span class="pill ${q.sent ? 'info' : 'warn'}">${q.sent ? 'Asked' : 'Not sent'}</span></div>`)}</div>`
       : html`<div class="box pad muted small">No requests yet. Add them on step 8 or with + Request.</div>`}
-      <p class="muted tiny">The office moves requests on (Seen, Ordered, Delivered) in Central Hub; that comes to this page in version 2.2.</p>`,
+      <p class="muted tiny">The office moves requests on (Seen, Ordered, Delivered) in Central Hub.</p>`,
   };
 }
 

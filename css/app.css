@@ -555,3 +555,6 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .cd-pic .row { display: flex; gap: 4px; } .cd-pic .row .btn { flex: 1; padding: 4px; }
 /* 2.45.1: the full list of what an employee record misses wraps under the name */
 .li .n .pill { white-space: normal; }
+/* 2.48.0 (simulation S6): on a wide screen the bell covered the corner of the top boxes; it sits at the bottom right */
+.app.wide ~ .inbox-fab, .app.wide .inbox-fab { top: auto; bottom: 20px; right: 20px; }
+.app.wide ~ .inbox-pop, .app.wide .inbox-pop { top: auto; bottom: 76px; }
