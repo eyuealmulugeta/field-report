@@ -144,8 +144,7 @@ export function today(c) {
       </div>
       <div class="row2"><button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight</button><button type="button" class="btn o bad-t" data-act="attOpen">${icon('alert')}Attention</button></div>
       <div class="k">This week</div>${weekStrip(c)}
-      <div class="k">Needs you</div>${needsBox(c)}
-      <div class="muted tiny center">File name: ${pdfName(p, c.today, no)}</div>`,
+      <div class="k">Needs you</div>${needsBox(c)}`,   // 2.44.2 (owner): no report file name on Today
   };
 }
 
