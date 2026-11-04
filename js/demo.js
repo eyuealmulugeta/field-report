@@ -3,6 +3,33 @@
 
 export const DEMO_TODAY = '2026-10-20';
 
+// 2.46.0 (owner): ?demo&sim opens the project simulation instead (tests/sim/fr-sim.json, written by the simulation's
+// loader). The file stays on the computer that runs the tests: it is never uploaded, so on the live site ?demo&sim is
+// the plain demo. Made-up people and figures only, in the browser's memory: nothing is sent anywhere.
+let SIM = null;
+export async function loadSim(url = './tests/sim/fr-sim.json') {
+  try { const r = await fetch(url, { cache: 'no-store' }); SIM = r.ok ? await r.json() : null; } catch { SIM = null; }
+  return !!SIM;
+}
+export const demoToday = () => (SIM && SIM.today) || DEMO_TODAY;
+
+/** The simulation's answers; null lets the plain demo answer. */
+function simServer(action, body) {
+  const S = SIM, p = S.project, q = new URLSearchParams(location.search);
+  const answer = name => S.answers[String(name || '').slice(0, 10)] || null;
+  switch (action) {
+    case 'getconfig': return { ok: true, rev: 1, projects: [p] };
+    case 'myProjects': return { ok: true, projects: [{ proj: p.code, cc: p.cc, name: p.name, location: p.location, staff: S.setup.staff, ...(q.has('pm') ? { crewApprove: true, hoursEdit: true, tradeWages: S.tradeWages || {}, crewWait: [] } : {}) }] };
+    case 'getSetup': return { ok: true, proj: body.proj, setup: S.setup };
+    case 'list': return { ok: true, reports: S.review, events: [] };
+    case 'projectDays': return { ok: true, days: S.review.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name, at: x.uploadedAt })) };
+    case 'status': { const a = answer(body.name); return a ? { ok: true, found: true, report: { name: body.name, ...a } } : { ok: true, found: false }; }
+    case 'inbox': return { ok: true, items: S.inbox || [], me: null };
+    case 'review': { const r = S.review.find(x => x.name === body.name); if (r) r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; return { ok: true, report: r || {} }; }
+    default: return null;
+  }
+}
+
 const staff = [
   ...['Abebe K.', 'Dawit T.', 'Henok A.', 'Kebede M.', 'Mulugeta S.', 'Tesfaye B.', 'Yonas G.', 'Bereket H.', 'Samuel W.', 'Getachew L.', 'Solomon D.']
     .map((name, i) => ({ id: `W${i + 1}`, name, trade: 'Welder' })),
@@ -72,6 +99,8 @@ const CREW_WAIT = [{ id: 'cw1', name: 'Girma T', trade: 'Mason', wage: 0, tradeW
 
 export async function demoServer(action, body) {
   await wait(250);
+  const s = SIM && simServer(action, body);
+  if (s) return s;
   switch (action) {
     case 'signin': {
       // demo only: ?demo&newdevice shows the refusal a new device gets; ?demo&admin signs in as the Admin
@@ -130,6 +159,7 @@ export async function demoServer(action, body) {
 
 /** Last week as sent, Monday 19 left missing, so the week strip shows every state. */
 export function demoDrafts() {
+  if (SIM) return JSON.parse(JSON.stringify(SIM.drafts));
   const out = {};
   ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17'].forEach((d, i) => {
     out[`MJO|${d}`] = { v: 1, proj: 'MJO', date: d, no: 95 + i, sentAt: Date.parse(d + 'T17:30:00Z'), start: { start: '08:00', end: '17:00', cond: 'Windy', tempC: 17, ground: 'Dry', location: 'Modjo, Ethiopia', done: true }, crew: { rows: [], extra: [], done: true }, items: [], equipment: [], received: [], delays: [], photos: [], requests: [], plan: [], safety: {}, done: {} };

@@ -11,7 +11,7 @@ import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
-import { demoServer, demoDrafts, DEMO_TODAY } from './demo.js';
+import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
 import { listen } from './core/voice.js';
@@ -40,11 +40,12 @@ import { showUrgent } from './ui/urgent.js';   // 2.34.0
 
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
+if (demo && new URLSearchParams(location.search).has('sim')) await loadSim();   // 2.46.0: the project simulation (test mode only)
 const store = createStore(demo ? memoryStorage() : localStorage);
 if (demo) store.set({ drafts: demoDrafts() });
 
 const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
-const realToday = () => (demo ? DEMO_TODAY : todayIn());
+const realToday = () => (demo ? demoToday() : todayIn());
 /** The day being reported: today, or an earlier day opened from Reports to write or correct. */
 const today = () => ui.date || realToday();
 const now = () => timeIn();
