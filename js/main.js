@@ -749,7 +749,7 @@ async function sendReport(k, step = () => {}) {
   try {
     const res = await call('upload', { name, folderId: '', data, meta });
     const at = Date.now();
-    editKey(k, x => { x.sentAt = at; x.pressedAt = pressed; x.updated = at; x.queuedAt = 0; x.sendError = ''; x.sent = { name, version: res.version || 1, status: res.status || 'submitted', unchanged: !!res.unchanged, hash: meta.hash }; });
+    editKey(k, x => { x.firstSentAt = x.firstSentAt || at; x.sentAt = at; x.pressedAt = pressed; x.updated = at; x.queuedAt = 0; x.sendError = ''; x.sent = { name, version: res.version || 1, status: res.status || 'submitted', unchanged: !!res.unchanged, hash: meta.hash }; });
     if (ui.pdf && ui.pdf.key === k) ui.pdf.at = at;
     unqueue(k);
     if (k === draftKey(p.code, realToday()) && !demo) call('draftDel', { proj: p.code }).catch(() => {});

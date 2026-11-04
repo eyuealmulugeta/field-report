@@ -47,7 +47,7 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       row.comment = k && k.comments && k.comments.length ? k.comments[k.comments.length - 1] : null;
       row.changed = r.updated > r.sentAt + 1000;
       row.last = lastStep(k && k.history) || { kind: 'submit', at: r.sentAt };   // 2.17.0
-      row.late = lateTag(d, r.sentAt, lateAfter(project));
+      row.late = lateTag(d, r.firstSentAt || r.sentAt, lateAfter(project));   // 2.47.0: a re-send after a send-back keeps the first send's tag
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
     else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
