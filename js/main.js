@@ -1386,11 +1386,14 @@ const ACTS = {
   // 2.45.0 (owner): Edit opens the person's employee data from Central Hub (name, trade, phone, ID, pictures); Save writes it there
   async cdOpen(d) {
     const p = project(), x = (p.staff || []).find(s => s.id === d.v);
-    if (!x || !x.personId) return ACTS.crewEdit(d);   // added on site, not in the directory yet: the short edit
+    if (!x) return;
     if (ui.cd && ui.cd.id === d.v) { ui.cd = null; return draw(); }
+    // 2.45.1 (owner: Edit did not open the employee data): the phone's crew list has no directory link (personId),
+    // so Central Hub is always asked; only when it has no record of the person does the short edit open
     ui.cd = { id: d.v, busy: true, f: {} }; draw();
-    try { const r = await L.now('crewPerson', { proj: p.code, id: d.v }); ui.cd = { id: d.v, f: { ...r.person }, was: { ...r.person }, missing: r.missing }; }
-    catch (e) { ui.cd = null; toast(`Not opened: ${e.message}`); }
+    const r = await L.now('crewPerson', { proj: p.code, id: d.v }).catch(e => ({ refused: e.message }));
+    if (r && r.person) ui.cd = { id: d.v, f: { ...r.person }, was: { ...r.person }, missing: r.missing };
+    else { ui.cd = null; if (r && r.refused && !/not on this project/.test(r.refused)) toast(r.refused); return ACTS.crewEdit(d); }
     draw();
   },
   cdClose() { ui.cd = null; draw(); },
