@@ -357,8 +357,10 @@ function cdForm(c, x) {
     ${fld('name', 'Full name')}
     <label class="lab">Trade</label><select class="fld" data-cd="title">${[...new Set([...TRADES, f.title].filter(Boolean))].map(n => html`<option ${n === f.title ? 'selected' : ''}>${n}</option>`)}</select>
     ${fld('privatePhone', 'Phone', 'type="tel" inputmode="tel"')}
+    ${fld('nationality', 'Nationality')}
     ${fld('idNumber', 'Fayda ID number', 'inputmode="numeric"')}
-    <div class="cd-pics">${pic('photo', 'Photo')}${pic('idImage', 'ID front')}${pic('idImageBack', 'ID back')}</div>
+    ${fld('passportNumber', 'Passport number')}
+    <div class="cd-pics">${pic('photo', 'Photo')}${pic('idImage', 'ID front')}${pic('idImageBack', 'ID back')}${pic('passportImage', 'Passport')}</div>
     <button type="button" class="btn p" data-act="cdSave" ${cd.busy ? 'disabled' : ''}>${cd.busy ? 'Saving…' : 'Save to Central Hub'}</button></div>`;
 }
 const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Refreshing…' : 'Refresh'}</button></div>`;
