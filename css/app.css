@@ -545,3 +545,11 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
   content: ''; position: fixed; z-index: -1; left: -25vw; top: 0; width: 250vw; height: 105.5vh;
   background: url('../img/watermark.webp') 0 0 / 100% 100% no-repeat; opacity: .11; mix-blend-mode: multiply; pointer-events: none;
 }
+
+/* 2.45.0: a crew member's employee data from Central Hub */
+.cd-form { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.cd-form .cd-miss { border-color: var(--warn); }
+.cd-pics { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.cd-pic { width: 31%; min-width: 96px; display: flex; flex-direction: column; gap: 4px; }
+.cd-pic img, .cd-pic .cd-empty { width: 100%; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.cd-pic .row { display: flex; gap: 4px; } .cd-pic .row .btn { flex: 1; padding: 4px; }

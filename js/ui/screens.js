@@ -337,10 +337,29 @@ function staffRow(c, x) {
   // 2.43.0 (owner): every Site engineer renames crew at once, no approval (Central Hub copies it to the directory)
   const may = !!x.id && (crewBoss(c) || c.kind === 'reporter'), mine = may && c.ui.live === 'on', del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
   const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>` : '';
+  if (c.ui.cd && c.ui.cd.id === x.id) return cdForm(c, x);
   if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${[...new Set([...TRADES, x.trade].filter(Boolean))].map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <input class="fld slim" data-ui="cePhone" value="${c.ui.cePhone ?? (x.phone || '')}" placeholder="Phone" inputmode="tel" aria-label="Phone"><button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
-  return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}</span></div>
-    ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'crewEdit' : 'liveConnect'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
+  const info = c.ui.crewInfo && c.ui.crewInfo.code === c.project.code && c.ui.crewInfo.info[x.id];
+  // 2.45.0 (owner): what Central Hub's employee record still misses, under the name
+  const tag = info ? (info.missing.length ? html` <span class="pill warn">${info.missing.join(', ')} missing</span>` : html` <span class="pill ok">Complete</span>`) : '';
+  return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}${tag}</span></div>
+    ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'cdOpen' : 'liveConnect'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
+}
+/** 2.45.0: the employee data of one crew member, from and to Central Hub. */
+function cdForm(c, x) {
+  const cd = c.ui.cd, f = cd.f || {};
+  if (cd.busy && !cd.was) return html`<div class="li"><div class="n"><b>${x.name}</b><span>Opening the employee data…</span></div></div>`;
+  const pic = (k, label) => html`<div class="cd-pic"><span class="small">${label}</span>${f[k] ? html`<img src="${f[k]}" alt="${label}">` : html`<div class="cd-empty bad-t small">Missing</div>`}
+    <div class="row"><button type="button" class="btn t slim" data-act="cdPic" data-k="${k}">Camera</button><button type="button" class="btn t slim" data-act="cdPic" data-k="${k}" data-g="1">Gallery</button></div></div>`;
+  const fld = (k, label, attrs = '') => html`<label class="lab">${label}</label><input class="fld ${f[k] ? '' : 'cd-miss'}" data-cd="${k}" value="${f[k] || ''}" ${attrs}>`;
+  return html`<div class="box pad cd-form"><div class="spread"><b>Employee data · ${x.name}</b><button type="button" class="mini" data-act="cdClose" aria-label="Close">✕</button></div>
+    ${fld('name', 'Full name')}
+    <label class="lab">Trade</label><select class="fld" data-cd="title">${[...new Set([...TRADES, f.title].filter(Boolean))].map(n => html`<option ${n === f.title ? 'selected' : ''}>${n}</option>`)}</select>
+    ${fld('privatePhone', 'Phone', 'type="tel" inputmode="tel"')}
+    ${fld('idNumber', 'Fayda ID number', 'inputmode="numeric"')}
+    <div class="cd-pics">${pic('photo', 'Photo')}${pic('idImage', 'ID front')}${pic('idImageBack', 'ID back')}</div>
+    <button type="button" class="btn p" data-act="cdSave" ${cd.busy ? 'disabled' : ''}>${cd.busy ? 'Saving…' : 'Save to Central Hub'}</button></div>`;
 }
 const refreshRow = c => html`<div class="spread small"><span class="muted">${(c.project.crewWait || []).length ? `${c.project.crewWait.length} waiting for approval` : 'The office keeps this list'}</span><button type="button" class="btn t slim" data-act="attRefresh" ${c.ui.attBusy ? 'disabled' : ''}>${c.ui.attBusy ? 'Refreshing…' : 'Refresh'}</button></div>`;
 

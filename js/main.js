@@ -863,7 +863,15 @@ async function fetchWeather() {
 /* ---------- actions ---------- */
 
 const go = to => { location.hash = to; };
-const AFTER = 'fr2_after';   // 2.43.1: the page to return to after the Central Hub sign-in
+const AFTER = 'fr2_after';
+/** 2.45.0: what each crew member's employee record in Central Hub still misses (read each time the Crew tab opens). */
+async function crewInfo() {
+  const p = project();
+  if (!p || demo || !L.liveOn()) return;
+  const r = await L.now('crewInfo', { proj: p.code });
+  if (r && r.info) { ui.crewInfo = { code: p.code, info: r.info }; draw(); }
+}
+const attRefreshSoon = () => setTimeout(() => { ACTS.attRefresh(true); crewInfo(); }, 300);   // 2.43.1: the page to return to after the Central Hub sign-in
 function toast(msg) {
   ui.toast = msg; draw();
   clearTimeout(toast.t); toast.t = setTimeout(() => { ui.toast = ''; draw(); }, 2600);
@@ -1331,6 +1339,7 @@ const ACTS = {
   // 2.16.0: the Office page tabs: Today, Crew attendance, Employee data
   attTab(d) {
     ui.attTab = d.v; ui.regEdit = null;
+    if (d.v === 'crew') crewInfo();   // 2.45.0: the employee data of the crew, read from Central Hub
     try { localStorage.setItem('fr2_attTab', d.v); } catch { /* private mode */ }   // 2.44.0: reopens on the last tab
     // 2.43.1 (owner): Candidate never asks to connect: the Central Hub sign-in starts by itself (once per visit) and comes back here
     if (d.v === 'emp' && !demo && ui.live !== 'on' && L.LIVE.has(ui.liveRoute) && !sessionStorage.getItem(AFTER)) {
@@ -1374,6 +1383,31 @@ const ACTS = {
   },
   startCrew() { ensureReport(); go('att'); },
   /** 2.10.0: the crew allocated in Central Hub, asked again (a report not sent yet takes in the changes). */
+  // 2.45.0 (owner): Edit opens the person's employee data from Central Hub (name, trade, phone, ID, pictures); Save writes it there
+  async cdOpen(d) {
+    const p = project(), x = (p.staff || []).find(s => s.id === d.v);
+    if (!x || !x.personId) return ACTS.crewEdit(d);   // added on site, not in the directory yet: the short edit
+    if (ui.cd && ui.cd.id === d.v) { ui.cd = null; return draw(); }
+    ui.cd = { id: d.v, busy: true, f: {} }; draw();
+    try { const r = await L.now('crewPerson', { proj: p.code, id: d.v }); ui.cd = { id: d.v, f: { ...r.person }, was: { ...r.person }, missing: r.missing }; }
+    catch (e) { ui.cd = null; toast(`Not opened: ${e.message}`); }
+    draw();
+  },
+  cdClose() { ui.cd = null; draw(); },
+  cdPic(d) { const i = document.getElementById('cdPic'); i.dataset.k = d.k; if (d.g) i.removeAttribute('capture'); else i.setAttribute('capture', d.k === 'photo' ? 'user' : 'environment'); i.value = ''; i.click(); },
+  async cdSave() {
+    const p = project(), cd = ui.cd;
+    if (!cd || cd.busy) return;
+    const fields = Object.fromEntries(Object.entries(cd.f).filter(([k, v]) => v !== (cd.was || {})[k]));
+    if (!Object.keys(fields).length) { ui.cd = null; return draw(); }
+    cd.busy = true; draw();
+    try {
+      const r = await L.now('crewSave', { proj: p.code, id: cd.id, fields });
+      ui.crewInfo = { ...(ui.crewInfo || {}), info: { ...((ui.crewInfo || {}).info || {}), [cd.id]: { missing: r.missing || [] } } };
+      ui.cd = null; toast('Saved. Central Hub has it.'); attRefreshSoon();
+    } catch (e) { cd.busy = false; toast(`Not saved: ${e.message}`); }
+    draw();
+  },
   async attRefresh(quiet) {
     if (ui.attBusy) return;
     if (demo) { ui.attAt = now(); return quiet ? draw() : toast('Demo: the list is the sample crew.'); }
@@ -1963,6 +1997,7 @@ root.addEventListener('click', e => {
 
 root.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.cd && ui.cd) { ui.cd.f[el.dataset.cd] = el.value; return; }   // 2.45.0
   if (el.dataset.ui) { ui[el.dataset.ui] = el.value; if (el.dataset.ui === 'q') draw(); return; }
   const f = el.dataset.f;
   if (!f) return;
@@ -1970,6 +2005,12 @@ root.addEventListener('input', e => {
   if (isDraft(f)) { setDraft(f, el.value); if (f.startsWith('cl.')) saveCl(); return; }
   const v = f === 'start.tempC' ? (num(el.value) ?? el.value) : el.value;
   edit(r => setPath(r, f, v), true);
+});
+// 2.45.0: a picture for the employee data (camera or gallery), made small like a receipt
+document.getElementById('cdPic').addEventListener('change', async e => {
+  const f = e.target.files?.[0], k = e.target.dataset.k;
+  if (!f || !ui.cd) return;
+  try { ui.cd.f[k] = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
 });
 root.addEventListener('change', e => { if (e.target.dataset.proj != null) return ACTS.projTop({ v: e.target.value }); const f = e.target.dataset.f; if (f && !f.startsWith('profile.') && (!isDraft(f) || f.startsWith('cl.'))) draw(); });
 

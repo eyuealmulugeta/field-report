@@ -197,7 +197,7 @@ export async function sigPush(sig, at) {
 export async function now(action, body = {}) {
   if (!signedIn()) return null;
   try { return (await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'fieldNow')({ action, ...body })).data; }
-  catch (e) { if (action === 'crewDrop' || action === 'crewOff') throw e; return null; }
+  catch (e) { if (['crewDrop', 'crewOff', 'crewPerson', 'crewSave'].includes(action)) throw e; return null; }
 }
 
 /** 2.13.0: corrects or takes off a crew member the site added (Central Hub's rules allow name, trade, phone, active only). */
