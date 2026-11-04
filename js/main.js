@@ -1954,6 +1954,8 @@ const escText = s => String(s).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&l
 
 root.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
+  // 2.44.1 (owner): the project list closes with a tap anywhere else
+  if (ui.projPop && !e.target.closest('.proj-pop') && !(el && el.dataset.act === 'projPop')) { ui.projPop = false; draw(); if (!el) return; }
   if (!el || el.disabled) return;
   const fn = ACTS[el.dataset.act];
   if (fn) fn(el.dataset, el);

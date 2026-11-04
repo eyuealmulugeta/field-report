@@ -7,7 +7,7 @@ import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
-import { inboxLink } from '../model/follow.js';
+import { inboxLink, monthDays } from '../model/follow.js';
 import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses, dayConfirm } from '../model/crew.js';
 import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop } from './parts.js';
@@ -92,8 +92,11 @@ export function weekStrip(c) {
   const t = c.today, p = c.project;
   const mon = addDays(t, -((weekday(t) + 6) % 7));
   const days = [...Array(7)].map((_, i) => addDays(mon, i));
+  // 2.44.1 (owner: CHB showed Monday and Tuesday unsent though Eyob sent them): a report sent from another phone counts,
+  // the same rows as Reports (monthDays: this phone's drafts, the project's reports from the script and Central Hub)
+  const sentBy = new Map(monthDays(c.realToday || t, p, c.s.drafts, c.s.known || {}, (c.s.others || {})[p.code]).filter(x => ['submitted', 'approved', 'changes'].includes(x.kind)).map(x => [x.date, x]));
   return html`<div class="box pad weekrow">${days.map(d => {
-    const r = c.s.drafts[`${p.code}|${d}`];
+    const r = sentBy.has(d) ? { ...(c.s.drafts[`${p.code}|${d}`] || {}), sentAt: (c.s.drafts[`${p.code}|${d}`] || {}).sentAt || 1 } : c.s.drafts[`${p.code}|${d}`];
     const off = (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
     const cls = r && r.sentAt ? 'ok' : r && r.nowork ? 'no' : d === t ? 'half' : off ? 'no' : d < t ? 'warn' : 'no';
     const mark = r && r.sentAt ? icon('check') : r && r.nowork ? '–' : d === t ? '•' : off ? '–' : d < t ? '!' : '';
@@ -163,10 +166,12 @@ export function attention(c) {
 }
 
 /** Reports the office sent back or commented on, newest first; each opens the day, with the comment and a reply box. */
+/** 2.44.1 (owner): no report file name (…_MJO_105.pdf) in the text on Today */
+export const noPdf = t => String(t || '').replace(/\S+\.pdf[:·,]?\s*/gi, '').replace(/\s{2,}/g, ' ').trim();
 function needsBox(c) {
   if (!c.needs.length) return html`<div class="box pad muted small">Nothing from the office.</div>`;
   return html`<div class="box">${c.needs.map(x => html`<button type="button" class="li" data-act="openDay" data-v="${x.date}"><span class="ic bad">${icon('alert')}</span>
-    <div class="n"><b>Report #${x.no} ${x.kind === 'changes' ? 'sent back' : 'has a comment'} · ${dayLabel(x.date)}</b><span>${x.comment ? `${x.comment.by || 'Office'}: ${x.comment.text}` : 'Open it to see what to fix'}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`;
+    <div class="n"><b>Report #${x.no} ${x.kind === 'changes' ? 'sent back' : 'has a comment'} · ${dayLabel(x.date)}</b><span>${x.comment ? `${x.comment.by || 'Office'}: ${noPdf(x.comment.text)}` : 'Open it to see what to fix'}</span></div><span class="ch">${icon('chev')}</span></button>`)}</div>`;
 }
 
 export function start(c) {
