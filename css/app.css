@@ -540,9 +540,11 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .req-acts { justify-content: flex-end; }
 
 /* 2.42.6 (owner): the letters' watermark, very faint, behind the sign-in page: its top point on the right edge (left = 100vw - width/2), from the top of the screen to its bottom tips at the bottom (the file has a margin under the tips, so 105.5vh) */
-.signin-page { position: relative; isolation: isolate; }
-.signin-page::before {
-  content: ''; position: fixed; z-index: -1; left: -25vw; top: 0; width: 250vw; height: 105.5vh;
+/* 2.51.1 (owner, 5 Nov): on a computer the watermark stays inside the sign-in box (the app's card), not across the screen */
+.signin-page { position: relative; }
+.app:has(.signin-page) { isolation: isolate; }
+.app:has(.signin-page)::before {
+  content: ''; position: absolute; z-index: -1; left: -25%; top: 0; width: 250%; height: 105.5%;
   background: url('../img/watermark.webp') 0 0 / 100% 100% no-repeat; opacity: .11; mix-blend-mode: multiply; pointer-events: none;
 }
 
