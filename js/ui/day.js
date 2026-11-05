@@ -7,6 +7,7 @@ import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipme
 import { stepHead, chips, stepper, isGM } from './parts.js';
 import { thumb } from './work.js';
 import { fitLine } from '../pdf.js';
+import { videosOf, VIDEO_KEEP_DAYS } from '../model/video.js';
 
 
 const camTile = act => html`<button type="button" class="thumb add" data-act="${act}" aria-label="Take a photo">${icon('cam')}</button>`;
@@ -107,6 +108,14 @@ export function delay(c) {
   };
 }
 
+/** 2.50.0 (R4): today's videos on this phone, sent or waiting; they never go into the report. */
+function videoList(c) {
+  const list = c.project ? videosOf(c.s.videos || [], c.project.code, c.realToday) : [];
+  return html`${c.ui.vidWork ? html`<p class="callout">${c.ui.vidWork}</p>` : ''}
+    ${list.length ? html`<div class="vlist"><b class="small">Videos today</b>${list.map(v => html`<div class="li"><span>${icon('cam')} ${v.time}</span><span class="grow"></span>${v.sent ? html`<span class="pill ok">Sent</span>` : v.gone ? html`<span class="pill warn">Lost on this phone</span>` : html`<span class="pill">Waiting</span><button type="button" class="btn sm o" data-act="videoDrop" data-v="${v.id}">Delete</button>`}</div>`)}</div>` : ''}
+    <p class="muted tiny">A video is at most 60 seconds. Videos go to Central Hub only, never into the client's report, and are deleted after ${VIDEO_KEEP_DAYS} days. All photos and videos are taken live, not uploaded.</p>`;
+}
+
 export function photos(c) {
   const r = c.report, list = [...r.photos].reverse();
   const missing = r.photos.filter(photoNeedsCaption).length;
@@ -118,7 +127,9 @@ export function photos(c) {
       <div class="ptiles">${list.map(p => html`<button type="button" class="ptile ${photoNeedsCaption(p) ? 'need' : ''}" data-act="openPhoto" data-v="${p.id}">
         ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
         <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button>
-        ${isGM(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>`,
+        <button type="button" class="ptile add" data-act="logVideo" ${c.ui.vidWork ? 'disabled' : ''}>${icon('cam')}<span><b>Record a video</b></span></button>
+        ${isGM(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>
+      ${videoList(c)}`,
     foot: doneBtn(r, 'photos', r.photos.length ? `Done · ${plural(r.photos.length, 'photo')}` : 'No photos today'),
   };
 }

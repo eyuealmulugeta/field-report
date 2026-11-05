@@ -32,6 +32,7 @@ import * as SP from './ui/spot.js';
 import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
 import { newVisit, visitMissing, visitRecord, VISIT_PHOTOS, PURPOSES } from './model/visit.js';
 import { shrinkVideo } from './core/video.js';
+import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
@@ -1100,6 +1101,46 @@ const spotFiles = async files => {
 };
 spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
 spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
+/* 2.50.0 (owner, 5 Nov, R4): a live video from the report camera. Central Hub only, never the report; kept 30 days. */
+const repVid = document.getElementById('repVid');
+const videoSet = (id, patch) => store.set({ videos: (store.get().videos || []).map(v => (v.id === id ? { ...v, ...patch } : v)) });
+repVid.addEventListener('change', async () => {
+  const f = repVid.files?.[0], p = project();
+  if (!f || !p) return;
+  const k = mediaKind(f);
+  if (k.refused || k.kind !== 'video') { toast(k.refused || 'That is not a video.'); return; }
+  if (await videoSeconds(f) > VIDEO_SECONDS + 1) { toast(`The video is longer than ${VIDEO_SECONDS} seconds. Record a shorter one.`); return; }
+  try {
+    let blob = f;
+    if (k.shrink) {
+      ui.vidWork = 'Making the video smaller… 0%. Keep this screen open.'; draw();
+      blob = await shrinkVideo(f, VIDEO_AIM, q => { const t = `Making the video smaller… ${Math.round(q * 100)}%. Keep this screen open.`; if (t !== ui.vidWork) { ui.vidWork = t; draw(); } });
+    }
+    const id = uid();
+    await putPhoto(id, blob);
+    store.set({ videos: videoAdd(store.get().videos, { id, proj: p.code, date: realToday(), time: now(), type: blob.type || f.type || 'video/mp4', sent: false }) });
+    toast('Video kept. It goes to Central Hub only.');
+  } catch (e) { toast(k.shrink ? e.message || String(e) : `Could not keep it on this phone (${e.message || e}).`); }
+  finally { ui.vidWork = ''; draw(); }
+  flushVideos();
+});
+let videoing = false;
+async function flushVideos() {
+  const waiting = videoWaiting(store.get().videos);
+  if (videoing || !waiting.length || !store.get().auth || !navigator.onLine) return;
+  videoing = true;
+  try {
+    for (const v of waiting.reverse()) {
+      const blob = await getPhoto(v.id);
+      if (!blob) { videoSet(v.id, { gone: true }); continue; }
+      await call('repVideo', { proj: v.proj, id: v.id, date: v.date, time: v.time, type: v.type, data: await toDataUrl(blob) });
+      videoSet(v.id, { sent: true, sentAt: Date.now() });
+      deletePhoto(v.id).catch(() => {});
+      toast(`Video sent to Central Hub (${v.time}).`);
+    }
+  } catch (e) { if (e.code !== 'OFFLINE') toast(`Video not sent yet: ${e.message}`); }
+  finally { videoing = false; draw(); }
+}
 spotGal.addEventListener('change', () => spotFiles([...(spotGal.files || [])]));
 /** 2.49.0: a signature (PNG) as a JPEG on white, the only picture type Spotlight sends. */
 const jpegOf = png => new Promise((ok, fail) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0); c.toBlob(ok, 'image/jpeg', 0.9); }; im.onerror = fail; im.src = png; });
@@ -1874,6 +1915,8 @@ const ACTS = {
 
   /* photos */
   logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; camera(); },
+  logVideo() { if (ui.vidWork) return; repVid.value = ''; repVid.click(); },   // 2.50.0
+  videoDrop(d) { const v = (store.get().videos || []).find(x => x.id === d.v); if (!v || v.sent) return; deletePhoto(v.id).catch(() => {}); store.set({ videos: store.get().videos.filter(x => x.id !== v.id) }); draw(); },
   galPhoto() { if (P.isGM({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0
   itemPhoto() { ui.camFor = 'item'; camera(); },
   photoItem: d => { ui.photo.itemId = ui.photo.itemId === d.v ? '' : d.v; draw(); },
@@ -2116,7 +2159,8 @@ window.addEventListener('hashchange', () => {
   if (h !== 'me') sendProfile();
   if (h === 'today' || h === '') pullDraft();
 });
-window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flushSpots(); });
+window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flushSpots(); flushVideos(); });
+setTimeout(() => flushVideos(), 4000);   // 2.50.0: a video left waiting is sent once the app is open
 // 2.1.1: the office's approvals show without opening Reports: when the app comes back to the front, and every 10 minutes
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);

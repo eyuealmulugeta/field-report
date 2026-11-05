@@ -23,6 +23,7 @@ const blank = () => ({
   pushAppId: '',       // 2.0.1: the OneSignal app id, kept after the first ask
   reqQueue: [],        // 2.25.0: requests for another day not shared yet [{ code, date, q }], shared when the connection is back
   spots: [],           // 2.7.0: Spotlight notes made on this phone, newest first; sent ones are kept as a short list
+  videos: [],          // 2.50.0: report videos [{ id, proj, date, time, type, sent }], the file in the photo store until sent
 });
 
 function load(storage) {
