@@ -30,6 +30,7 @@ import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
 import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
+import { newVisit, visitMissing, visitRecord, VISIT_PHOTOS, PURPOSES } from './model/visit.js';
 import { shrinkVideo } from './core/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
@@ -1070,11 +1071,14 @@ rcpt.addEventListener('change', async () => {
 /** 2.21.0: the length of a video in seconds (0 when the phone cannot tell). */
 const videoSeconds = file => new Promise(res => { const v = document.createElement('video'), u = URL.createObjectURL(file); v.preload = 'metadata'; v.onloadedmetadata = () => { URL.revokeObjectURL(u); res(Number.isFinite(v.duration) ? v.duration : 0); }; v.onerror = () => { URL.revokeObjectURL(u); res(0); }; v.src = u; });
 const spotFiles = async files => {
-  const s = ui.spot || (ui.spot = newSpot());
+  // 2.49.0: the camera may be taking a visitor's photo (camera only, photos only)
+  const forVisit = ui.camFor === 'visit' && ui.visit; ui.camFor = '';
+  const s = forVisit ? ui.visit : ui.spot || (ui.spot = newSpot()), max = forVisit ? VISIT_PHOTOS : SPOT_MAX;
   for (const f of files) {
-    if (s.media.length >= SPOT_MAX) { toast(`At most ${SPOT_MAX} photos or videos.`); break; }
+    if (s.media.length >= max) { toast(`At most ${max} photos${forVisit ? '' : ' or videos'}.`); break; }
     const k = mediaKind(f);
     if (k.refused) { toast(k.refused); continue; }
+    if (forVisit && k.kind !== 'photo') { toast('Only photos for a visit.'); continue; }
     // 2.21.0: a live video is at most 60 seconds
     if (k.kind === 'video' && await videoSeconds(f) > VIDEO_SECONDS + 1) { toast(`The video is longer than ${VIDEO_SECONDS} seconds. Record a shorter one.`); continue; }
     try {
@@ -1097,11 +1101,13 @@ const spotFiles = async files => {
 spotCam.addEventListener('change', () => spotFiles([...(spotCam.files || [])]));
 spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
 spotGal.addEventListener('change', () => spotFiles([...(spotGal.files || [])]));
+/** 2.49.0: a signature (PNG) as a JPEG on white, the only picture type Spotlight sends. */
+const jpegOf = png => new Promise((ok, fail) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0); c.toBlob(ok, 'image/jpeg', 0.9); }; im.onerror = fail; im.src = png; });
 const spotSet = (id, fn) => store.set({ spots: (store.get().spots || []).map(x => { if (x.id !== id) return x; const y = structuredClone(x); fn(y); return y; }) });
 let spotting = false;
 async function flushSpots() {
-  const waiting = (store.get().spots || []).filter(x => !x.sent);
-  if (spotting || !waiting.length || !store.get().auth || !navigator.onLine) return;
+  const waiting = (store.get().spots || []).filter(x => !x.sent), outs = (store.get().spots || []).filter(x => x.sent && x.outPending);
+  if (spotting || !(waiting.length || outs.length) || !store.get().auth || !navigator.onLine) return;
   spotting = true;
   try {
     for (const x of waiting.reverse()) {
@@ -1111,11 +1117,13 @@ async function flushSpots() {
         if (blob) await call('spotMedia', { proj: x.proj, id: x.id, n, type: m.type, data: await toDataUrl(blob) });
         spotSet(x.id, y => { y.media[n].up = true; });
       }
-      await call('spotPut', { proj: x.proj, id: x.id, about: x.about, tone: x.tone, cat: x.cat, note: x.note, madeAt: `${x.date}T${x.time}` });
+      await call('spotPut', { proj: x.proj, id: x.id, about: x.about, tone: x.tone, cat: x.cat, note: x.note, madeAt: `${x.date}T${x.time}`, ...(x.visit ? { visit: x.visit } : {}) });
       spotSet(x.id, y => { y.sent = true; y.sentAt = Date.now(); });
       x.media.forEach(m => deletePhoto(m.id).catch(() => {}));
-      toast(`Spotlight sent: ${x.cat} · ${x.about}.`);
+      toast(x.visit ? `Visit sent: ${x.visit.name}.` : `Spotlight sent: ${x.cat} · ${x.about}.`);
     }
+    // 2.49.0: the time a visitor left, after the visit was sent
+    for (const x of outs) { await call('visitOut', { proj: x.proj, id: x.id, out: x.visit.tout }); spotSet(x.id, y => { y.outPending = false; }); }
   } catch (e) { if (e.code !== 'OFFLINE') toast(`Spotlight not sent yet: ${e.message}`); }
   finally { spotting = false; }
 }
@@ -1300,8 +1308,38 @@ const ACTS = {
   inboxGo(d) { if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.8.1: the same link twice opens again
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
+  // 2.49.0 (owner, R3): Visitors
+  spotTab(d) { ui.spotTab = d.v; draw(); },
+  visitNew() { ui.visit = newVisit(); Object.assign(ui, { vName: '', vOrg: '', vIn: now(), vOut: '', vPurpose: PURPOSES[0], vResult: '', vSummary: '' }); draw(); },
+  visType(d) { ui.visit.type = d.v; draw(); },
+  visitCam() { ui.camFor = 'visit'; spotIn(spotCam); },
+  visitDrop(d) { const [m] = ui.visit.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
+  async visitSign() {
+    const png = await openPad('Visitor signature');
+    if (!png || !ui.visit) return;
+    const blob = await jpegOf(png), id = uid();
+    await putPhoto(id, blob); await photoUrl(id);
+    if (ui.visit.signId) deletePhoto(ui.visit.signId).catch(() => {});
+    ui.visit.signId = id; draw();
+  },
+  visitCancel() { (ui.visit?.media || []).forEach(m => deletePhoto(m.id).catch(() => {})); if (ui.visit?.signId) deletePhoto(ui.visit.signId).catch(() => {}); ui.visit = null; draw(); },
+  visitSave() {
+    const t = k => String(ui[k] || '').trim();
+    const v = { ...ui.visit, name: t('vName'), org: t('vOrg'), tin: ui.vIn || '', tout: ui.vOut || '', purpose: ui.vPurpose || PURPOSES[0], result: t('vResult'), summary: t('vSummary') }, why = visitMissing(v);
+    if (why) return toast(why);
+    const keep = visitRecord(v, { id: uid(), proj: project().code, date: realToday(), time: now() });
+    const old = store.get().spots || [];
+    store.set({ spots: [keep, ...old.filter(x => !x.sent), ...old.filter(x => x.sent).slice(0, 40)] });
+    ui.visit = null;
+    toast(navigator.onLine ? 'Sending the visit to Central Hub…' : 'Kept on this phone. It goes when there is a connection.');
+    flushSpots();
+  },
+  visitLeft(d) {
+    spotSet(d.v, y => { y.visit.tout = now(); if (y.sent) y.outPending = true; });
+    toast('Leaving time kept.'); flushSpots(); draw();
+  },
   spotCat(d) { ui.spot.cat = d.v; draw(); },
-  spotCam() { spotIn(spotCam); },
+  spotCam() { ui.camFor = ''; spotIn(spotCam); },
   spotVid() { spotIn(spotVid); },
   spotGal() { spotIn(spotGal); },
 
