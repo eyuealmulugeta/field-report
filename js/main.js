@@ -13,7 +13,7 @@ import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWai
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
-import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl } from './core/photos.js';
+import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl, original, screenCopy, ORIG } from './core/photos.js';
 import { listen } from './core/voice.js';
 import * as S from './ui/screens.js';
 import * as W from './ui/work.js';
@@ -782,7 +782,13 @@ async function sendPhotos(k, name, step) {
     const b = await getPhoto(ph.id).catch(() => null);
     if (!b) continue;   // taken on another phone and never sent from there
     step(`Sending photos… ${i} of ${todo.length}`);
-    const res = await call('photoPut', { report: name, id: ph.id, data: (await toDataUrl(b)).split(',')[1] });
+    // 2.51.0 (owner): the camera original in full quality, after a screen copy for Central Hub; the 1600 px copy when the
+    // original is not on this phone (taken before 2.51.0). Time and caption go with it, so the office sees it live.
+    const meta = { time: ph.at || '', caption: ph.caption || '', zone: ph.zone || '' }, o = await getPhoto(ORIG(ph.id)).catch(() => null);
+    const b64 = async x => (await toDataUrl(x)).split(',')[1];
+    if (o) await call('photoPut', { report: name, id: ph.id, kind: 'screen', data: await b64(await screenCopy(o)), ...meta });
+    const res = await call('photoPut', { report: name, id: ph.id, data: await b64(o || b), ...meta });
+    if (o) deletePhoto(ORIG(ph.id)).catch(() => {});
     editKey(k, r => { const x = r.photos.find(y => y.id === ph.id); if (x) { x.drive = res.fileId || 'yes'; x.upAt = Date.now(); } });
   }
 }
@@ -818,6 +824,7 @@ async function cleanPhotos() {
   for (const [k, r] of Object.entries(d)) for (const ph of r.photos || []) if (r.sentAt && ph.drive && !ph.gone && ph.upAt && ph.upAt < limit) old.push([k, ph.id]);
   for (const [k, id] of old) {
     await deletePhoto(id).catch(() => {});
+    deletePhoto(ORIG(id)).catch(() => {});
     editKey(k, r => { const x = r.photos.find(y => y.id === id); if (x) x.gone = true; });
   }
 }
@@ -984,6 +991,7 @@ async function addPhoto(file) {
   try {
     const blob = await shrink(file), id = uid(), o = await orientOfBlob(blob);
     await putPhoto(id, blob);
+    await putPhoto(ORIG(id), await original(file)).catch(() => {});   // 2.51.0: the original goes to Drive, full quality
     await photoUrl(id);
     const r = ensureReport();
     if (ui.camFor === 'item' && ui.item) {
@@ -1937,6 +1945,7 @@ const ACTS = {
     if (ui.photoEditing && !confirm('Delete this photo?')) return;
     edit(r => { r.photos = r.photos.filter(x => x.id !== p.id); r.items.forEach(it => { it.photos = it.photos.filter(x => x !== p.id); }); });
     await deletePhoto(p.id).catch(() => {});
+    deletePhoto(ORIG(p.id)).catch(() => {});
     ui.photoEditing = false; go(ui.photoBack || 'today');
   },
   closeSheet: () => { ui.sheet = ''; draw(); },
