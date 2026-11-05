@@ -96,6 +96,8 @@ export function daySheet(c) {
         : canWrite ? html`<button type="button" class="btn o slim" data-act="openPast" data-v="${x.date}">${icon('doc')}${x.report && x.report.start ? 'Edit' : 'Write'}</button>` : ''}
       ${x.name ? html`<button type="button" class="btn o slim" data-act="${may ? 'dayRev' : 'replySend'}" data-v="${may ? 'comment' : x.name}" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>Comment</button>` : ''}
       ${may && x.name && x.kind !== 'approved' && x.kind !== 'changes' ? html`<button type="button" class="btn o slim bad-t" data-act="dayRev" data-v="changes" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>Send back</button>` : ''}
+      ${may && x.name && x.kind !== 'approved' && x.kind !== 'missing' && x.kind !== 'nowork' ? html`<button type="button" class="btn p slim" data-act="dayRev" data-v="approve" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>${icon('check')}Approve</button>` : ''}
+      ${may && x.name && x.kind === 'approved' ? html`<button type="button" class="btn o slim" data-act="dayRev" data-v="reopen" data-n="${x.name}" ${c.ui.busy ? 'disabled' : ''}>Reopen</button>` : ''}
       ${x.kind !== 'missing' ? html`<button type="button" class="btn t slim bad-t" data-act="dayHide" data-v="${x.date}">Remove</button>` : ''}
     </div>
     <button type="button" class="btn t" data-act="closeSheet">Close</button></div>`;

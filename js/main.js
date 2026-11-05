@@ -1938,6 +1938,7 @@ const ACTS = {
     });
     ui.photoEditing = false;
     toast('Photo saved.');
+    upNow();   // 2.52.0 (owner): sent to Drive at once, also after the report was sent, so Central Hub shows it
     if (d.v === 'again') { ui.camFor = 'photo'; camera(); } else go(ui.photoBack || 'today');
   },
   async dropPhoto() {
@@ -2006,7 +2007,8 @@ function openLink(h) {
   if (!s.auth || !s.profile.done) return false;
   if (code && code !== s.proj && s.projects.some(p => p.code === code)) store.set({ proj: code });
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
-  else if (what === 'review' && kind() !== 'reporter') { (ui.rv ||= {}).want = { d, no }; ui.rv.f = ''; go('review'); ACTS.revLoad(); }
+  // 2.52.0 (owner): a new report opens that report in Reports (its day, with Approve and Send back), not the old Review page
+  else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else go(['crew', 'att', 'crewrev', 'spot', 'reports'].includes(what) ? (what === 'crew' ? 'att' : what) : 'today');
   return true;
