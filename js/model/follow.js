@@ -106,7 +106,14 @@ export function inboxLink(x, year = new Date().getFullYear()) {
   if (k) return `#go=${k[1] === 'crew' ? 'crewrev' : 'crew'}//${k[2]}`;
   const d = /No\.\s*(\d+)\s*\((\d{1,2}) (\w{3})\)/.exec(`${x.h || ''} ${x.m || ''}`);
   if (d && MON[d[3]]) return `#go=day/${year}-${MON[d[3]]}-${d[2].padStart(2, '0')}//${d[1]}`;
-  return /report|approv|changes|comment/i.test(`${x.h || ''}`) ? '#go=reports' : '';
+  // 2.53.0 (owner): every kind of notification opens its page, not only reports and crew
+  const c = String(x.c || ''), h = String(x.h || '');
+  if (/^(dev|devok)-/.test(c) || /device/i.test(h)) return '#go=devices';
+  if (/^spot-/.test(c) || /^(Spotlight|Visitor)/.test(h)) return '#go=spot';
+  if (/^(miss|digest|risk)-/.test(c) || /^(MISSING REPORT|CRITICAL RISK|No work|Report updates)/i.test(h)) return '#go=reports';
+  if (/^(me|sus|su)-/.test(c) || /^(Your name|Sign-in refused|Sign-up request)/.test(h)) return '#go=me';
+  if (/^(send|urg)-/.test(c) || /^Send today/.test(h)) return '#go=today';
+  return /report|approv|changes|comment/i.test(h) ? '#go=reports' : '';
 }
 export const sentBack = rows => rows.filter(x => x.kind === 'changes' && !x.changed);
 /** 2.7.0: what needs the site: reports sent back, and office comments not answered yet (the last word is the office's). */
@@ -150,8 +157,9 @@ export const lateRequest = (q, today) => !!q.neededBy && q.neededBy < today;
 /** The draft another phone keeps in the script (text only; photos stay on that phone): use it, ask, or leave it. */
 export function draftChoice(remote, local, { today, dev }) {
   if (!remote || !remote.s || !remote.s.fr2 || !remote.s.report) return 'none';
-  if (remote.dev === dev || remote.date !== today) return 'none';
-  if (!local || !local.start) return 'load';
+  if (remote.date !== today) return 'none';
+  if (!local || !local.start) return 'load';   // 2.53.0: also this phone's own copy, when the phone lost its draft
+  if (remote.dev === dev) return 'none';
   if (local.sentAt && !(local.updated > local.sentAt + 1000)) return 'none';
   return remote.at > (local.updated || 0) + 120e3 ? 'ask' : 'none';
 }

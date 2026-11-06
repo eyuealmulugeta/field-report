@@ -43,7 +43,8 @@ import { showUrgent } from './ui/urgent.js';   // 2.34.0
 const demo = new URLSearchParams(location.search).has('demo');
 if (demo) useFake(demoServer);
 if (demo && new URLSearchParams(location.search).has('sim')) await loadSim();   // 2.46.0: the project simulation (test mode only)
-const store = createStore(demo ? memoryStorage() : localStorage);
+// 2.53.0: when even the smaller copy does not fit, say so instead of losing the work
+const store = createStore(demo ? memoryStorage() : localStorage, () => { if (Date.now() - (window.fullAt || 0) > 60e3) { window.fullAt = Date.now(); setTimeout(() => toast('The phone storage for Field Report is full: send your report now, then remove old photos or videos.'), 0); } });
 if (demo) store.set({ drafts: demoDrafts() });
 
 const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
@@ -164,7 +165,7 @@ const token = () => (store.get().auth || {}).token;
 async function call(action, body) {
   try { return await post(action, body, token()); }
   catch (e) {
-    if (e.code === 'AUTH') { store.set({ auth: null }); location.hash = ''; }
+    if (e.code === 'AUTH') { store.set({ auth: null }); ui.error = `Signed out: ${e.message}`; location.hash = ''; }   // 2.53.0: the reason stays on the sign-in page
     throw e;
   }
 }
@@ -627,7 +628,7 @@ async function signedIn(pending) {
     let after = '';
     try { after = sessionStorage.getItem(AFTER) || ''; } catch { /* none */ }
     if (after === 'emp') { ui.attTab = 'emp'; go('att'); try { sessionStorage.setItem(AFTER, 'done'); } catch { /* once */ } } else go('today');   // 2.43.1: back to Candidate, once
-    checkStatus(); devCheck(true); inboxCheck(true);
+    checkStatus(); devCheck(true); inboxCheck(true); pullDraft();   // 2.53.0: a draft lost with the sign-out comes back
     goLive(takeGoogleToken());
   } catch (e) {
     if (e.code === 'SIGNUP') ui.signup = { email: (e.reply && e.reply.email) || (ui.signup || {}).email || '', sent: !!(ui.signup && ui.signup.asking), msg: e.message };
@@ -1354,7 +1355,7 @@ const ACTS = {
     finally { ui.busy = false; draw(); }
   },
   inboxRead(d) { if (d.t) store.set({ inboxRead: [...new Set([...(store.get().inboxRead || []), d.t])].slice(-200) }); draw(); },   // 2.39.0
-  inboxGo(d) { if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.8.1: the same link twice opens again
+  inboxGo(d) { ui.inboxOpen = false; if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.53.0: the list closes, so the page opened is seen   // 2.8.1: the same link twice opens again
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   // 2.49.0 (owner, R3): Visitors
@@ -2010,6 +2011,8 @@ function openLink(h) {
   // 2.52.0 (owner): a new report opens that report in Reports (its day, with Approve and Send back), not the old Review page
   else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
+  else if (what === 'devices') { go('me'); devCheck(true); }   // 2.53.0: a new device waits on Me > Devices
+  else if (what === 'me' || what === 'requests') go(what);
   else go(['crew', 'att', 'crewrev', 'spot', 'reports'].includes(what) ? (what === 'crew' ? 'att' : what) : 'today');
   return true;
 }
