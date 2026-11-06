@@ -36,6 +36,7 @@ import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
+import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
 import { onSwipe } from './core/swipe.js';
 import { offerInstall } from './core/install.js';   // 2.32.0
 import { showUrgent } from './ui/urgent.js';   // 2.34.0
@@ -61,6 +62,7 @@ const SCREENS = {
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
   spot: SP.spot, attention: S.attention,              // 2.7.0
   quick: Q.quick,                                      // 2.11.0
+  media: MD.media,                                     // 2.54.0: the GM's Dashboard
 };
 const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
 
@@ -278,6 +280,8 @@ async function goLive(at = '') {
       if (d.lists && d.lists !== seen.lists) loadSetup();
       if (d.crew && d.crew !== seen.crew) crewSoon();   // 2.16.0: now and again a little later
     },
+    // 2.54.0 (owner): the trades of Central Hub's Manpower Directory, the one list every trade is picked from
+    onPingTrades: list => { if (JSON.stringify(list) !== JSON.stringify(store.get().trades || [])) store.set({ trades: list }); },
     onTeam: team => { ui.team = team; ui.teamOf = p.code; store.set({ gone: { ...(store.get().gone || {}), [p.code]: team.filter(m => m.active === false).map(m => m.id) } }); crewFollow(); draw(); },
     onUrgent: list => showUrgent(list, a.email, (store.get().profile || {}).name || '', L.answerUrgent),   // 2.34.0
     onDay: (marks, ok) => { ui.marks = marks; ui.dayOk = ok; ui.marksOf = p.code; crewFollow(); draw(); },
@@ -805,6 +809,24 @@ async function drivePhoto(report, id) {
   return b;
 }
 
+/** 2.54.0: the GM's Dashboard: the day's photos (script dayPhotos), the project's videos (videoList), each photo read from Drive. */
+async function mediaLoad() {
+  const p = project(), day = ui.mDay || realToday();
+  if (!p) return;
+  const k = `${p.code}|${day}`;
+  ui.mPhotos ||= {}; ui.mVids ||= {}; ui.mUrl ||= {}; ui.mErr = '';
+  try {
+    if (!ui.mVids[p.code]) ui.mVids[p.code] = (await call('videoList', { proj: p.code })).videos || [];
+    ui.mPhotos[k] = (await call('dayPhotos', { proj: p.code, date: day })).photos || [];
+  } catch (e) { ui.mErr = e.message; ui.mPhotos[k] = ui.mPhotos[k] || []; }
+  draw();
+  for (const ph of ui.mPhotos[k] || []) {
+    if (ui.mUrl[ph.id]) continue;
+    const b = await drivePhoto(ph.report, ph.id);
+    if (b) { ui.mUrl[ph.id] = URL.createObjectURL(b); if (route() === 'media') draw(); }
+  }
+}
+
 /** The thumbnail of a photo that left this phone: from Drive, through the report that holds it. */
 async function driveUrl(id) {
   const d = store.get().drafts;
@@ -1113,8 +1135,12 @@ spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
 /* 2.50.0 (owner, 5 Nov, R4): a live video from the report camera. Central Hub only, never the report; kept 30 days. */
 const repVid = document.getElementById('repVid');
 const videoSet = (id, patch) => store.set({ videos: (store.get().videos || []).map(v => (v.id === id ? { ...v, ...patch } : v)) });
-repVid.addEventListener('change', async () => {
-  const f = repVid.files?.[0], p = project();
+// 2.54.0 (owner): a video from the gallery too, marked as such; the same 60 seconds and Dashboard only
+const repVidGal = document.getElementById('repVidGal');
+repVid.addEventListener('change', () => keepVideo(repVid.files?.[0], false));
+repVidGal.addEventListener('change', () => keepVideo(repVidGal.files?.[0], true));
+async function keepVideo(f, gal) {
+  const p = project();
   if (!f || !p) return;
   const k = mediaKind(f);
   if (k.refused || k.kind !== 'video') { toast(k.refused || 'That is not a video.'); return; }
@@ -1127,12 +1153,12 @@ repVid.addEventListener('change', async () => {
     }
     const id = uid();
     await putPhoto(id, blob);
-    store.set({ videos: videoAdd(store.get().videos, { id, proj: p.code, date: realToday(), time: now(), type: blob.type || f.type || 'video/mp4', sent: false }) });
+    store.set({ videos: videoAdd(store.get().videos, { id, proj: p.code, date: realToday(), time: now(), type: blob.type || f.type || 'video/mp4', sent: false, ...(gal ? { gal: true } : {}) }) });
     toast('Video kept. It goes to Central Hub only.');
   } catch (e) { toast(k.shrink ? e.message || String(e) : `Could not keep it on this phone (${e.message || e}).`); }
   finally { ui.vidWork = ''; draw(); }
   flushVideos();
-});
+}
 let videoing = false;
 async function flushVideos() {
   const waiting = videoWaiting(store.get().videos);
@@ -1142,7 +1168,7 @@ async function flushVideos() {
     for (const v of waiting.reverse()) {
       const blob = await getPhoto(v.id);
       if (!blob) { videoSet(v.id, { gone: true }); continue; }
-      await call('repVideo', { proj: v.proj, id: v.id, date: v.date, time: v.time, type: v.type, data: await toDataUrl(blob) });
+      await call('repVideo', { proj: v.proj, id: v.id, date: v.date, time: v.time, type: v.type, ...(v.gal ? { gal: 1 } : {}), data: await toDataUrl(blob) });
       videoSet(v.id, { sent: true, sentAt: Date.now() });
       deletePhoto(v.id).catch(() => {});
       toast(`Video sent to Central Hub (${v.time}).`);
@@ -1253,6 +1279,7 @@ const ACTS = {
   projPop: () => { ui.projPop = !ui.projPop; draw(); },
   projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
+  revTab(d) { ui.revTab = d.v; draw(); },   // 2.54.0
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
     ui.refreshing = true; draw();   // 2.42.0: the button says Refreshing…
@@ -1356,6 +1383,10 @@ const ACTS = {
   },
   inboxRead(d) { if (d.t) store.set({ inboxRead: [...new Set([...(store.get().inboxRead || []), d.t])].slice(-200) }); draw(); },   // 2.39.0
   inboxGo(d) { ui.inboxOpen = false; if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.53.0: the list closes, so the page opened is seen   // 2.8.1: the same link twice opens again
+  // 2.54.0 (owner): the GM's Dashboard: the week's photos and videos from site
+  mediaOpen() { ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
+  mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
+  mediaBig(d) { ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw(); },
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   // 2.49.0 (owner, R3): Visitors
@@ -1925,6 +1956,7 @@ const ACTS = {
   /* photos */
   logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; camera(); },
   logVideo() { if (ui.vidWork) return; repVid.value = ''; repVid.click(); },   // 2.50.0
+  galVideo() { if (ui.vidWork) return; repVidGal.value = ''; repVidGal.click(); },   // 2.54.0
   videoDrop(d) { const v = (store.get().videos || []).find(x => x.id === d.v); if (!v || v.sent) return; deletePhoto(v.id).catch(() => {}); store.set({ videos: store.get().videos.filter(x => x.id !== v.id) }); draw(); },
   galPhoto() { if (P.isGM({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0
   itemPhoto() { ui.camFor = 'item'; camera(); },
@@ -2002,6 +2034,15 @@ function context() {
   };
 }
 
+/** 2.54.0: the button on a notification: Approve after one question (the list may still be loading), Send back asks for the reason. */
+function notifAct(how, date, no, tries = 0) {
+  const p = project();
+  const x = p && monthDays(realToday(), p, store.get().drafts, store.get().known, (store.get().others || {})[p.code]).find(y => y.date === date && String(y.no) === String(no));
+  if (!x || !x.name) { if (tries < 10) setTimeout(() => notifAct(how, date, no, tries + 1), 1000); else toast('Open the report and choose there.'); return; }
+  if (how === 'changes') return toast('Write what must change, then tap Send back.');
+  if (confirm(`Approve report No. ${x.no} (${date})?`)) ACTS.dayRev({ v: 'approve', n: x.name });
+}
+
 /** 2.7.0: a notification's link (#go=what/date/project/no) opens its item: the day of a report, a report to review, the crew. */
 function openLink(h) {
   const [what, d, code, no] = decodeURIComponent(h.slice(3)).split('/'), s = store.get();
@@ -2010,6 +2051,13 @@ function openLink(h) {
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
   // 2.52.0 (owner): a new report opens that report in Reports (its day, with Approve and Send back), not the old Review page
   else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }
+  // 2.54.0 (owner): Approve or Send back tapped on the phone notification: the report opens, Approve asks once, Send back waits for the reason
+  else if (what === 'act') {
+    const [, how, date, pcode, pno] = decodeURIComponent(h.slice(3)).split('/');
+    if (!['approve', 'changes'].includes(how) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) { go('reports'); return true; }
+    if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
+    go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
+  }
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else if (what === 'devices') { go('me'); devCheck(true); }   // 2.53.0: a new device waits on Me > Devices
   else if (what === 'me' || what === 'requests') go(what);

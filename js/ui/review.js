@@ -7,6 +7,10 @@ import { head, stepHead, isGM } from './parts.js';
 import { STATUS, offlineLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
+import { requests } from './follow.js';
+
+// 2.54.0 (owner): Reports and Requests side by side as two tabs inside Review
+const revTabs = t => html`<div class="seg wide rev-tabs" role="group" aria-label="Review"><button type="button" class="${t === 'rep' ? 'on' : ''}" data-act="revTab" data-v="rep" aria-pressed="${t === 'rep'}">Reports</button><button type="button" class="${t === 'req' ? 'on' : ''}" data-act="revTab" data-v="req" aria-pressed="${t === 'req'}">Requests</button></div>`;
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 /** 2.7.0: the project's working hours; the PM or GM with the right sets them. Late attendance = start + 15 min. */
@@ -33,10 +37,11 @@ export function review(c) {
   // 2.37.0 (owner): the list opens on All
   const rv = c.ui.rv || {}, f = rv.f ?? '', list = reviewRows(rv.list, all ? '' : c.project.code, f);
   const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
+  if (c.ui.revTab === 'req') return { tab: c.kind === 'viewer' ? 'review' : 'me', head: head('Review', `${c.project.name} · Requests`), body: html`${revTabs('req')}${requests(c).body}` };
   return {
     tab: c.kind === 'viewer' ? 'review' : 'me',
     head: head('Review', `${all ? 'All projects' : c.project.name} · ${KIND_WORD[c.kind]}`, rv.busy ? 'Refreshing…' : ''),
-    body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
+    body: html`${revTabs('rep')}<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
         <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Refreshing…' : rv.list ? 'Refresh' : 'Show the reports'}</button>
         ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}</div>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>

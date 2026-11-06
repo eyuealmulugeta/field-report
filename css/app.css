@@ -570,3 +570,11 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 /* 2.50.0: today's videos under the photos */
 .vlist { margin: 10px 0 4px; display: grid; gap: 6px; }
 .vlist .li { display: flex; align-items: center; gap: 8px; }
+
+/* 2.54.0: the GM's Dashboard */
+.m-days { overflow-x: auto; flex-wrap: nowrap; }
+.m-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.m-tile { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: none; text-align: left; min-height: 120px; }
+.m-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
+.m-big { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.m-big img { max-width: 100%; max-height: 88vh; object-fit: contain; }

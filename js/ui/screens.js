@@ -126,7 +126,7 @@ export function today(c) {
       body: html`${widget(c)}${sentBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
-        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>`,
+        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button>${isGM(c) ? html`<button type="button" class="btn t" data-act="mediaOpen">Dashboard</button>` : ''}</div>`,
     };
   }
   return {
@@ -219,7 +219,7 @@ export function crew(c, inAtt = false) {
         ${list.length ? '' : html`<div class="li muted small">No one matches.</div>`}</div>`}`
       : html`<p class="callout warn">The office has not sent a crew list for this project yet. Add day workers below, or ask the office to add the crew in Central Hub.</p>`}
       <div class="k">Day workers without names</div>
-      <div class="box">${cr.extra.map((x, i) => html`<div class="li"><input class="fld slim" data-f="crew.extra.${i}.trade" value="${x.trade}" placeholder="Trade" aria-label="Trade">${stepper('extra', x.qty, x.qty, i)}</div>`)}
+      <div class="box">${cr.extra.map((x, i) => html`<div class="li">${tradeField(c, x.trade, `crew.extra.${i}.trade`)}${stepper('extra', x.qty, x.qty, i)}</div>`)}
         <button type="button" class="li" data-act="addExtra"><span class="ic">${icon('plus')}</span><div class="n"><b>Add day workers</b><span>Trade and count</span></div></button></div>
       ${confirmBox(c)}
       ${inAtt ? '' : crewListBox(c)}`,
@@ -338,7 +338,7 @@ function staffRow(c, x) {
   const may = !!x.id && (crewBoss(c) || c.kind === 'reporter'), mine = may && c.ui.live === 'on', del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
   const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>` : '';
   if (c.ui.cd && c.ui.cd.id === x.id) return cdForm(c, x);
-  if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${[...new Set([...TRADES, x.trade].filter(Boolean))].map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
+  if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${tradesOf(c, x.trade).map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <input class="fld slim" data-ui="cePhone" value="${c.ui.cePhone ?? (x.phone || '')}" placeholder="Phone" inputmode="tel" aria-label="Phone"><button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   const info = c.ui.crewInfo && c.ui.crewInfo.code === c.project.code && c.ui.crewInfo.info[x.id];
   // 2.45.0 (owner): what Central Hub's employee record still misses, under the name
@@ -355,7 +355,7 @@ function cdForm(c, x) {
   const fld = (k, label, attrs = '') => html`<label class="lab">${label}</label><input class="fld ${f[k] ? '' : 'cd-miss'}" data-cd="${k}" value="${f[k] || ''}" ${attrs}>`;
   return html`<div class="box pad cd-form"><div class="spread"><b>Employee data · ${x.name}</b><button type="button" class="mini" data-act="cdClose" aria-label="Close">✕</button></div>
     ${fld('name', 'Full name')}
-    <label class="lab">Trade</label><select class="fld" data-cd="title">${[...new Set([...TRADES, f.title].filter(Boolean))].map(n => html`<option ${n === f.title ? 'selected' : ''}>${n}</option>`)}</select>
+    <label class="lab">Trade</label><select class="fld" data-cd="title">${tradesOf(c, f.title).map(n => html`<option ${n === f.title ? 'selected' : ''}>${n}</option>`)}</select>
     ${fld('privatePhone', 'Phone', 'type="tel" inputmode="tel"')}
     ${fld('nationality', 'Nationality')}
     ${fld('idNumber', 'Fayda ID number', 'inputmode="numeric"')}
@@ -377,11 +377,11 @@ function crewPhotoBox(c) {
 
 /** 2.8.0: the usual trades on site; the project's own (wages, crew) are added to them. */
 export const TRADES = ['Foreman', 'Site supervision', 'Site Technician', 'Welder / fitter', 'Rigger / erector', 'Crane operator', 'Mason', 'Carpenter', 'Steel fixer', 'Electrician', 'Plumber', 'Painter', 'Driver', 'Labourer'];
-/** A trade picked from the list; "Add a trade not listed" turns it into a box to type a new one. */
+/** 2.54.0 (owner): the trades of Central Hub's Manpower Directory (the built-in list until the phone has it); a value already
+ *  given stays choosable. Nothing is typed: a missing trade is added in Central Hub (Manpower Directory, + Add a position). */
+export const tradesOf = (c, cur = '') => [...new Set([...(c.s.trades && c.s.trades.length ? c.s.trades : TRADES), cur].filter(Boolean))];
 function tradeField(c, v, path) {
-  const list = [...new Set([...TRADES, ...Object.keys(c.project.tradeWages || {}), ...((c.report && c.report.crew && c.report.crew.rows) || []).map(r => r.trade).filter(Boolean)])];
-  if (v === '+' || (v && !list.includes(v))) return html`<input class="fld slim" data-f="${path}" value="${v === '+' ? '' : v}" placeholder="New trade" aria-label="New trade" autofocus>`;
-  return html`<select class="fld slim" data-f="${path}" aria-label="Trade"><option value="">Trade…</option>${list.map(n => html`<option ${n === v ? 'selected' : ''}>${n}</option>`)}<option value="+">+ Add a trade not listed</option></select>`;
+  return html`<select class="fld slim" data-f="${path}" aria-label="Trade"><option value="">Trade…</option>${tradesOf(c, v === '+' ? '' : v).map(n => html`<option ${n === v ? 'selected' : ''}>${n}</option>`)}</select>`;
 }
 
 /** 2.5.0: names and trades sent for approval as the crew of this project. 2.6.0: only a reviewer sees and gives wages. */
@@ -474,6 +474,7 @@ export function me(c) {
         : sigLine(p)}
       <div class="k">Project</div>
       ${isGM(c) ? html`<div class="box pad">${projTop(c)}</div>` : ''}<div class="box ${isGM(c) ? 'hide' : ''}">${c.s.projects.map(x => html`<button type="button" class="li" data-act="pickProject" data-v="${x.code}"><span class="ic ${x.code === c.s.proj ? 'ok' : ''}">${icon(x.code === c.s.proj ? 'check' : 'pin')}</span><div class="n"><b>${x.name}</b><span>${x.code}</span></div></button>`)}</div>
+      ${isGM(c) ? html`<button type="button" class="btn o" data-act="mediaOpen">${icon('cam')}Dashboard: photos and videos</button>` : ''}   <!-- 2.54.0 -->
       ${c.kind === 'reviewer' ? html`<div class="k">Crew & Hours</div><button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(pr && pr.crewWait || []).length ? ` · ${pr.crewWait.length} waiting` : ''}</button>
       <p class="muted tiny">Working hours, days off and the crew the site sent. Days off for this project: ${off || 'none'}.</p>` : ''}
       ${liveLine(c.ui, c.ui.liveWhy || '', L.liveLast())}

@@ -101,7 +101,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -140,7 +140,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
       stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', p2, 'requests'), F.where('site', '==', true)), snap => onReqAll(c2, snap.docs.map(x => x.data())), () => {}));
     }
     // 2.13.0: Central Hub's "something changed" signals, the team (names, trades, taken off) and the crew photos
-    stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => onPing(d.data() || {}), () => {}));
+    stops.push(F.onSnapshot(F.doc(db, 'fieldPing', pid), d => { const v = d.data() || {}; onPing(v); if (Array.isArray(v.trades) && v.trades.length) onPingTrades(v.trades.map(String)); }, () => {}));   // 2.54.0: and the trade list
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'team'), snap => onTeam(snap.docs.map(x => ({ id: x.id, ...pick(x.data()) }))), () => {}));
     stops.push(F.onSnapshot(F.doc(db, 'fieldPhotos', pid), d => onPhotos((d.data() || {}).m || {}), () => {}));
     // 2.15.0: today's attendance marks from every phone and computer of the project
