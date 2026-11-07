@@ -39,6 +39,8 @@ import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
+import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
+import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
@@ -70,6 +72,7 @@ const SCREENS = {
   reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports')}${v.body}` }; },
   penalties: PN.penalties,   // 2.57.0
   store: SM.store,   // 2.61.0 (R5)
+  share: SH.share, shots: SH.shots,   // 2.66.0
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
   view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
@@ -305,6 +308,7 @@ async function goLive(at = '') {
     onPenalties: list => { ui.pens = list; draw(); },   // 2.57.0
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
+    onShots: list => { ui.shList = list; draw(); },   // 2.66.0
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -1078,6 +1082,36 @@ async function addPhoto(file) {
   } catch (e) { toast(`The photo could not be saved on this phone (${e.message || e}).`); }
 }
 
+/** 2.66.0: approve or reject a technician's photos. */
+async function shDecide(id, status, reason = '') {
+  ui.busy = true; draw();
+  try { await L.shotStatus(id, status, (store.get().profile || {}).name || '', reason); toast(status === 'approved' ? 'Approved.' : 'Rejected. The technician sees why.'); }
+  catch (e) { toast(`Not saved: ${e.message}`); }
+  ui.busy = false; draw();
+}
+/** 2.66.0: a work photo made small (about 230 KB) and checked for clearness on a 160-px grey copy. */
+async function shotPhoto(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
+  const src = bmp || await new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = URL.createObjectURL(file); });
+  const g = document.createElement('canvas'), k0 = 160 / Math.max(src.width, src.height);
+  g.width = Math.max(8, Math.round(src.width * k0)); g.height = Math.max(8, Math.round(src.height * k0));
+  const gx = g.getContext('2d'); gx.drawImage(src, 0, 0, g.width, g.height);
+  const px = gx.getImageData(0, 0, g.width, g.height).data, gray = new Uint8ClampedArray(g.width * g.height);
+  for (let i = 0; i < gray.length; i++) gray[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+  const q = qualityOf(gray, g.width, g.height);
+  const c = document.createElement('canvas');
+  let side = 1280, jq = 0.72, url = '';
+  for (let i = 0; i < 8; i++) {
+    const k = Math.min(1, side / Math.max(src.width, src.height));
+    c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    url = c.toDataURL('image/jpeg', jq);
+    if (url.length <= PHOTO_CHARS) break;
+    side = Math.round(side * 0.8); jq = Math.max(0.45, jq - 0.05);
+  }
+  return { url, q };
+}
+
 /** 2.5.0: the crew photo's time (the server's when online) and place, and whether it is on time. */
 const crewClock = () => (demo && new URLSearchParams(location.search).get('t')) || now();
 const where = () => new Promise(res => {
@@ -1766,6 +1800,24 @@ const ACTS = {
     catch (e) { toast(`Not saved: ${e.message}`); }
     ui.busy = false; draw();
   },
+  // 2.66.0 (owner): a technician's work photos; the SE / PM approves or rejects with a reason
+  shTake() { const i = document.getElementById('shCam'); i.value = ''; i.click(); },
+  shDel(d) { if (ui.sh && ui.sh.photos) { ui.sh.photos.splice(Number(d.v), 1); draw(); } },
+  async shSave() {
+    const p = project(), f = ui.sh || {}, tasks = ((p && p.setup) || {}).tasks || [];
+    const why = shotProblem(f, { tasks });
+    if (why) return toast(why);
+    if (demo) { ui.sh = null; toast('Demo: not sent.'); return draw(); }
+    ui.busy = true; draw();
+    try {
+      const geo = await where(), t = tasks.find(x => x.id === f.taskId);
+      const ok = await L.saveShot(({ email, at, pid, id }) => shotRecord({ ...f, taskName: t ? t.name : '' }, { email, byName: (store.get().profile || {}).name || '', at, pid, id, dev: devId(), geo, date: realToday() }));
+      if (ok) { ui.sh = null; toast('Sent to the Site Engineer / PM.'); } else toast('Not connected to Central Hub. Try again.');
+    } catch (e) { toast(`Not sent: ${e.message}`); }
+    ui.busy = false; draw();
+  },
+  async shOk(d) { await shDecide(d.id, 'approved'); },
+  async shNo(d) { await shDecide(d.id, 'rejected', ui[`shWhy.${d.id}`] || 'blur'); },
   // 2.61.0 (R5): the store
   smOpen(d) { ui.sm = { kind: d.v, date: realToday(), cnt: {} }; draw(); },
   smClose() { ui.sm = null; draw(); },
@@ -2184,6 +2236,8 @@ function route() {
   if (h === 'crew') h = 'att';   // 2.10.0: the day's Attendance step is the Office attendance tab
   // 2.6.0: a reviewer or viewer account writes no report: it opens on Review
   if (h === 'review') h = 'reports';   // 2.55.0 (owner): the old Review list is replaced by Reports and Requests
+  if (kind() === 'technician') return h === 'me' ? 'me' : 'share';   // 2.66.0 (owner): a technician opens only Share work
+  if (h === 'share') return 'today';
   if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'reports';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
   if (!screenOk(s.rules, h)) return firstOk(s.rules);   // 2.60.0 (owner, G6): a page the rules hide does not open by any address
@@ -2256,6 +2310,18 @@ root.addEventListener('click', e => {
   if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
 });
 
+// 2.66.0: the technician's photo, from the camera only; refused on the phone when blurred, dark or too bright
+document.getElementById('shCam').addEventListener('change', async e => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  ui.sh ||= { photos: [] }; ui.sh.photos ||= []; ui.shBusy = true; ui.shWhy = ''; draw();
+  try {
+    const x = await shotPhoto(f);
+    if (!x.q.ok) ui.shWhy = x.q.why;
+    else if (ui.sh.photos.length < MAX_PHOTOS) ui.sh.photos.push(x);
+  } catch { toast('That picture could not be read.'); }
+  ui.shBusy = false; draw();
+});
 const SMF = { smTask: 'taskId', smPo: 'poId', smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
 // 2.61.0 (R5): the delivery note, from the camera only; a known item fills its unit
 document.getElementById('smCam').addEventListener('change', async e => {
@@ -2276,6 +2342,7 @@ root.addEventListener('input', e => {
   if (el.dataset.cd && ui.cd) { ui.cd.f[el.dataset.cd] = el.value; return; }   // 2.45.0
   // 2.61.0 (R5): the store's form, its counts and minimums
   if (el.dataset.ui && /^sm(Cnt|Min)\./.test(el.dataset.ui)) { const i = el.dataset.ui.indexOf('.'), a = el.dataset.ui.slice(0, i), k = el.dataset.ui.slice(i + 1); if (a === 'smCnt' && ui.sm) (ui.sm.cnt ||= {})[k] = el.value; else if (a === 'smMin') (ui.smMin ||= {})[k] = el.value; return; }
+  if (el.dataset.ui === 'shTask' || el.dataset.ui === 'shNote') { (ui.sh ||= { photos: [] })[el.dataset.ui === 'shTask' ? 'taskId' : 'note'] = el.value; return; }   // 2.66.0
   if (el.dataset.ui && SMF[el.dataset.ui] && ui.sm) { ui.sm[SMF[el.dataset.ui]] = el.value; return; }
   if (el.dataset.ui) { ui[el.dataset.ui] = el.value; if (el.dataset.ui === 'q') draw(); return; }
   const f = el.dataset.f;

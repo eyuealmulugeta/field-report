@@ -2,8 +2,9 @@
 // approves, sends back and comments, and gives the crew their wages; a viewer only reads. Central Hub's access rules
 // decide the rest on the script.
 
-export const kindOf = role => (role === 'coordinator' || role === 'admin' ? 'reviewer' : role === 'viewer' || role === 'exec' ? 'viewer' : 'reporter');
-export const KIND_WORD = { reporter: 'Site', reviewer: 'Approve, send back, comment', viewer: 'View only' };
+// 2.66.0 (owner): a technician only shares photos of the work done
+export const kindOf = role => (role === 'technician' ? 'technician' : role === 'coordinator' || role === 'admin' ? 'reviewer' : role === 'viewer' || role === 'exec' ? 'viewer' : 'reporter');
+export const KIND_WORD = { reporter: 'Site', reviewer: 'Approve, send back, comment', viewer: 'View only', technician: 'Share work photos' };
 
 export const REVIEW_FILTERS = [['', 'All'], ['approved', 'Approved'], ['changes', 'Sent back'], ['submitted', 'Waiting']];   // 2.26.0: owner's order
 /** The reports of one project, newest first, filtered by status. */

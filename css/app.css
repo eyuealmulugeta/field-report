@@ -590,3 +590,9 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .sm-form .lab{display:block;margin-top:10px}
 .sm-form .btn.slim{margin:4px 0}
 .fc-days{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}   /* 2.64.0 R8 forecast */
+
+/* 2.66.0: technicians' work photos */
+.sh-photos{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.sh-photos img{width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#ddd)}
+.sh-ph{display:flex;flex-direction:column;gap:4px;align-items:center}
+.sh-rev .row{gap:8px;align-items:center;flex-wrap:wrap}

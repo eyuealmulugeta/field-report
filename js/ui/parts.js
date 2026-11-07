@@ -20,7 +20,8 @@ export const REVIEW_TABS = [
 /** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
 // 2.16.1: Review before Quick (owner, 1 Nov)
 // 2.37.0 (owner): a reviewer's Review and Crew & Hours open from Me, not the tab bar
-export const tabsFor = (kind, rules = null) => (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : TABS).filter(t => screenOk(rules, t.id));   // 2.60.0 (G6)
+export const TECH_TABS = [{ id: 'share', title: 'Share work', icon: 'cam' }];   // 2.66.0
+export const tabsFor = (kind, rules = null) => kind === 'technician' ? TECH_TABS : (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : TABS).filter(t => screenOk(rules, t.id));   // 2.60.0 (G6)
 
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
@@ -36,9 +37,9 @@ export const ALL_PROJ = new Set(['reports', 'requests', 'review']);
 export const projTop = (c, all = false) => html`<div class="proj-top"><select data-proj aria-label="Project">${all ? html`<option value="*" ${c.ui && c.ui.allProj ? 'selected' : ''}>All projects</option>` : ''}${c.s.projects.map(x => html`<option value="${x.code}" ${x.code === c.s.proj && !(all && c.ui && c.ui.allProj) ? 'selected' : ''}>${x.name} · ${x.code}</option>`)}</select></div>`;
 
 // 2.55.0: Requests, Review and a report's review light the Review tab
-export const tabOf = on => (['requests', 'penalties', 'store', 'review', 'rev'].includes(on) ? 'reports' : on);
+export const tabOf = on => (['requests', 'penalties', 'store', 'shots', 'review', 'rev'].includes(on) ? 'reports' : on);
 /** 2.55.0 (owner): the two tabs inside Review. */
-export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button></div>`;   // 2.57.0; Store 2.61.0
+export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button><button type="button" class="${on === 'shots' ? 'on' : ''}" data-act="go" data-to="shots" aria-pressed="${on === 'shots'}">Photos</button></div>`;   // Photos 2.66.0   // 2.57.0; Store 2.61.0
 export const nav = (on, badges = {}, kind = 'reporter', rules = null) => html`<nav class="nav">${tabsFor(kind, rules).map(t => html`
   <button type="button" class="${t.id === tabOf(on) ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;
