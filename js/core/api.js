@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.55.0';
+export const APP_VERSION = '2.57.0';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -11,6 +11,8 @@ const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40
  * This phone's id for the Admin's new-device check (script 7.28.0): random, kept on the phone, sent with every request.
  * 2.2.0: kept twice (storage and a cookie), so clearing one does not make the phone look new and wait for approval again.
  */
+let wiped = false;   // 2.56.0: true when this launch had to make a new id (the phone had cleared the app's data)
+export const deviceWiped = () => wiped;
 export function deviceId() {
   let d = '', kept = false;
   try { d = localStorage.getItem('afr_devid') || ''; } catch { /* no storage */ }   // the same id as Field Report 1 on this phone (same address), so one approval covers both
@@ -18,10 +20,49 @@ export function deviceId() {
   if (!DEV_RE.test(d)) {
     const a = new Uint8Array(12); crypto.getRandomValues(a);
     d = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+    wiped = true;
+    try { localStorage.setItem('afr_wiped', '1'); } catch { /* this launch only */ }   // kept until the next sign-in (Google sign-in reloads the page)
   }
   try { if (localStorage.getItem('afr_devid') !== d) localStorage.setItem('afr_devid', d); kept = true; } catch { /* the cookie may still keep it */ }
   try { if (devCookie() !== d) document.cookie = `afr_devid=${d}; max-age=34560000; path=${location.pathname.replace(/[^/]*$/, '')}; SameSite=Strict; Secure`; } catch { /* storage only */ }
   return kept || devCookie() === d ? d : 'nostorage00';
+}
+
+/**
+ * 2.56.0: the id is also kept in IndexedDB and in a cache of its own, so a phone that clears only the storage or only the cookies
+ * gets its id back (restored before anything else runs). A full wipe clears these too: the script then knows the person and the phone.
+ */
+const DEV_CACHE = 'afr-dev', DEV_URL = '/__afr_devid';
+function idb(fn) {
+  return new Promise(res => {
+    try {
+      const o = indexedDB.open('afr-dev', 1);
+      o.onupgradeneeded = () => o.result.createObjectStore('k');
+      o.onsuccess = () => { try { const t = o.result.transaction('k', 'readwrite'), r = fn(t.objectStore('k')); t.oncomplete = () => res(r && r.result); t.onerror = () => res(''); } catch { res(''); } };
+      o.onerror = () => res('');
+    } catch { res(''); }
+  });
+}
+export async function deviceRestore() {
+  let have = '';
+  try { have = localStorage.getItem('afr_devid') || ''; } catch { /* no storage */ }
+  if (!DEV_RE.test(have)) have = devCookie();
+  let d = have;
+  if (!DEV_RE.test(d)) d = String(await idb(s => s.get('id')) || '');
+  if (!DEV_RE.test(d)) { try { const r = await (await caches.open(DEV_CACHE)).match(DEV_URL); d = r ? (await r.text()).trim() : ''; } catch { d = ''; } }
+  if (!DEV_RE.test(d)) { d = deviceId(); if (d === 'nostorage00') return ''; have = d; }
+  if (d !== have) { try { localStorage.setItem('afr_devid', d); } catch { /* the cookie may keep it */ } }
+  await idb(s => s.put(d, 'id'));
+  try { await (await caches.open(DEV_CACHE)).put(DEV_URL, new Response(d)); } catch { /* storage and cookie only */ }
+  return d;
+}
+
+/** 2.56.0: a few facts about the phone (screen, processor, memory, time zone): with the model they tell the script it is the same phone. */
+export function deviceFp() {
+  try {
+    const w = screen.width, h = screen.height;
+    return [Math.min(w, h) + 'x' + Math.max(w, h) + '@' + (devicePixelRatio || 1), navigator.hardwareConcurrency || '', navigator.deviceMemory || '', Intl.DateTimeFormat().resolvedOptions().timeZone || ''].join('|').slice(0, 60);
+  } catch { return ''; }
 }
 
 /** 'app' when opened from the home screen, else 'browser': on an iPhone these are two separate phones to the Admin. */
@@ -69,7 +110,9 @@ export async function post(action, body = {}, token = '') {
 
 /** The script's sign-in; a new or denied device is refused with "Unauthorized user". */
 async function signinPost(body) {
-  try { const r = await post('signin', body); sendWhere(r); return r; }
+  let w = wiped; try { w = w || localStorage.getItem('afr_wiped') === '1'; } catch { /* this launch only */ }
+  body = { ...body, fp: deviceFp(), ...(w ? { wiped: 1 } : {}) };   // 2.56.0
+  try { const r = await post('signin', body); sendWhere(r); try { localStorage.removeItem('afr_wiped'); } catch { /* fine */ } return r; }
   catch (e) {
     // 2.4.0 (script 7.35.0): a Google account without access asks to join; the sign-up form sends the name and phone with the same sign-in
     if (e.code === 'SIGNUP') {

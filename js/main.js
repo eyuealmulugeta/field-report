@@ -1,6 +1,6 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, takeGoogleToken } from './core/api.js';
+import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, takeGoogleToken } from './core/api.js';
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
 import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
@@ -36,6 +36,8 @@ import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
+import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
+import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
 import { onSwipe } from './core/swipe.js';
 import { offerInstall } from './core/install.js';   // 2.32.0
@@ -48,6 +50,7 @@ if (demo && new URLSearchParams(location.search).has('sim')) await loadSim();   
 const store = createStore(demo ? memoryStorage() : localStorage, () => { if (Date.now() - (window.fullAt || 0) > 60e3) { window.fullAt = Date.now(); setTimeout(() => toast('The phone storage for Field Report is full: send your report now, then remove old photos or videos.'), 0); } });
 if (demo) store.set({ drafts: demoDrafts() });
 
+await deviceRestore().catch(() => '');   // 2.56.0: the device id back from IndexedDB or its cache before any request
 const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
 const realToday = () => (demo ? demoToday() : todayIn());
 /** The day being reported: today, or an earlier day opened from Reports to write or correct. */
@@ -60,6 +63,7 @@ const SCREENS = {
   end: E.end, request: E.request, send: E.send,
   // 2.55.0 (owner): Reports and Requests are the two tabs inside Review
   reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports')}${v.body}` }; },
+  penalties: PN.penalties,   // 2.57.0
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
   view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
@@ -292,6 +296,7 @@ async function goLive(at = '') {
     onPhotos: m => { ui.photos = m; draw(); },
     onRequests: list => liveRequests(list),
     onFixes: list => regFixes(list),   // 2.16.0
+    onPenalties: list => { ui.pens = list; draw(); },   // 2.57.0
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -481,7 +486,7 @@ async function freshFiles() {
   try {
     performance.setResourceTimingBufferSize?.(2000);
     for (const r of await navigator.serviceWorker.getRegistrations()) await r.update();
-    for (const k of await caches.keys()) await caches.delete(k);
+    for (const k of await caches.keys()) if (k !== 'afr-dev') await caches.delete(k);   // 2.56.0: the device id's copy stays
     const own = performance.getEntriesByType('resource').map(e => e.name).filter(u => u.startsWith(location.origin) && /\.(js|css|json|html)(\?|$)/.test(u));
     await Promise.all([...new Set([location.href.split('#')[0], ...own])].map(u => fetch(u, { cache: 'reload' }).catch(() => {})));
   } catch { /* reload anyway */ }
@@ -1702,6 +1707,33 @@ const ACTS = {
   seenNew() { ui.sheet = ''; store.set({ seenNew: APP_VERSION }); },
   showNew() { ui.sheet = 'new'; ui.sheetNew = true; draw(); },
   loadRemote() { useRemote(ui.remote); ui.sheet = ''; ui.remote = null; toast('Draft from your other phone loaded.'); },
+  // 2.57.0 (R3): penalties
+  penOpen() { Object.assign(ui, { penOpen: true, penWho: '', penReason: '', penAmt: '', penDate: realToday() }); draw(); },
+  penClose() { ui.penOpen = false; draw(); },
+  penReason(d) { ui.penReason = d.v; draw(); },
+  async penSave() {
+    const p = project(), staff = p.staff || [];
+    const f = { personId: ui.penWho, reason: ui.penReason, amount: ui.penAmt, date: ui.penDate || realToday() };
+    const why = penaltyProblem(f, staff);
+    if (why) return toast(why);
+    if (!L.liveOn()) return toast('No connection to Central Hub. Try again when online.');
+    ui.busy = true; draw();
+    try {
+      await L.savePenalty(o => penaltyRecord(f, { staff, byName: (store.get().profile || {}).name || '', ...o }));
+      ui.penOpen = false; toast('Penalty sent for approval.');
+    } catch (e) { toast(`Not saved: ${e.message}`); }
+    ui.busy = false; draw();
+  },
+  async penDecide(d) {
+    const x = (ui.pens || []).find(p => p.id === d.id);
+    if (!x) return;
+    const word = { approved: 'Approve', rejected: 'Reject', cancelled: 'Cancel' }[d.v];
+    if (!confirm(`${word} the penalty of ${x.name}, ${x.amount} ETB?`)) return;
+    ui.busy = true; draw();
+    try { await L.penaltyStatus(x.id, d.v, (store.get().profile || {}).name || ''); toast('Done.'); }
+    catch (e) { toast(`Not saved: ${e.message}`); }
+    ui.busy = false; draw();
+  },
   keepLocal() { ui.sheet = ''; ui.remote = null; draw(); pushDraft(); },
   flipPref(d) {
     const pr = store.get().profile, on = d.f === 'remind' ? pr.remind === false : !pr[d.f];
@@ -2241,7 +2273,10 @@ updateCheck();   // 2.12.3
 setInterval(updateCheck, 30 * 60e3);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updateCheck(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
-try { navigator.storage?.persist?.().catch(() => {}); } catch { /* 2.2.0: asks the phone not to clear the app's data (the device id) */ }
+// 2.2.0: asks the phone not to clear the app's data (the device id); 2.56.0: asked again each launch, and Me warns when the phone says no
+try { navigator.storage?.persist?.().then(ok => { if (ui.persisted !== ok) { ui.persisted = ok; draw(); } }).catch(() => {}); } catch { /* no storage manager */ }
+// 2.56.0: today's draft goes to the script at once when the app is put away (not only 15 s after a change)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && draftT) { clearTimeout(draftT); draftT = 0; pushDraft(); } });
 store.subscribe(draw);
 // 2.40.0: a choice made in a list is drawn at once; a page held back while a list was open is drawn when it closes
 document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') e.target.blur(); }, true);

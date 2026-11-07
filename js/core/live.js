@@ -101,7 +101,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -150,6 +150,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     if (day) stops.push(F.onSnapshot(F.doc(db, 'projects', pid, 'fieldDay', day), d => onDay((d.data() || {}).rows || {}, (d.data() || {}).confirmed || null), () => {}));   // 2.33.0: and the reporter's check
     // 2.14.0: the project's site requests, drafts included, from every phone
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
+    // 2.57.0: the project's penalties (given on site, approved by the PE or GM)
+    stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'penalties'), snap => onPenalties(snap.docs.map(x => x.data())), () => {}));
     // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'attendance'), snap => onFixes(snap.docs.map(x => x.data())), () => {}));
     return 'on';
@@ -276,6 +278,23 @@ export async function saveRequest(q, { date, byName = '' }) {
   const entry = { at, by: email, byName: byName || email, status: asked ? 'requested' : 'draft', note: old.exists() ? 'Changed on site' : 'Written on site' };
   if (old.exists()) await F.updateDoc(ref, { ...base, log: F.arrayUnion(entry) });
   else await F.setDoc(ref, { ...base, number: `SITE-${String(q.id).slice(-4).toUpperCase()}`, by: email, byName: byName || email, byTitle: 'Field Report', log: [entry] });
+  return true;
+}
+
+/** 2.57.0: a penalty given on site, waiting for the PE or GM (projects/<id>/penalties/<id>). */
+export async function savePenalty(make) {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
+  const id = `pen_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  await F.setDoc(F.doc(db, 'projects', pid, 'penalties', id), make({ email, at, pid, id }));
+  return true;
+}
+/** 2.57.0: approved or rejected (PE or GM), or cancelled by the one who gave it; who and when are kept. */
+export async function penaltyStatus(id, status, byName = '') {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
+  const by = byName || email;
+  await F.updateDoc(F.doc(db, 'projects', pid, 'penalties', id), { status, ...(status === 'cancelled' ? {} : { decidedBy: email, decidedByName: by, decidedAt: at }), log: F.arrayUnion({ at, by: email, byName: by, status, note: 'On Field Report' }) });
   return true;
 }
 

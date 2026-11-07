@@ -467,7 +467,7 @@ export function me(c) {
     head: head('Me', a.email || ''),
     // 2.37.0 (owner): Review and Crew & Hours live in Me for reviewers
     // 2.42.0 (owner): no Review button here; Crew & Hours where the usual day was; the page is compact
-    body: html`<div class="me-page"><label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
+    body: html`<div class="me-page">${c.ui.persisted === false && !c.demo ? html`<p class="box pad warn small" id="keepWarn">This phone may clear Field Report's data when it needs space. Keep Field Report on the home screen, allow its notifications, and do not clean it with a cleaner app.</p>` : ''}<label class="lab" for="mn">Name</label><input id="mn" class="fld" data-f="profile.name" value="${p.name}" ${p.locked ? 'readonly' : ''}>
       <label class="lab" for="mp">Position</label><input id="mp" class="fld" value="${p.position}" readonly>${p.locked ? html`<p class="muted tiny">Confirmed by the office. Ask the office to change your name or position.</p>` : html`<p class="muted tiny">Your position is set by the office in Central Hub (2.20.0).</p>`}
       <div class="k">Signature</div>
       ${p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Sign again</button></div></div>`
