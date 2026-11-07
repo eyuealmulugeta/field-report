@@ -1,6 +1,6 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, takeGoogleToken } from './core/api.js';
+import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, deviceUa, deviceMode, takeGoogleToken } from './core/api.js';
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
 import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
@@ -36,6 +36,7 @@ import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
+import { presence, BEAT_MS, newEntry as newLog } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
@@ -1292,8 +1293,9 @@ const ACTS = {
     ui.refreshing = true; draw();   // 2.42.0: the button says Refreshing…
     try { await loadProjects(); toast('Lists updated from the office.'); } catch (e) { toast(e.message); } finally { ui.refreshing = false; draw(); }
   },
-  signout() {
+  async signout() {
     if (!confirm('Sign out? Reports not yet sent stay on this phone.')) return;
+    await here.signOut(Date.now());   // 2.58.0: the end of this session in the sign-in history
     L.stop(); ui.live = '';
     store.set({ auth: null }); go('');
   },
@@ -2277,6 +2279,15 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.ser
 try { navigator.storage?.persist?.().then(ok => { if (ui.persisted !== ok) { ui.persisted = ok; draw(); } }).catch(() => {}); } catch { /* no storage manager */ }
 // 2.56.0: today's draft goes to the script at once when the app is put away (not only 15 s after a change)
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && draftT) { clearTimeout(draftT); draftT = 0; pushDraft(); } });
+// 2.58.0 (owner, G2): this phone's sessions in Central Hub's sign-in history, every minute while the app is in front
+const here = presence(now => {
+  const s = store.get(), p = project();
+  return { ...newLog({ email: L.logEmail(), name: (s.profile || {}).name || '', position: (s.profile || {}).position || '', projects: p ? [p.code] : [], device: deviceUa(), mode: deviceMode(), now }) };
+}, L.logIO);
+const hereTick = () => { if (!demo && store.get().auth && L.logReady() && document.visibilityState === 'visible' && navigator.onLine) here.tick(Date.now()); };
+setInterval(hereTick, BEAT_MS);
+setTimeout(hereTick, 5000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') hereTick(); else here.hide(Date.now()); });
 store.subscribe(draw);
 // 2.40.0: a choice made in a list is drawn at once; a page held back while a list was open is drawn when it closes
 document.addEventListener('change', e => { if (e.target.tagName === 'SELECT') e.target.blur(); }, true);

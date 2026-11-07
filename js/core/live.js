@@ -90,6 +90,16 @@ export async function connect(accessToken) {
   } catch (e) { fail(e, 'Sign-in'); return false; }
 }
 
+/** 2.58.0 (G2): this phone's sessions in Central Hub's sign-in history (signlog/<id>), once signed in to Firebase. */
+export const logReady = () => !!(fb && fb.auth.currentUser && fb.auth.currentUser.email);
+export const logEmail = () => (logReady() ? fb.auth.currentUser.email.toLowerCase() : '');
+export const logIO = {
+  create: e => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', e.id), e),
+  touch: (id, last) => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', id), { last }, { merge: true }),
+  close: (id, end) => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', id), { last: end, end, how: 'signout' }, { merge: true }),
+  place: id => fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'signPlace')({ id }).catch(() => {}),
+};
+
 /** Stops listening and signs out of Firebase (the phone's own sign-out, or the route back to Script). */
 export async function stop() {
   stops.forEach(f => { try { f(); } catch { /* gone */ } }); stops = [];
