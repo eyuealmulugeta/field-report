@@ -9,6 +9,7 @@ const n = v => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 3
 
 function form(c, book, items, pos = []) {
   const f = c.ui.sm || {}, k = f.kind;
+  const tasks = ((c.project && c.project.setup) || {}).tasks || [];   // 2.63.0 (R7)
   const po = pos.find(p => p.id === f.poId);
   if (po) items = po.lines.map(l => ({ item: l.item, unit: l.unit }));
   const others = (c.s.projects || []).filter(p => p.code !== c.s.proj);
@@ -33,7 +34,8 @@ function form(c, book, items, pos = []) {
       <label class="lab">Delivery note</label>${f.photo ? html`<img class="sm-photo" src="${f.photo}" alt="Delivery note">` : ''}<button type="button" class="btn t slim" data-act="smCam">${icon('cam')}${f.photo ? 'Take again' : 'Take a photo'}</button>` : ''}
     ${k === 'issue' || k === 'return' ? html`<label class="lab" for="smTo">${k === 'issue' ? 'Given to' : 'Brought back by'}</label><input id="smTo" class="fld" list="smPeople" data-ui="smTo" value="${f.to || ''}" placeholder="Name or crew">
       <datalist id="smPeople">${(c.project && c.project.staff || []).map(s => html`<option value="${s.name}">`)}</datalist>` : ''}
-    ${k === 'issue' ? html`<label class="lab" for="smZone">For (activity or zone)</label><input id="smZone" class="fld" data-ui="smZone" value="${f.zone || ''}" placeholder="e.g. Zone B roofing">
+    ${k === 'issue' && tasks.length ? html`<label class="lab" for="smTask">For which task</label><select id="smTask" class="fld" data-ui="smTask"><option value="">Choose the task…</option>${tasks.map(t => html`<option value="${t.id}" ${t.id === f.taskId ? 'selected' : ''}>${t.name}</option>`)}</select>` : ''}
+    ${k === 'issue' ? html`<label class="lab" for="smZone">${tasks.length ? 'Zone or note (optional)' : 'For (activity or zone)'}</label><input id="smZone" class="fld" data-ui="smZone" value="${f.zone || ''}" placeholder="e.g. Zone B roofing">
       <label class="lab">Receiver's signature</label>${f.sig ? html`<img class="sm-sig" src="${f.sig}" alt="Signature">` : ''}<button type="button" class="btn t slim" data-act="smSign">${f.sig ? 'Sign again' : 'Receiver signs'}</button>` : ''}
     ${k === 'transfer' ? html`<label class="lab" for="smProj">To project</label><select id="smProj" class="fld" data-ui="smProj"><option value="">Choose…</option>${others.map(p => html`<option value="${p.code}" ${p.code === f.toProject ? 'selected' : ''}>${p.name} · ${p.code}</option>`)}</select>` : ''}
     <label class="lab" for="smNote">Note</label><input id="smNote" class="fld" data-ui="smNote" value="${f.note || ''}" placeholder="Optional">

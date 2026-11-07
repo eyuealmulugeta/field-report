@@ -1766,7 +1766,7 @@ const ACTS = {
     if (!f) return;
     const all = ui.smList || [], book = bookOf(all), projects = store.get().projects || [];
     if (f.kind === 'count') f.lines = Object.values(book).map(e => ({ key: e.key, item: e.item, unit: e.unit, counted: (f.cnt || {})[e.key] ?? '' }));
-    const why = moveProblem(f, { book, projects, code: p ? p.code : '' });
+    const why = moveProblem(f, { book, projects, code: p ? p.code : '', tasks: ((p && p.setup) || {}).tasks || [] });
     if (why) return toast(why);
     if (!L.liveOn()) return toast('No connection to Central Hub. Try again when online.');
     ui.busy = true; draw();
@@ -2244,7 +2244,7 @@ root.addEventListener('click', e => {
   if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
 });
 
-const SMF = { smPo: 'poId', smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
+const SMF = { smTask: 'taskId', smPo: 'poId', smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
 // 2.61.0 (R5): the delivery note, from the camera only; a known item fills its unit
 document.getElementById('smCam').addEventListener('change', async e => {
   const f = e.target.files?.[0];
@@ -2253,6 +2253,7 @@ document.getElementById('smCam').addEventListener('change', async e => {
 });
 root.addEventListener('change', e => {
   // 2.62.0 (R6): a Receive against a PO takes its supplier and number
+  if (e.target.dataset.ui === 'smTask' && ui.sm) { const p = project(), t = (((p && p.setup) || {}).tasks || []).find(x => x.id === e.target.value); ui.sm.taskId = t ? t.id : ''; ui.sm.taskName = t ? t.name : ''; return; }   // 2.63.0 (R7)
   if (e.target.dataset.ui === 'smPo' && ui.sm) { const po = (ui.poList || []).find(p => p.id === e.target.value); ui.sm.poId = po ? po.id : ''; ui.sm.poNo = po ? po.number : ''; if (po) ui.sm.supplier = po.supplier || ui.sm.supplier; draw(); return; }
   if (e.target.dataset.ui !== 'smItem' || !ui.sm || ui.sm.unit) return;
   const hit = itemsOf(ui.smList || [], ui.liveReqs || []).find(i => i.item.toLowerCase() === String(ui.sm.item || '').trim().toLowerCase());
