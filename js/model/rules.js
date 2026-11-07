@@ -7,10 +7,10 @@ export const STEP_SCREENS = new Set(['attention', 'start', 'crew', 'work', 'item
 /** Each page and the features that open it (any one is enough). */
 const SCREEN = {
   today: ['fr_report'], att: ['fr_crewphoto', 'fr_crew'], reports: ['fr_review'], rev: ['fr_review'], review: ['fr_review'],
-  requests: ['fr_requests'], penalties: ['fr_penalty'], spot: ['fr_spot'], crewrev: ['fr_hours'], quick: ['fr_quick'], media: ['fr_media'],
+  requests: ['fr_requests'], penalties: ['fr_penalty'], store: ['fr_store'], spot: ['fr_spot'], crewrev: ['fr_hours'], quick: ['fr_quick'], media: ['fr_media'],
 };
 /** Buttons that open something without a page of their own: [feature, S sees or D does]. */
-const ACT = { spotOpen: ['fr_spot', 'S'], mediaOpen: ['fr_media', 'S'], penOpen: ['fr_penalty', 'D'], penSave: ['fr_penalty', 'D'], noWork: ['fr_report', 'D'] };
+const ACT = { spotOpen: ['fr_spot', 'S'], mediaOpen: ['fr_media', 'S'], penOpen: ['fr_penalty', 'D'], penSave: ['fr_penalty', 'D'], smOpen: ['fr_store', 'D'], smSave: ['fr_store', 'D'], noWork: ['fr_report', 'D'] };
 const DECIDE = new Set(['revDo', 'dayRev', 'notifAct']);
 
 /** Keep only a clean { feature: 'SDN' } object, or null. */
@@ -18,7 +18,9 @@ export const cleanRules = r => (r && typeof r === 'object' && !Array.isArray(r)
   ? Object.fromEntries(Object.entries(r).filter(([k]) => /^(fr|ch)_[a-z]{2,12}$/.test(k)).map(([k, v]) => [k, String(v || '').replace(/[^SDN]/g, '')]))
   : null);
 /** Has the person this flag (S by default) of the feature? Always, when there are no rules. */
-export const has = (rules, feat, flag = 'S') => !rules || String(rules[feat] || '').includes(flag);
+// 2.61.0: a feature Central Hub has not set for the person yet (added after their rules were saved) is allowed
+const LATER = new Set(['fr_store']);
+export const has = (rules, feat, flag = 'S') => !rules || (LATER.has(feat) && !(feat in rules)) || String(rules[feat] || '').includes(flag);
 /** May the person open this page? */
 export function screenOk(rules, screen) {
   if (!rules) return true;

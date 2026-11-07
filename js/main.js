@@ -4,7 +4,6 @@ import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERS
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
 import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
-import { openPad } from './ui/sigpad.js';
 import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
@@ -38,8 +37,11 @@ import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
+import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
+import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
+import { openPad } from './ui/sigpad.js';
 import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
 import { onSwipe } from './core/swipe.js';
 import { offerInstall } from './core/install.js';   // 2.32.0
@@ -66,6 +68,7 @@ const SCREENS = {
   // 2.55.0 (owner): Reports and Requests are the two tabs inside Review
   reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports')}${v.body}` }; },
   penalties: PN.penalties,   // 2.57.0
+  store: SM.store,   // 2.61.0 (R5)
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
   view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
@@ -299,6 +302,7 @@ async function goLive(at = '') {
     onRequests: list => liveRequests(list),
     onFixes: list => regFixes(list),   // 2.16.0
     onPenalties: list => { ui.pens = list; draw(); },   // 2.57.0
+    onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -1750,6 +1754,50 @@ const ACTS = {
     catch (e) { toast(`Not saved: ${e.message}`); }
     ui.busy = false; draw();
   },
+  // 2.61.0 (R5): the store
+  smOpen(d) { ui.sm = { kind: d.v, date: realToday(), cnt: {} }; draw(); },
+  smClose() { ui.sm = null; draw(); },
+  smCard(d) { ui.smCard = d.v || ''; draw(); },
+  smCam() { const i = document.getElementById('smCam'); i.value = ''; i.click(); },
+  async smSign() { const sig = await openPad("Receiver's signature"); if (sig && ui.sm) { ui.sm.sig = sig; draw(); } },
+  async smSave() {
+    const p = project(), f = ui.sm;
+    if (!f) return;
+    const all = ui.smList || [], book = bookOf(all), projects = store.get().projects || [];
+    if (f.kind === 'count') f.lines = Object.values(book).map(e => ({ key: e.key, item: e.item, unit: e.unit, counted: (f.cnt || {})[e.key] ?? '' }));
+    const why = moveProblem(f, { book, projects, code: p ? p.code : '' });
+    if (why) return toast(why);
+    if (!L.liveOn()) return toast('No connection to Central Hub. Try again when online.');
+    ui.busy = true; draw();
+    try {
+      let rec = null;
+      await L.saveMove(o => (rec = moveRecord(f, { book, projects, byName: (store.get().profile || {}).name || '', ...o })));
+      ui.sm = null; toast('Sent to the PM for approval.');
+      if (rec) logAct({ action: 'save', channel: 'Store', doc: moveLine(rec) });
+    } catch (e) { toast(`Not saved: ${e.message}`); }
+    ui.busy = false; draw();
+  },
+  async smDecide(d) {
+    const x = (ui.smList || []).find(m => m.id === d.id);
+    if (!x) return;
+    const word = { approved: 'Approve', rejected: 'Reject', cancelled: 'Cancel' }[d.v];
+    if (!confirm(`${word}: ${moveLine(x)}?`)) return;
+    ui.busy = true; draw();
+    try { await L.moveStatus(x.id, d.v, (store.get().profile || {}).name || ''); toast('Done.'); logAct({ action: 'save', channel: 'Store', doc: `${word}d: ${moveLine(x)}` }); }
+    catch (e) { toast(`Not saved: ${e.message}`); }
+    ui.busy = false; draw();
+  },
+  async smKeeper() {
+    const k = (ui.smList || []).find(m => m.id === 'keeper') || {};
+    const keeper = String(ui.smKeep ?? k.keeper ?? '').trim();
+    if (keeper && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(keeper)) return toast('Enter the keeper\'s sign-in email.');
+    const mins = { ...(k.mins || {}) };
+    for (const [key, v] of Object.entries(ui.smMin || {})) { if (v === '' || v == null) delete mins[key]; else if (Number(v) >= 0) mins[key] = Number(v); }
+    ui.busy = true; draw();
+    try { await L.setKeeper({ keeper, keeperName: String(ui.smKeepName ?? k.keeperName ?? '').trim(), mins, byName: (store.get().profile || {}).name || '' }); ui.smMin = {}; toast('Saved.'); }
+    catch (e) { toast(`Not saved: ${e.message}`); }
+    ui.busy = false; draw();
+  },
   keepLocal() { ui.sheet = ''; ui.remote = null; draw(); pushDraft(); },
   flipPref(d) {
     const pr = store.get().profile, on = d.f === 'remind' ? pr.remind === false : !pr[d.f];
@@ -2195,9 +2243,24 @@ root.addEventListener('click', e => {
   if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
 });
 
+const SMF = { smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
+// 2.61.0 (R5): the delivery note, from the camera only; a known item fills its unit
+document.getElementById('smCam').addEventListener('change', async e => {
+  const f = e.target.files?.[0];
+  if (!f || !ui.sm) return;
+  try { ui.sm.photo = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
+});
+root.addEventListener('change', e => {
+  if (e.target.dataset.ui !== 'smItem' || !ui.sm || ui.sm.unit) return;
+  const hit = itemsOf(ui.smList || [], ui.liveReqs || []).find(i => i.item.toLowerCase() === String(ui.sm.item || '').trim().toLowerCase());
+  if (hit) { ui.sm.unit = hit.unit; draw(); }
+});
 root.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.cd && ui.cd) { ui.cd.f[el.dataset.cd] = el.value; return; }   // 2.45.0
+  // 2.61.0 (R5): the store's form, its counts and minimums
+  if (el.dataset.ui && /^sm(Cnt|Min)\./.test(el.dataset.ui)) { const i = el.dataset.ui.indexOf('.'), a = el.dataset.ui.slice(0, i), k = el.dataset.ui.slice(i + 1); if (a === 'smCnt' && ui.sm) (ui.sm.cnt ||= {})[k] = el.value; else if (a === 'smMin') (ui.smMin ||= {})[k] = el.value; return; }
+  if (el.dataset.ui && SMF[el.dataset.ui] && ui.sm) { ui.sm[SMF[el.dataset.ui]] = el.value; return; }
   if (el.dataset.ui) { ui[el.dataset.ui] = el.value; if (el.dataset.ui === 'q') draw(); return; }
   const f = el.dataset.f;
   if (!f) return;

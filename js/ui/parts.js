@@ -30,15 +30,15 @@ export const dbBar = (ui, waiting = 0) => (ui.liveRoute === 'both' && ui.live ==
   : ui.liveRoute === 'read' && ui.live === 'signin' ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Live updates are off.</b> Tap to turn them on</button>` : '');
 
 export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
-export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'penalties', 'review']);
+export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'penalties', 'store', 'review']);
 // 2.17.0: "All projects" on Reports, Requests and Review
 export const ALL_PROJ = new Set(['reports', 'requests', 'review']);
 export const projTop = (c, all = false) => html`<div class="proj-top"><select data-proj aria-label="Project">${all ? html`<option value="*" ${c.ui && c.ui.allProj ? 'selected' : ''}>All projects</option>` : ''}${c.s.projects.map(x => html`<option value="${x.code}" ${x.code === c.s.proj && !(all && c.ui && c.ui.allProj) ? 'selected' : ''}>${x.name} · ${x.code}</option>`)}</select></div>`;
 
 // 2.55.0: Requests, Review and a report's review light the Review tab
-export const tabOf = on => (['requests', 'penalties', 'review', 'rev'].includes(on) ? 'reports' : on);
+export const tabOf = on => (['requests', 'penalties', 'store', 'review', 'rev'].includes(on) ? 'reports' : on);
 /** 2.55.0 (owner): the two tabs inside Review. */
-export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button></div>`;   // 2.57.0
+export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button></div>`;   // 2.57.0; Store 2.61.0
 export const nav = (on, badges = {}, kind = 'reporter', rules = null) => html`<nav class="nav">${tabsFor(kind, rules).map(t => html`
   <button type="button" class="${t.id === tabOf(on) ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;

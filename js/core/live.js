@@ -117,7 +117,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -168,6 +168,8 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.query(F.collection(db, 'projects', pid, 'requests'), F.where('site', '==', true)), snap => onRequests(snap.docs.map(x => x.data())), () => {}));
     // 2.57.0: the project's penalties (given on site, approved by the PE or GM)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'penalties'), snap => onPenalties(snap.docs.map(x => x.data())), () => {}));
+    // 2.61.0 (R5): the project's store movements and its keeper
+    stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'storeMoves'), snap => onStore(snap.docs.map(x => x.data())), () => {}));
     // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'attendance'), snap => onFixes(snap.docs.map(x => x.data())), () => {}));
     return 'on';
@@ -311,6 +313,29 @@ export async function penaltyStatus(id, status, byName = '') {
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
   const by = byName || email;
   await F.updateDoc(F.doc(db, 'projects', pid, 'penalties', id), { status, ...(status === 'cancelled' ? {} : { decidedBy: email, decidedByName: by, decidedAt: at }), log: F.arrayUnion({ at, by: email, byName: by, status, note: 'On Field Report' }) });
+  return true;
+}
+
+/** 2.61.0 (R5): a store movement, waiting for the PM (projects/<id>/storeMoves/<id>). */
+export async function saveMove(make) {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
+  const id = `sm_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  await F.setDoc(F.doc(db, 'projects', pid, 'storeMoves', id), make({ email, at, pid, id }));
+  return true;
+}
+/** 2.61.0: approved or rejected by the PM (or PE, GM), or cancelled by the one who recorded it. */
+export async function moveStatus(id, status, byName = '') {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString(), by = byName || email;
+  await F.updateDoc(F.doc(db, 'projects', pid, 'storeMoves', id), { status, ...(status === 'cancelled' ? {} : { decidedBy: email, decidedByName: by, decidedAt: at }), log: F.arrayUnion({ at, by: email, byName: by, status, note: 'On Field Report' }) });
+  return true;
+}
+/** 2.61.0: the store's keeper (or the person delegated) and the items' minimums, set by the PM, PE or GM. */
+export async function setKeeper({ keeper = '', keeperName = '', mins = {}, byName = '' }) {
+  if (!signedIn()) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase();
+  await F.setDoc(F.doc(db, 'projects', pid, 'storeMoves', 'keeper'), { id: 'keeper', keeper: String(keeper).trim().toLowerCase(), keeperName, mins, by: email, byName: byName || email, at: new Date().toISOString() });
   return true;
 }
 
