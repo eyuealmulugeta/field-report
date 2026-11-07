@@ -303,6 +303,7 @@ async function goLive(at = '') {
     onFixes: list => regFixes(list),   // 2.16.0
     onPenalties: list => { ui.pens = list; draw(); },   // 2.57.0
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
+    onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -2243,7 +2244,7 @@ root.addEventListener('click', e => {
   if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
 });
 
-const SMF = { smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
+const SMF = { smPo: 'poId', smDate: 'date', smItem: 'item', smQty: 'qty', smUnit: 'unit', smSup: 'supplier', smTo: 'to', smZone: 'zone', smProj: 'toProject', smNote: 'note' };
 // 2.61.0 (R5): the delivery note, from the camera only; a known item fills its unit
 document.getElementById('smCam').addEventListener('change', async e => {
   const f = e.target.files?.[0];
@@ -2251,6 +2252,8 @@ document.getElementById('smCam').addEventListener('change', async e => {
   try { ui.sm.photo = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
 });
 root.addEventListener('change', e => {
+  // 2.62.0 (R6): a Receive against a PO takes its supplier and number
+  if (e.target.dataset.ui === 'smPo' && ui.sm) { const po = (ui.poList || []).find(p => p.id === e.target.value); ui.sm.poId = po ? po.id : ''; ui.sm.poNo = po ? po.number : ''; if (po) ui.sm.supplier = po.supplier || ui.sm.supplier; draw(); return; }
   if (e.target.dataset.ui !== 'smItem' || !ui.sm || ui.sm.unit) return;
   const hit = itemsOf(ui.smList || [], ui.liveReqs || []).find(i => i.item.toLowerCase() === String(ui.sm.item || '').trim().toLowerCase());
   if (hit) { ui.sm.unit = hit.unit; draw(); }

@@ -3,12 +3,14 @@
 
 import { html, icon } from '../core/dom.js';
 import { head, reviewTabs } from './parts.js';
-import { KINDS, kindWord, MOVE_WORD, MOVE_TONE, UNITS, mayApprove, mayRecord, maySetKeeper, bookOf, itemsOf, lowOf, countDue, sortMoves, cardOf, moveLine } from '../model/store.js';
+import { KINDS, kindWord, MOVE_WORD, MOVE_TONE, UNITS, mayApprove, mayRecord, maySetKeeper, bookOf, itemsOf, lowOf, countDue, sortMoves, cardOf, moveLine, openPOs } from '../model/store.js';
 
 const n = v => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
 
-function form(c, book, items) {
+function form(c, book, items, pos = []) {
   const f = c.ui.sm || {}, k = f.kind;
+  const po = pos.find(p => p.id === f.poId);
+  if (po) items = po.lines.map(l => ({ item: l.item, unit: l.unit }));
   const others = (c.s.projects || []).filter(p => p.code !== c.s.proj);
   if (k === 'count') {
     const rows = Object.values(book).sort((a, b) => a.item.localeCompare(b.item));
@@ -20,6 +22,8 @@ function form(c, book, items) {
       <p class="tiny muted">The PE or the GM approves the differences. Then the store's books show what was counted.</p></div>`;
   }
   return html`<div class="box pad sm-form"><b>${kindWord(k)}</b>
+    ${k === 'receive' && pos.length ? html`<label class="lab" for="smPo">Purchase order</label><select id="smPo" class="fld" data-ui="smPo"><option value="">No PO (cash or other)</option>${pos.map(p => html`<option value="${p.id}" ${p.id === f.poId ? 'selected' : ''}>${p.number} · ${p.supplier}</option>`)}</select>
+      ${po ? html`<p class="tiny muted">Still to come: ${po.lines.filter(l => l.left > 0).map(l => `${l.item} ${n(l.left)} ${l.unit}`).join(', ')}</p>` : ''}` : ''}
     <label class="lab" for="smDate">Day</label><input id="smDate" class="fld" type="date" data-ui="smDate" value="${f.date || c.realToday}" max="${c.realToday}">
     <label class="lab" for="smItem">Item</label><input id="smItem" class="fld" list="smItems" data-ui="smItem" value="${f.item || ''}" placeholder="e.g. Cement 50 kg" autocomplete="off">
     <datalist id="smItems">${items.map(i => html`<option value="${i.item}">${i.unit}</option>`)}</datalist>
@@ -41,6 +45,7 @@ export function store(c) {
   const auth = c.s.auth || {}, role = auth.role || '', me = String(auth.email || '').toLowerCase();
   const all = c.ui.smList || [], keeper = all.find(m => m.id === 'keeper') || null;
   const book = bookOf(all), items = itemsOf(all, c.ui.liveReqs || []), list = sortMoves(all);
+  const pos = openPOs(c.ui.poList || [], all, c.realToday);   // 2.62.0 (R6)
   const low = lowOf(book, (keeper && keeper.mins) || {}), due = countDue(all, c.realToday);
   const waiting = list.filter(m => m.status === 'waiting').length, may = mayRecord(role, me, keeper);
   const card = c.ui.smCard ? cardOf(all, c.ui.smCard) : null, cardItem = c.ui.smCard && book[c.ui.smCard];
@@ -54,7 +59,8 @@ export function store(c) {
       ${low.length ? html`<p class="callout warn small">Low: ${low.map(e => `${e.item} ${n(e.qty)} ${e.unit}`).join(', ')}. <button type="button" class="btn t slim" data-act="go" data-to="requests">Make a material request</button></p>` : ''}
       ${may && !c.ui.sm ? html`<div class="seg wide sm-kinds" role="group" aria-label="Record">${KINDS.map(([v, w]) => html`<button type="button" data-act="smOpen" data-v="${v}">${w}</button>`)}</div>` : ''}
       ${!may && !c.ui.sm ? html`<p class="tiny muted">Only the store keeper, the Site Engineer, the PM or the GM records movements.</p>` : ''}
-      ${c.ui.sm ? form(c, book, items) : ''}
+      ${c.ui.sm ? form(c, book, items, pos) : ''}
+      ${pos.length && !c.ui.sm ? html`<div class="k">Deliveries still to come</div>${pos.map(p => html`<div class="li item"><div class="n"><b>${p.number} · ${p.supplier}</b><span>${p.lines.filter(l => l.left > 0).map(l => `${l.item} ${n(l.left)} of ${n(l.qty)} ${l.unit}${l.waiting ? ` (${n(l.waiting)} waiting)` : ''}`).join(', ')}</span></div><span class="pill ${p.late ? 'bad' : ''}">${p.late ? 'Late' : p.due ? `By ${String(p.due).slice(5)}` : 'Open'}</span></div>`)}` : ''}
       ${card ? html`<div class="box pad"><div class="row"><b>${cardItem ? `${cardItem.item} · ${n(cardItem.qty)} ${cardItem.unit}` : 'Stock card'}</b><button type="button" class="btn t slim" data-act="smCard" data-v="">Close</button></div>
         ${card.map(x => html`<div class="li item"><span class="time">${String(x.date).slice(5)}</span><div class="n"><b>${kindWord(x.kind)} ${x.diff != null ? `${n(x.qty)} (diff ${x.diff > 0 ? '+' : ''}${n(x.diff)})` : n(x.qty)}</b><span>${[x.who, x.by].filter(Boolean).join(' · ')}</span></div><span class="pill ${MOVE_TONE[x.status] || ''}">${x.status === 'approved' ? `= ${n(x.bal)}` : MOVE_WORD[x.status]}</span></div>`)}</div>` : ''}
       <div class="k">In the store</div>

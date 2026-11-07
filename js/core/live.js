@@ -117,7 +117,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -170,6 +170,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'penalties'), snap => onPenalties(snap.docs.map(x => x.data())), () => {}));
     // 2.61.0 (R5): the project's store movements and its keeper
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'storeMoves'), snap => onStore(snap.docs.map(x => x.data())), () => {}));
+    stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'poOpen'), snap => onPOs(snap.docs.map(x => x.data())), () => {}));   // 2.62.0 (R6)
     // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'attendance'), snap => onFixes(snap.docs.map(x => x.data())), () => {}));
     return 'on';

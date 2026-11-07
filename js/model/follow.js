@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'Deliveries against purchase orders (2.62.0)', 'Store, Receive: choose the purchase order the goods came on; the supplier fills in and the items are the PO lines. Store shows the deliveries still to come per PO, late ones first.'],
   ['doc', 'Store (2.61.0)', 'Review, Store: receive (with a photo of the delivery note), issue (the receiver signs), return, transfer to another project and the weekly stock count. The PM approves every movement; the PE or GM approves count differences. The PM sets the store keeper and the minimums.'],
   ['doc', 'One row of actions on a report (2.42.0)', 'Tap a report on Reports: View, Share, Edit, Comment, Send back (Project engineer and GM) and Remove. Me is shorter, with Crew & Hours where Your usual day was. Live updates and notifications are on by default. A page reloaded stays where it was.'],
   ['users', 'Crew changes need the Project engineer or the GM (2.41.0)', 'A Site engineer asks to delete a crew member or add labour; the Project engineer or the GM confirms, and a deleted person leaves the list here and in Central Hub. Reports sent after 19:00 are tagged Late submission, with the day sent when it was a later day. Check again is now Refresh.'],
