@@ -3,7 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { head, reviewTabs } from './parts.js';
-import { KINDS, kindWord, MOVE_WORD, MOVE_TONE, UNITS, mayApprove, mayRecord, maySetKeeper, bookOf, itemsOf, lowOf, countDue, sortMoves, cardOf, moveLine, openPOs } from '../model/store.js';
+import { KINDS, kindWord, MOVE_WORD, MOVE_TONE, UNITS, mayApprove, mayRecord, maySetKeeper, bookOf, itemsOf, lowOf, countDue, sortMoves, cardOf, moveLine, openPOs, cashReqs } from '../model/store.js';
 
 const n = v => Number(v || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
 
@@ -11,12 +11,14 @@ function form(c, book, items, pos = []) {
   const f = c.ui.sm || {}, k = f.kind;
   const tasks = ((c.project && c.project.setup) || {}).tasks || [];   // 2.63.0 (R7)
   const po = pos.find(p => p.id === f.poId);
+  const cash = cashReqs(c.ui.liveReqs || [], c.ui.smList || []);   // 2.67.0
   if (po) items = po.lines.map(l => ({ item: l.item, unit: l.unit }));
   const others = (c.s.projects || []).filter(p => p.code !== c.s.proj);
   if (k === 'count') {
     const rows = Object.values(book).sort((a, b) => a.item.localeCompare(b.item));
     return html`<div class="box pad sm-form"><b>Stock count</b>
-      <label class="lab" for="smDate">Day</label><input id="smDate" class="fld" type="date" data-ui="smDate" value="${f.date || c.realToday}" max="${c.realToday}">
+      ${k === 'receive' && !po && cash.length ? html`<label class="lab" for="smReq">Cash purchase (expense request)</label><select id="smReq" class="fld" data-ui="smReq"><option value="">Not a cash purchase</option>${cash.map(r => html`<option value="${r.id}" ${r.id === f.reqId ? 'selected' : ''}>${r.number || r.id} · ${r.vendor || ''} · ${n(r.amount)} ${r.currency || 'ETB'}</option>`)}</select>` : ''}
+    <label class="lab" for="smDate">Day</label><input id="smDate" class="fld" type="date" data-ui="smDate" value="${f.date || c.realToday}" max="${c.realToday}">
       ${rows.length ? rows.map(e => html`<div class="sm-cnt"><span>${e.item}<small class="muted"> · books ${n(e.qty)} ${e.unit}</small></span><input class="fld slim" type="number" inputmode="decimal" min="0" data-ui="smCnt.${e.key}" value="${(f.cnt || {})[e.key] ?? ''}" placeholder="Counted" aria-label="Counted ${e.item}"></div>`) : html`<p class="muted">Nothing in the store yet.</p>`}
       <label class="lab" for="smNote">Note</label><input id="smNote" class="fld" data-ui="smNote" value="${f.note || ''}" placeholder="Optional">
       <div class="row"><button type="button" class="btn p" data-act="smSave" ${c.ui.busy ? 'disabled' : ''}>Send for approval</button><button type="button" class="btn t" data-act="smClose">Cancel</button></div>

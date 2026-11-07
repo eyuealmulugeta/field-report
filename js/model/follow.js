@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'Cash purchases in the store (2.67.0)', 'Store, Receive with no purchase order: choose the approved cash expense the material was bought with. Central Hub then stops showing it as a cash purchase with no receipt.'],
   ['cam', 'Technicians share work photos (2.66.0)', 'A technician account opens only Share work: photos of the work done, the task and a note. A blurred or dark photo is refused on the phone. The Site Engineer or PM approves it in Review, Photos, or rejects it with a reason.'],
   ['users', 'Time used is recorded (2.65.0)', 'As with sign-ins, the minutes you actively use Field Report and Central Hub (tapping, typing, scrolling) are recorded for the company. Only the Admin and the GM see them.'],
   ['sun', 'Next 3 days (2.64.0)', 'Today shows the forecast at the site for the next 3 days, heavy rain in red. It needs the site position, set in Central Hub, Reports, Weather; the same position fills in the weather on the report.'],
