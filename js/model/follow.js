@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['users', 'Project not linked (2.70.0)', 'If your email is not on this project in Central Hub, a bar at the top says so: approvals and changes cannot arrive by themselves until the Admin puts you on the project in the Manpower Directory.'],
   ['doc', 'Reports waiting for the database (2.69.0)', 'If a sent report has not reached the database, a bar at the top says how many, why, and sends them again when you tap it.'],
   ['bell', 'Open and Remind later (2.68.0)', 'A new report\'s notification now has Open, which goes straight to that report with Approve, Send back, Comment and Remove, and Remind later, which brings the notification back in 30 minutes.'],
   ['doc', 'Cash purchases in the store (2.67.0)', 'Store, Receive with no purchase order: choose the approved cash expense the material was bought with. Central Hub then stops showing it as a cash purchase with no receipt.'],

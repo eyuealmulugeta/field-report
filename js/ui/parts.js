@@ -27,7 +27,10 @@ export const tabsFor = (kind, rules = null) => kind === 'technician' ? TECH_TABS
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
 // 2.42.0 (owner): live updates are on for everyone: whenever they are off, every page asks for the one tap that signs in
 // 2.69.0 (owner): connected but reports still not in the database: how many, the database's reason, Send again
-export const dbBar = (ui, waiting = 0, why = '') => (ui.liveRoute === 'both' && ui.live === 'on' && waiting
+// 2.70.0 (owner): signed in, but this project is not linked to the email in Central Hub: said on every page, whatever the route
+export const dbBar = (ui, waiting = 0, why = '') => (ui.live === 'none' && ui.liveRoute && ui.liveRoute !== 'script'
+  ? html`<div class="db-bar" role="status"><b>This project is not linked to your email in Central Hub.</b> Approvals and changes do not arrive by themselves${waiting ? ` and ${waiting} report${waiting > 1 ? 's are' : ' is'} not in the database` : ''}. Ask the Admin to put you on this project in the Manpower Directory.</div>`
+  : ui.liveRoute === 'both' && ui.live === 'on' && waiting
   ? html`<button type="button" class="db-bar" data-act="dbAgain"><b>${waiting} report${waiting > 1 ? 's' : ''} not in the database.</b> ${why || 'Not sent yet.'} · Tap to send again</button>`
   : ui.liveRoute === 'both' && ui.live === 'signin'
   ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Not connected to the database.</b> Tap to sign in again${waiting ? ` · ${waiting} report${waiting > 1 ? 's' : ''} waiting` : ''}</button>`
