@@ -589,3 +589,4 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .sm-form>b{display:block;margin-bottom:4px}
 .sm-form .lab{display:block;margin-top:10px}
 .sm-form .btn.slim{margin:4px 0}
+.fc-days{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}   /* 2.64.0 R8 forecast */

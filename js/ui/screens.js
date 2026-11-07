@@ -6,6 +6,8 @@ import * as L from '../core/live.js';
 import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
+/** 2.64.0 (R8): the next 3 days at the site; heavy rain in red. */
+const fcBox = c => (c.ui && c.ui.fc && c.ui.fc.length ? html`<div class="box pad fc"><b>Next 3 days</b><div class="fc-days">${c.ui.fc.map(d => html`<span class="pill ${d.heavy ? 'bad' : ''}">${dayLabel(d.date)}: ${d.word}, ${d.tmax}°${d.rain ? `, ${d.rain} mm` : ''}</span>`)}</div>${c.ui.fc.some(d => d.heavy) ? html`<p class="tiny bad">Heavy rain expected: plan covered work and protect materials.</p>` : ''}</div>` : '');
 import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
 import { inboxLink, monthDays } from '../model/follow.js';
 import { inboxOk } from '../model/rules.js';
@@ -133,7 +135,7 @@ export function today(c) {
   return {
     tab: 'today',
     head: head(p.name, sub, p.code),
-    body: html`${widget(c)}${sentBox(c)}<div class="soft">
+    body: html`${widget(c)}${sentBox(c)}${fcBox(c)}<div class="soft">
         <div class="spread"><b class="big-t">Today · ${dayLabel(c.today)}</b><span class="k brand">Report #${no}</span></div>
         <div class="bar gap"><i style="width:0%"></i></div>
         <div class="muted small">${r && r.nowork ? `No work today: ${r.nowork.reason}` : c.dayOff ? 'A day off for this project · you can still report' : 'Not started · about 6 minutes in all'}</div>

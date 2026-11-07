@@ -22,6 +22,7 @@ import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { buildPdf, loadPdfLib, photoCaption, weatherFile } from './pdf.js';
+import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
 import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests } from './model/follow.js';
@@ -903,6 +904,16 @@ async function sendOrQueue(action, body) {
     store.set({ outbox: [...box, { action, body, at: Date.now() }] });
     return 'queued';
   }
+}
+
+/** 2.64.0 (R8): the 3-day forecast for Today, once per project and day. */
+function fetchForecast() {
+  const p = project();
+  if (demo || !p || p.siteLa == null || p.siteLo == null) return;
+  const key = `${p.code}|${realToday()}`;
+  if (ui.fcKey === key) return;
+  ui.fcKey = key;
+  fetch(forecastUrl(p.siteLa, p.siteLo)).then(r => r.json()).then(j => { ui.fc = forecastOf(j); draw(); }).catch(() => { ui.fc = null; });
 }
 
 /** Today's weather at the site, when the project has a map position. Optional: the fields stay editable. */
@@ -2186,6 +2197,7 @@ function route() {
 }
 
 function draw() {
+  try { fetchForecast(); } catch { /* no forecast */ }   // 2.64.0
   // 2.40.0 (owner): an open list (the project list on Requests) is not closed by a live update; the page is drawn when it closes
   if (document.activeElement && document.activeElement.tagName === 'SELECT') { ui.drawLater = true; return; }
   ui.drawLater = false;

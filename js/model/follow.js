@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['sun', 'Next 3 days (2.64.0)', 'Today shows the forecast at the site for the next 3 days, heavy rain in red. It needs the site position, set in Central Hub, Reports, Weather; the same position fills in the weather on the report.'],
   ['doc', 'Issue for a task (2.63.0)', 'Store, Issue: choose the schedule task the material is for. Central Hub compares what was issued with what the work done should have used.'],
   ['doc', 'Deliveries against purchase orders (2.62.0)', 'Store, Receive: choose the purchase order the goods came on; the supplier fills in and the items are the PO lines. Store shows the deliveries still to come per PO, late ones first.'],
   ['doc', 'Store (2.61.0)', 'Review, Store: receive (with a photo of the delivery note), issue (the receiver signs), return, transfer to another project and the weekly stock count. The PM approves every movement; the PE or GM approves count differences. The PM sets the store keeper and the minimums.'],
