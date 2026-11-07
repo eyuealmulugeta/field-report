@@ -219,7 +219,11 @@ export async function sigPush(sig, at) {
 export async function now(action, body = {}) {
   if (!signedIn()) return null;
   try { return (await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'fieldNow')({ action, ...body })).data; }
-  catch (e) { if (['crewDrop', 'crewOff', 'crewPerson', 'crewSave'].includes(action)) throw e; return null; }
+  catch (e) {
+    if (['crewDrop', 'crewOff', 'crewPerson', 'crewSave'].includes(action)) throw e;
+    if (action === 'report' && e && e.code && String(e.code).includes('permission-denied')) return { ok: false, refused: String(e.message || '') };   // 2.69.0
+    return null;
+  }
 }
 
 /** 2.13.0: corrects or takes off a crew member the site added (Central Hub's rules allow name, trade, phone, active only). */

@@ -337,8 +337,8 @@ async function dbCopy(k) {
   const body = dbBody(k);
   if (!body || !L.liveOn()) return false;
   const res = await L.now('report', body);
-  if (!res || !res.ok) return false;
-  editKey(k, x => { x.dbAt = Date.now(); });
+  if (!res || !res.ok) { if (res && res.refused) editKey(k, x => { x.dbWhy = res.refused; }); return false; }   // 2.69.0: the reason, shown on the bar
+  editKey(k, x => { x.dbAt = Date.now(); delete x.dbWhy; });
   return true;
 }
 let dbBusy = false;
@@ -1382,6 +1382,8 @@ const ACTS = {
   },
   revFilter(d) { (ui.rv ||= {}).f = d.v; draw(); },
   // 2.68.0 (owner): Remove in a report's details: off this phone's lists; Central Hub keeps it
+  // 2.69.0 (owner): reports the database has not taken yet, sent again from the bar
+  dbAgain() { dbResend(); },
   revHide() {
     const rv = ui.rv || {}, x = rv.open, p = project();
     if (!x || !p || !confirm(`Remove report No. ${x.no} of ${x.date} from this phone? Central Hub keeps it.`)) return;
@@ -2280,7 +2282,7 @@ function draw() {
   let v = r === 'signin' ? S.signin(c) : r === 'profile' ? S.profile(c) : r === 'choose' ? S.chooseProject(c)
     : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);
   if (ui.date && (r === 'today' || NEEDS_REPORT.has(r))) v = { ...v, body: html`${F.pastBand(c)}${v.body}` };
-  if (!demo && !setup) v = { ...v, body: html`${P.dbBar(ui, dbWaiting(c.s.drafts).length)}${v.body}` };   // 2.35.0
+  if (!demo && !setup) { const w = dbWaiting(c.s.drafts); v = { ...v, body: html`${P.dbBar(ui, w.length, w.map(k => c.s.drafts[k].dbWhy).filter(Boolean).pop() || '')}${v.body}` }; }   // 2.35.0; 2.69.0 the reason
   if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c, P.ALL_PROJ.has(r))}` };   // 2.16.1; 2.17.0 All projects
   document.documentElement.dataset.theme = c.s.profile.dark ? 'dark' : '';
   const scroll = root.querySelector('.bd')?.scrollTop || 0;

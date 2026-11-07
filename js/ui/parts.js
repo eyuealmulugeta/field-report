@@ -26,7 +26,10 @@ export const tabsFor = (kind, rules = null) => kind === 'technician' ? TECH_TABS
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
 // 2.42.0 (owner): live updates are on for everyone: whenever they are off, every page asks for the one tap that signs in
-export const dbBar = (ui, waiting = 0) => (ui.liveRoute === 'both' && ui.live === 'signin'
+// 2.69.0 (owner): connected but reports still not in the database: how many, the database's reason, Send again
+export const dbBar = (ui, waiting = 0, why = '') => (ui.liveRoute === 'both' && ui.live === 'on' && waiting
+  ? html`<button type="button" class="db-bar" data-act="dbAgain"><b>${waiting} report${waiting > 1 ? 's' : ''} not in the database.</b> ${why || 'Not sent yet.'} · Tap to send again</button>`
+  : ui.liveRoute === 'both' && ui.live === 'signin'
   ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Not connected to the database.</b> Tap to sign in again${waiting ? ` · ${waiting} report${waiting > 1 ? 's' : ''} waiting` : ''}</button>`
   : ui.liveRoute === 'read' && ui.live === 'signin' ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Live updates are off.</b> Tap to turn them on</button>` : '');
 
