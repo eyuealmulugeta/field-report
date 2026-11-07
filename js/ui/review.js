@@ -55,7 +55,7 @@ export function rev(c) {
   const hist = (x.history || []).slice(-8).reverse();
   const to = x.preparedBy || x.uploadedBy || 'the sender';
   return {
-    head: stepHead(`No. ${x.no} · ${dayLabel(x.date)}`, `${x.preparedBy || x.uploadedBy || 'Site'} · version ${x.version || 1}`, 'review'),
+    head: stepHead(`No. ${x.no} · ${dayLabel(x.date)}`, `${x.preparedBy || x.uploadedBy || 'Site'} · version ${x.version || 1}`, 'reports'),   // 2.68.0: back to Reports
     body: html`<div class="box pad"><div class="two"><span>Status</span>${pill(st)}</div>
         <div class="two"><span>Sent by</span><b>${x.preparedBy || x.uploadedBy || '—'}</b></div>
         <div class="two"><span>Sent</span><b>${when(x.uploadedAt)}</b></div>
@@ -69,7 +69,7 @@ export function rev(c) {
         <textarea class="fld" rows="3" data-ui="revText" placeholder="Comment or what to change: it goes to ${to} only">${c.ui.revText || ''}</textarea>
         <div class="two">${st !== 'approved' ? html`<button type="button" class="btn o" data-act="revDo" data-v="changes" ${rv.busy ? 'disabled' : ''}>Send back</button><button type="button" class="btn p" data-act="revDo" data-v="approve" ${rv.busy ? 'disabled' : ''}>${icon('check')}Approve</button>`
           : html`<button type="button" class="btn o" data-act="revDo" data-v="reopen" ${rv.busy ? 'disabled' : ''}>Reopen for the site</button>`}</div>
-        <button type="button" class="btn t" data-act="revDo" data-v="comment" ${rv.busy ? 'disabled' : ''}>Comment only</button>
+        <div class="two"><button type="button" class="btn o" data-act="revDo" data-v="comment" ${rv.busy ? 'disabled' : ''}>Comment</button><button type="button" class="btn t bad-t" data-act="revHide" ${rv.busy ? 'disabled' : ''}>Remove</button></div>
         <p class="muted small">Approving signs the report with your signature (set it under Me).</p></div>` : ''}`,
   };
 }

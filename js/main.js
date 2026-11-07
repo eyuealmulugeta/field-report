@@ -1381,6 +1381,14 @@ const ACTS = {
     finally { rv.busy = false; draw(); }
   },
   revFilter(d) { (ui.rv ||= {}).f = d.v; draw(); },
+  // 2.68.0 (owner): Remove in a report's details: off this phone's lists; Central Hub keeps it
+  revHide() {
+    const rv = ui.rv || {}, x = rv.open, p = project();
+    if (!x || !p || !confirm(`Remove report No. ${x.no} of ${x.date} from this phone? Central Hub keeps it.`)) return;
+    store.set({ hidden: { ...(store.get().hidden || {}), [`${p.code}|${x.date}`]: Date.now() } });
+    rv.list = (rv.list || []).filter(y => y.name !== x.name); rv.open = null;
+    toast('Removed from this phone.'); go('reports');
+  },
   async revOpen(d) {
     const rv = ui.rv || (ui.rv = {});
     rv.open = (rv.list || []).find(x => x.name === d.v) || null; ui.revText = '';
@@ -2212,7 +2220,14 @@ function openLink(h) {
   if (code && code !== s.proj && s.projects.some(p => p.code === code)) store.set({ proj: code });
   if (what === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }   // after the page change, which closes sheets
   // 2.52.0 (owner): a new report opens that report in Reports (its day, with Approve and Send back), not the old Review page
+  // 2.68.0 (owner): Open on the notification: that report's details (Approve, Send back, Comment, Remove), not the list
+  else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '') && kind() !== 'reporter') { ui.rv = { want: { d, no } }; ui.sheet = ''; go('rev'); ACTS.revLoad(); }
   else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }
+  // 2.68.0 (owner): Remind later: the same notification again in 30 minutes
+  else if (what === 'later' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) {
+    go('reports');
+    call('remindLater', { date: d, proj: code, no }).then(r => toast(`I will remind you in ${r.minutes || 30} minutes.`)).catch(e => toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`));
+  }
   // 2.54.0 (owner): Approve or Send back tapped on the phone notification: the report opens, Approve asks once, Send back waits for the reason
   else if (what === 'act') {
     const [, how, date, pcode, pno] = decodeURIComponent(h.slice(3)).split('/');
