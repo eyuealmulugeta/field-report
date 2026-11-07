@@ -11,8 +11,17 @@ export function newEntry({ email, name = '', position = '', projects = [], devic
   return {
     id: `FR_${now.toString(36)}_${rand()}`, app: 'FR', email: String(email || '').toLowerCase(), name: String(name || '').slice(0, 80), position: String(position || '').slice(0, 60),
     projects: (projects || []).map(String).slice(0, 20), device: String(device || '').slice(0, 80), mode: mode === 'app' || mode === 'browser' ? mode : '',
-    start: now, last: now, end: 0, how: '',
+    start: now, last: now, end: 0, how: '', act: 0,
   };
+}
+
+/** 2.65.0 (G3): the minutes the person really used the app (tapped, typed or scrolled in the last 5 minutes). */
+export const IDLE_MS = 5 * 60 * 1000;
+export function inputClock(doc, start = Date.now()) {
+  let at = start;
+  const mark = () => { at = Date.now(); };
+  if (doc && doc.addEventListener) for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll']) doc.addEventListener(ev, mark, { passive: true, capture: true });
+  return { busy: now => now - at < IDLE_MS, mark };
 }
 
 const s = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
@@ -27,14 +36,14 @@ export function actEntry(e, who, now = Date.now()) {
 }
 
 /** io: { create(entry), touch(id, last), close(id, end), place(id) } (each may fail quietly). */
-export function presence(make, io) {
+export function presence(make, io, busy = null) {
   let cur = null;
   const quiet = p => Promise.resolve(p).catch(() => {});
   return {
     tick(now = Date.now()) {
       const e = !cur || now - cur.last > STALE_MS ? make(now) : null;
       if (e) { cur = e; quiet(Promise.resolve(io.create(e)).then(() => io.place(e.id))); }
-      else if (now - cur.last >= BEAT_MS - 5000) { cur.last = now; quiet(io.touch(cur.id, now)); }
+      else if (now - cur.last >= BEAT_MS - 5000) { if (busy && busy(now)) cur.act = (cur.act || 0) + 1; cur.last = now; quiet(io.touch(cur.id, now, cur.act)); }   // 2.65.0: act
     },
     hide(now = Date.now()) { if (cur && now - cur.last <= STALE_MS) { cur.last = now; quiet(io.touch(cur.id, now)); } },
     async signOut(now = Date.now()) { const c = cur; cur = null; if (c) await quiet(io.close(c.id, now)); },

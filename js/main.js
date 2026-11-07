@@ -36,7 +36,7 @@ import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
-import { presence, BEAT_MS, newEntry as newLog, actEntry } from './core/signlog.js';   // 2.58.0 (G2)
+import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
@@ -2378,7 +2378,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 const here = presence(now => {
   const s = store.get(), p = project();
   return { ...newLog({ email: L.logEmail(), name: (s.profile || {}).name || '', position: (s.profile || {}).position || '', projects: p ? [p.code] : [], device: deviceUa(), mode: deviceMode(), now }) };
-}, L.logIO);
+}, L.logIO, inputClock(document).busy);   // 2.65.0 (G3): active minutes
 const hereTick = () => { if (!demo && store.get().auth && L.logReady() && document.visibilityState === 'visible' && navigator.onLine) here.tick(Date.now()); };
 setInterval(hereTick, BEAT_MS);
 setTimeout(hereTick, 5000);

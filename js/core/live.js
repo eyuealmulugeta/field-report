@@ -95,7 +95,7 @@ export const logReady = () => !!(fb && fb.auth.currentUser && fb.auth.currentUse
 export const logEmail = () => (logReady() ? fb.auth.currentUser.email.toLowerCase() : '');
 export const logIO = {
   create: e => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', e.id), e),
-  touch: (id, last) => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', id), { last }, { merge: true }),
+  touch: (id, last, act) => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', id), act != null ? { last, act } : { last }, { merge: true }),   // 2.65.0: active minutes
   close: (id, end) => fb.F.setDoc(fb.F.doc(fb.db, 'signlog', id), { last: end, end, how: 'signout' }, { merge: true }),
   place: id => fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'signPlace')({ id }).catch(() => {}),
 };

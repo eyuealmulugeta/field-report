@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['users', 'Time used is recorded (2.65.0)', 'As with sign-ins, the minutes you actively use Field Report and Central Hub (tapping, typing, scrolling) are recorded for the company. Only the Admin and the GM see them.'],
   ['sun', 'Next 3 days (2.64.0)', 'Today shows the forecast at the site for the next 3 days, heavy rain in red. It needs the site position, set in Central Hub, Reports, Weather; the same position fills in the weather on the report.'],
   ['doc', 'Issue for a task (2.63.0)', 'Store, Issue: choose the schedule task the material is for. Central Hub compares what was issued with what the work done should have used.'],
   ['doc', 'Deliveries against purchase orders (2.62.0)', 'Store, Receive: choose the purchase order the goods came on; the supplier fills in and the items are the PO lines. Store shows the deliveries still to come per PO, late ones first.'],
