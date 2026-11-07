@@ -100,6 +100,12 @@ export const logIO = {
   place: id => fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'signPlace')({ id }).catch(() => {}),
 };
 
+/** 2.59.0 (G1): one line of Central Hub's activity record (activity/<id>), in this account's name. */
+export function logAct(rec) {
+  if (!logReady() || !rec) return;
+  fb.F.setDoc(fb.F.doc(fb.db, 'activity', rec.id), { ...rec, email: logEmail() }).catch(() => {});
+}
+
 /** Stops listening and signs out of Firebase (the phone's own sign-out, or the route back to Script). */
 export async function stop() {
   stops.forEach(f => { try { f(); } catch { /* gone */ } }); stops = [];

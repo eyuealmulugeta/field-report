@@ -36,7 +36,7 @@ import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
-import { presence, BEAT_MS, newEntry as newLog } from './core/signlog.js';   // 2.58.0 (G2)
+import { presence, BEAT_MS, newEntry as newLog, actEntry } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
@@ -610,6 +610,7 @@ async function makePdf(r, p, step = () => {}) {
   const blob = doc.output('blob');
   if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
   ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
+  logAct({ action: 'generate', channel: 'PDF', doc: ui.pdf.name, no: r.no ? `#${r.no}` : '' });   // 2.59.0
   return blob;
 }
 
@@ -675,6 +676,15 @@ function sigFetch() {
 const adminRole = () => ((store.get().auth || {}).role || '') === 'admin';
 const dropPdf = () => { if (ui.pdf) { URL.revokeObjectURL(ui.pdf.url); ui.pdf = null; } };
 const pdfRefused = () => { toast('The report PDF goes to the office only. Use View the report.'); return true; };
+
+/** 2.59.0 (owner, G1): a line of Central Hub's activity record: a report PDF made, opened, shared or downloaded, a report sent. */
+function logAct(e) {
+  if (demo) return;
+  try {
+    const s = store.get(), p = project();
+    L.logAct(actEntry({ page: 'Field Report', ...e }, { email: L.logEmail(), name: (s.profile || {}).name || '', position: (s.profile || {}).position || '', project: p ? p.code : '', projectName: p ? p.name || p.code : '' }));
+  } catch { /* the record never stops the work */ }
+}
 
 /** 2.0.1: the old app (at /v1/) is for the Admin only. On everyone else's phone its saved data goes: its settings, sign-in,
  *  drafts and unsent reports (localStorage "afr_…" and IndexedDB "afr"). The device id (afr_devid) stays: it is shared with this app. */
@@ -765,6 +775,7 @@ async function sendReport(k, step = () => {}) {
   try {
     const res = await call('upload', { name, folderId: '', data, meta });
     const at = Date.now();
+    logAct({ action: 'send', channel: 'To the office', doc: name, no: r && r.no ? `#${r.no}` : '' });   // 2.59.0 (G1)
     editKey(k, x => { x.firstSentAt = x.firstSentAt || at; x.sentAt = at; x.pressedAt = pressed; x.updated = at; x.queuedAt = 0; x.sendError = ''; x.sent = { name, version: res.version || 1, status: res.status || 'submitted', unchanged: !!res.unchanged, hash: meta.hash }; });
     if (ui.pdf && ui.pdf.key === k) ui.pdf.at = at;
     unqueue(k);
@@ -1701,8 +1712,8 @@ const ACTS = {
     try {
       await makePdf(r, project());
       const f = ui.pdf, file = new File([f.blob], f.name, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: f.name });
-      else { const a = document.createElement('a'); a.href = f.url; a.download = f.name; a.click(); }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: f.name }); logAct({ action: 'share', channel: 'Share sheet', doc: f.name }); }
+      else { const a = document.createElement('a'); a.href = f.url; a.download = f.name; a.click(); logAct({ action: 'download', channel: 'PDF', doc: f.name }); }   // 2.59.0
     } catch (e) { if (e.name !== 'AbortError') toast(`Not shared: ${e.message}`); }
   },
   checkStatus: () => checkStatus(true),
@@ -1849,7 +1860,7 @@ const ACTS = {
   async openPdf() {
     if (!adminRole()) return pdfRefused();
     ui.pdfBusy = true; draw();
-    try { const f = await currentPdf(); window.open(f.url, '_blank'); }
+    try { const f = await currentPdf(); window.open(f.url, '_blank'); logAct({ action: 'view', channel: 'PDF', doc: f.name }); }   // 2.59.0
     catch (e) { toast(`The PDF could not be made: ${e.message}`); }
     ui.pdfBusy = false; draw();
   },
@@ -1857,8 +1868,8 @@ const ACTS = {
     if (!adminRole()) return pdfRefused();
     try {
       const f = await currentPdf(), file = new File([f.blob], f.name, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: f.name });
-      else { const a = document.createElement('a'); a.href = f.url; a.download = f.name; a.click(); }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: f.name }); logAct({ action: 'share', channel: 'Share sheet', doc: f.name }); }
+      else { const a = document.createElement('a'); a.href = f.url; a.download = f.name; a.click(); logAct({ action: 'download', channel: 'PDF', doc: f.name }); }   // 2.59.0
     } catch (e) { if (e.name !== 'AbortError') toast(`Not shared: ${e.message}`); }
   },
   async sendReport() {

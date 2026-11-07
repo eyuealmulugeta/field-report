@@ -15,6 +15,17 @@ export function newEntry({ email, name = '', position = '', projects = [], devic
   };
 }
 
+const s = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+const ACTIONS = ['generate', 'print', 'share', 'email', 'download', 'save', 'view', 'send'];
+/** 2.59.0 (G1): a line of the activity record, the shape Central Hub's rules accept (engine/activity.js there). */
+export function actEntry(e, who, now = Date.now()) {
+  return {
+    id: `FR_${now.toString(36)}_${rand()}`, app: 'FR', email: s(who.email, 120).toLowerCase(), name: s(who.name, 80), position: s(who.position, 60),
+    project: s(who.project, 60), projectName: s(who.projectName, 80), page: s(e.page, 60), action: ACTIONS.includes(e.action) ? e.action : 'save',
+    channel: s(e.channel, 40), doc: s(e.doc, 120), no: s(e.no, 40), to: s(e.to, 160), at: now,
+  };
+}
+
 /** io: { create(entry), touch(id, last), close(id, end), place(id) } (each may fail quietly). */
 export function presence(make, io) {
   let cur = null;
