@@ -596,3 +596,8 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .sh-photos img{width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#ddd)}
 .sh-ph{display:flex;flex-direction:column;gap:4px;align-items:center}
 .sh-rev .row{gap:8px;align-items:center;flex-wrap:wrap}
+/* 2.70.1 (owner, 8 Nov): on a phone the bell covered the header and the red bar; it sits above the + button, bottom right */
+.inbox-fab { top: auto; bottom: calc(150px + env(safe-area-inset-bottom)); right: 23px; }
+.inbox-pop { top: auto; bottom: calc(204px + env(safe-area-inset-bottom)); max-height: 55vh; }
+.app.wide ~ .inbox-fab, .app.wide .inbox-fab { bottom: 20px; right: 20px; }
+.app.wide ~ .inbox-pop, .app.wide .inbox-pop { bottom: 76px; max-height: 65vh; }
