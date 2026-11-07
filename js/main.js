@@ -58,7 +58,10 @@ const SCREENS = {
   today: S.today, start: S.start, crew: S.crew, att: S.att, me: S.me, work: W.work, item: W.item, photo: W.photo,
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
   end: E.end, request: E.request, send: E.send,
-  reports: F.reports, requests: F.requests, view: V.view,
+  // 2.55.0 (owner): Reports and Requests are the two tabs inside Review
+  reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports')}${v.body}` }; },
+  requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
+  view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
   spot: SP.spot, attention: S.attention,              // 2.7.0
   quick: Q.quick,                                      // 2.11.0
@@ -1279,7 +1282,6 @@ const ACTS = {
   projPop: () => { ui.projPop = !ui.projPop; draw(); },
   projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
-  revTab(d) { ui.revTab = d.v; draw(); },   // 2.54.0
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
   async refresh() {
     ui.refreshing = true; draw();   // 2.42.0: the button says Refreshing…
@@ -2016,7 +2018,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
 [300, 1500].forEach(ms => setTimeout(relayout, ms));
 
 /** The open step's tab in the menu. */
-const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'requests', me: 'me', review: 'review', rev: 'review', crewrev: 'review' };
+const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'reports', me: 'me', review: 'reports', rev: 'reports', crewrev: 'me' };   // 2.55.0
 if (true) { TAB_OF.review = TAB_OF.rev = TAB_OF.crewrev = 'me'; }   // 2.37.0: from Me (a viewer has no rail tab but Review)
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
@@ -2073,7 +2075,8 @@ function route() {
   let h = location.hash.slice(1) || 'today';
   if (h === 'crew') h = 'att';   // 2.10.0: the day's Attendance step is the Office attendance tab
   // 2.6.0: a reviewer or viewer account writes no report: it opens on Review
-  if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'reports' || h === 'requests' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'review';
+  if (h === 'review') h = 'reports';   // 2.55.0 (owner): the old Review list is replaced by Reports and Requests
+  if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'reports';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';

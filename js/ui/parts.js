@@ -7,14 +7,13 @@ import { APP_VERSION } from '../core/api.js';
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
   { id: 'att', title: 'Office', icon: 'users' },   // 2.13.1: the page itself says Attendance   // 2.10.0
-  { id: 'reports', title: 'Reports', icon: 'doc' },
-  { id: 'requests', title: 'Requests', icon: 'box' },
+  { id: 'reports', title: 'Review', icon: 'doc' },   // 2.55.0 (owner): Review holds Reports and Requests side by side
   { id: 'quick', title: 'Quick', icon: 'plus' },   // 2.11.0: the + tab
 ];   // 2.8.0: Me is the person button at the top right (`head`)
 
 /** 2.6.0: a reviewer or viewer account: Review, Crew and Me. */
 export const REVIEW_TABS = [
-  { id: 'review', title: 'Review', icon: 'doc' },
+  { id: 'reports', title: 'Review', icon: 'doc' },   // 2.55.0: Reports and Requests inside
   { id: 'crewrev', title: 'Crew', icon: 'users' },
 ];
 /** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
@@ -35,8 +34,12 @@ export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'review'
 export const ALL_PROJ = new Set(['reports', 'requests', 'review']);
 export const projTop = (c, all = false) => html`<div class="proj-top"><select data-proj aria-label="Project">${all ? html`<option value="*" ${c.ui && c.ui.allProj ? 'selected' : ''}>All projects</option>` : ''}${c.s.projects.map(x => html`<option value="${x.code}" ${x.code === c.s.proj && !(all && c.ui && c.ui.allProj) ? 'selected' : ''}>${x.name} · ${x.code}</option>`)}</select></div>`;
 
+// 2.55.0: Requests, Review and a report's review light the Review tab
+export const tabOf = on => (['requests', 'review', 'rev'].includes(on) ? 'reports' : on);
+/** 2.55.0 (owner): the two tabs inside Review. */
+export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button></div>`;
 export const nav = (on, badges = {}, kind = 'reporter') => html`<nav class="nav">${tabsFor(kind).map(t => html`
-  <button type="button" class="${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
+  <button type="button" class="${t.id === tabOf(on) ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;
 
 /** Header for a tab: logo, title, subtitle and an optional pill on the right. */

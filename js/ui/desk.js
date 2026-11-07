@@ -6,7 +6,7 @@ import { dayLabel } from '../core/util.js';
 import { doneCount } from '../model/report.js';
 import { totals } from '../model/crew.js';
 import { itemLine } from '../model/items.js';
-import { tabsFor, dayList, kpi, isGM, projPick } from './parts.js';
+import { tabsFor, tabOf, dayList, kpi, isGM, projPick } from './parts.js';
 import { thumb, plannedBox } from './work.js';
 import { READY, weekStrip } from './screens.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
@@ -21,7 +21,7 @@ export function rail(c, on) {
     <div class="brand"><img class="logo" src="icon-192.png" alt="Amistad Prefab"><div class="wide-only"><b>Field Report</b><span>Amistad Prefab</span></div></div>
     <span class="ver">${APP_VERSION}</span>
     ${isGM(c) ? html`<button type="button" class="proj wide-only" data-act="projPop" title="Change project"><div><b>${p.name}</b><span>${p.code}${p.location ? ` · ${p.location}` : ''}</span></div></button>${c.ui.projPop ? html`<div class="proj-pop">${projPick(c, 'projPopPick', true)}</div>` : ''}` : ''}
-    ${[...tabsFor(c.kind), { id: 'me', title: 'Me', icon: 'user' }].map(t => html`<button type="button" class="navi ${t.id === on ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
+    ${[...tabsFor(c.kind), { id: 'me', title: 'Me', icon: 'user' }].map(t => html`<button type="button" class="navi ${t.id === tabOf(on) ? 'on' : ''}" data-act="go" data-to="${t.id}" title="${t.title}">${icon(t.icon)}<span class="wide-only">${t.title}</span></button>`)}
     <div class="rail-foot wide-only">${time ? html`<span><b>● Saved</b> on this computer · ${time}</span>` : ''}<span>${c.s.profile.name}${c.s.profile.position ? ` · ${c.s.profile.position}` : ''}</span>${isDemo() ? html`<span class="pill warn">Demo</span>` : ''}</div>
   </aside>`;
 }
