@@ -1,6 +1,7 @@
 // The screens of slice 1: sign in, first-time profile, Today, Start of day, Attendance and crew, Me,
 // and holding pages for Reports and Requests. Each returns { head, body, foot, tab, fab }.
 
+import { countryList } from '../core/countries.js';   // 2.71.0
 import { html, icon } from '../core/dom.js';
 import * as L from '../core/live.js';
 import { dayLabel, dayLetter, addDays, weekday } from '../core/util.js';
@@ -347,8 +348,10 @@ function staffRow(c, x) {
   // 2.45.0 (owner): what Central Hub's employee record still misses, under the name
   const tag = info ? (info.missing.length ? html` <span class="pill warn">${info.missing.join(', ')} missing</span>` : html` <span class="pill ok">Complete</span>`) : '';
   return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}${tag}</span></div>
-    ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'cdOpen' : 'liveConnect'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
+    ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'cdOpen' : c.ui.live === 'signin' || !c.ui.live ? 'liveConnect' : 'liveWhy'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
+/** 2.71.0 (owner, 8 Nov): every country in the world, Ethiopia first; an older value (e.g. "Ethiopian") is kept as it is. */
+const nationalities = cur => { const all = countryList().map(([, n]) => n).filter(n => n !== 'Ethiopia'); return ['', 'Ethiopia', ...all, ...(cur && cur !== 'Ethiopia' && !all.includes(cur) ? [cur] : [])]; };
 /** 2.45.0: the employee data of one crew member, from and to Central Hub. */
 function cdForm(c, x) {
   const cd = c.ui.cd, f = cd.f || {};
@@ -360,7 +363,7 @@ function cdForm(c, x) {
     ${fld('name', 'Full name')}
     <label class="lab">Trade</label><select class="fld" data-cd="title">${tradesOf(c, f.title).map(n => html`<option ${n === f.title ? 'selected' : ''}>${n}</option>`)}</select>
     ${fld('privatePhone', 'Phone', 'type="tel" inputmode="tel"')}
-    ${fld('nationality', 'Nationality')}
+    <label class="lab">Nationality</label><select class="fld ${f.nationality ? '' : 'cd-miss'}" data-cd="nationality">${nationalities(f.nationality).map(n => html`<option value="${n}" ${n === (f.nationality || '') ? 'selected' : ''}>${n || 'Choose the country…'}</option>`)}</select>   <!-- 2.71.0 (owner): every country -->
     ${fld('idNumber', 'Fayda ID number', 'inputmode="numeric"')}
     ${fld('passportNumber', 'Passport number')}
     <div class="cd-pics">${pic('photo', 'Photo')}${pic('idImage', 'ID front')}${pic('idImageBack', 'ID back')}${pic('passportImage', 'Passport')}</div>

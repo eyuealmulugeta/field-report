@@ -948,6 +948,13 @@ async function crewInfo() {
   if (r && r.info) { ui.crewInfo = { code: p.code, info: r.info }; draw(); }
 }
 const attRefreshSoon = () => setTimeout(() => { ACTS.attRefresh(true); crewInfo(); }, 300);   // 2.43.1: the page to return to after the Central Hub sign-in
+/** 2.71.0: why live updates (and the crew employee data) are not available, in words. */
+function liveWhyText(st, why = '') {
+  if (st === 'none') return 'This project is not linked to your email in Central Hub. Ask the Admin to put you on it in the Manpower Directory.';
+  if (st === 'error') return `Central Hub's database cannot be reached now${why ? ` (${why})` : ''}. Check the internet and try again.`;
+  if (st === 'off' || st === '') return 'Live updates are off for this project. Ask the Admin.';
+  return 'Connecting to Central Hub… try again in a moment.';
+}
 function toast(msg) {
   ui.toast = msg; draw();
   clearTimeout(toast.t); toast.t = setTimeout(() => { ui.toast = ''; draw(); }, 2600);
@@ -1321,7 +1328,9 @@ const ACTS = {
     go('today');
   },
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); goLive(); },
-  liveConnect: () => signedIn(signIn(store.get().profile.name || '')),   // 2.12.0: the Google sign-in again, for live updates
+  liveConnect: () => signedIn(signIn(store.get().profile.name || '')),
+  // 2.71.0 (owner): the crew Edit opened Google's account page when the project was not linked; now it says why
+  liveWhy: () => toast(liveWhyText(ui.live, ui.liveWhy)),   // 2.12.0: the Google sign-in again, for live updates
   // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
   // 2.16.1: the GM's project list at the top: every page follows the project chosen
   projTop(d) {
