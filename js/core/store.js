@@ -18,6 +18,7 @@ const blank = () => ({
   dev: '',             // this phone's id, so a draft saved here is not offered back to it
   seenNew: '',         // the version whose "What's new" was seen
   remindedOn: '',      // the day the 17:00 reminder went out
+  rules: null,         // 2.60.0 (G6): this person's access rules from Central Hub; null: the role decides
   inbox: [],           // 2.0.1: the last notifications sent to this person [{ t, h, m, c, f }] (script 7.29.0)
   inboxSeen: '',       // 2.0.1: notifications up to this time were cleared from Today
   pushAppId: '',       // 2.0.1: the OneSignal app id, kept after the first ask

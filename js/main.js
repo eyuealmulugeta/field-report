@@ -38,6 +38,7 @@ import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
+import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
 import { onSwipe } from './core/swipe.js';
@@ -635,6 +636,7 @@ async function signedIn(pending) {
     const s = store.get();
     store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...s.profile, name: s.profile.name || a.name || '' } });
     applyMe(a.me);
+    if ('rules' in a) store.set({ rules: cleanRules(a.rules) });   // 2.60.0 (G6)
     ui.signup = null;
     oldAppClear();
     sigFetch();
@@ -722,6 +724,7 @@ async function inboxCheck(force) {
   try {
     const r = await call('inbox', {});
     applyMe(r.me);
+    if ('rules' in r) { const nr = cleanRules(r.rules); if (JSON.stringify(nr) !== JSON.stringify(store.get().rules || null)) store.set({ rules: nr }); }   // 2.60.0 (G6)
     const items = r.items || [], was = store.get().inbox || [];
     if (JSON.stringify(items) !== JSON.stringify(was)) store.set({ inbox: items });
   } catch (e) { if (force && e.code !== 'BAD_REQUEST') toast(e.message); }
@@ -1308,7 +1311,7 @@ const ACTS = {
     if (!confirm('Sign out? Reports not yet sent stay on this phone.')) return;
     await here.signOut(Date.now());   // 2.58.0: the end of this session in the sign-in history
     L.stop(); ui.live = '';
-    store.set({ auth: null }); go('');
+    store.set({ auth: null, rules: null }); go('');
   },
   startDay() { ensureReport(); go('start'); fetchWeather(); },
   /** 2.6.0: the reports of the open project, for a reviewer or viewer. */
@@ -2101,7 +2104,7 @@ function openLink(h) {
   // 2.54.0 (owner): Approve or Send back tapped on the phone notification: the report opens, Approve asks once, Send back waits for the reason
   else if (what === 'act') {
     const [, how, date, pcode, pno] = decodeURIComponent(h.slice(3)).split('/');
-    if (!['approve', 'changes'].includes(how) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) { go('reports'); return true; }
+    if (!['approve', 'changes'].includes(how) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !ruleHas(s.rules, 'fr_approve', 'D')) { go('reports'); return true; }   // 2.60.0: approving by rule only
     if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
     go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
   }
@@ -2123,6 +2126,7 @@ function route() {
   if (h === 'review') h = 'reports';   // 2.55.0 (owner): the old Review list is replaced by Reports and Requests
   if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'reports';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
+  if (!screenOk(s.rules, h)) return firstOk(s.rules);   // 2.60.0 (owner, G6): a page the rules hide does not open by any address
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';
   if (h === 'photo' && !ui.photo) return 'today';
@@ -2161,7 +2165,7 @@ function draw() {
   } else {
     root.innerHTML = page
     + `${v.fab ? '<button type="button" class="fab" data-act="fab" aria-label="Log now"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}`
-    + `${v.tab ? nav(v.tab, {}, c.kind) : ''}`;
+    + `${v.tab ? nav(v.tab, {}, c.kind, c.s.rules) : ''}`;
   }
   if (!setup) root.insertAdjacentHTML('beforeend', S.inboxFab(c));   // 2.37.0: the floating notifications circle
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
@@ -2170,6 +2174,7 @@ function draw() {
     + `${isDemo() ? '<div class="demo-flag">Demo</div>' : ''}`;
   if (ui.sheetNew) { root.querySelector('.sheet')?.classList.add('new'); ui.sheetNew = false; }
   if (same) { const bd = root.querySelector('.bd'); if (bd) bd.scrollTop = scroll; }
+  hideOff(root, c.s.rules);   // 2.60.0 (owner, G6): what the rules hide is not on the page by any means
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
   bindSig();
@@ -2187,7 +2192,7 @@ root.addEventListener('click', e => {
   if (ui.projPop && !e.target.closest('.proj-pop') && !(el && el.dataset.act === 'projPop')) { ui.projPop = false; draw(); if (!el) return; }
   if (!el || el.disabled) return;
   const fn = ACTS[el.dataset.act];
-  if (fn) fn(el.dataset, el);
+  if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
 });
 
 root.addEventListener('input', e => {

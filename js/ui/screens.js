@@ -8,6 +8,7 @@ import { pdfName } from '../core/names.js';
 import { isDemo, APP_VERSION } from '../core/api.js';
 import { doneCount, WEATHER, GROUND, WEATHER_PIC, PPE } from '../model/report.js';
 import { inboxLink, monthDays } from '../model/follow.js';
+import { inboxOk } from '../model/rules.js';
 import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses, dayConfirm } from '../model/crew.js';
 import { thumb } from './work.js';
 import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop } from './parts.js';
@@ -19,7 +20,7 @@ const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig
 /** 2.0.1: every notification sent to this person (reviews, alerts, tests, device reports), newest first. 2.37.0: in a floating circle. */
 const when = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.toDateString().slice(4, 10)} · ${d.toTimeString().slice(0, 5)}`; };
 // 2.39.0 (owner): a message opened is read, so the count goes down
-export const inboxItems = c => { const seen = c.s.inboxSeen || '', read = new Set(c.s.inboxRead || []); return (c.s.inbox || []).filter(x => x.t > seen && !read.has(x.t)); };
+export const inboxItems = c => { const seen = c.s.inboxSeen || '', read = new Set(c.s.inboxRead || []); return inboxOk(c.s.rules, (c.s.inbox || []).filter(x => x.t > seen && !read.has(x.t)), inboxLink); };   // 2.60.0 (G6): hidden pages send no notifications
 /** 2.37.0 (owner): a circle with the count, only when there are notifications; it opens the list. Clear empties it and the circle goes. */
 export function inboxFab(c) {
   const n = inboxItems(c).length;
