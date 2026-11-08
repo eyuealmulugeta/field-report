@@ -43,7 +43,7 @@ import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
 import { messageOf, freshOf, mayEdit, isDm, takeBackOk } from './model/chat.js';
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
-import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
+import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
 import { openPad } from './ui/sigpad.js';
@@ -66,6 +66,7 @@ const realToday = () => (demo ? demoToday() : todayIn());
 const today = () => ui.date || realToday();
 const now = () => timeIn();
 
+try { setOff(JSON.parse(localStorage.getItem('fr2_off') || '[]')); } catch { /* private mode */ }   // 2.74.0: what Central Hub switched off, offline too
 const SCREENS = {
   today: S.today, start: S.start, crew: S.crew, att: S.att, me: S.me, work: W.work, item: W.item, photo: W.photo,
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
@@ -312,6 +313,11 @@ async function goLive(at = '') {
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
     onShots: list => { ui.shList = list; draw(); },   // 2.66.0
+    onFeatures: list => {   // 2.74.0 (owner): Central Hub switched features on or off
+      const k = JSON.stringify(list || []);
+      try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
+      setOff(list); draw();
+    },
     onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); },   // 2.73.0 (owner, R4)
     onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); },
     // 2.17.0: every phone's reports, live; the GM's other projects too

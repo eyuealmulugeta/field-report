@@ -24,10 +24,18 @@ const LATER = new Set(['fr_store', 'fr_shots']);
 export const has = (rules, feat, flag = 'S') => !rules || (LATER.has(feat) && !(feat in rules)) || String(rules[feat] || '').includes(flag);
 /** May the person open this page? */
 export function screenOk(rules, screen) {
-  if (!rules) return true;
   const f = STEP_SCREENS.has(screen) && screen !== 'crew' ? ['fr_report'] : SCREEN[screen === 'crew' ? 'att' : screen];
-  return !f || f.some(k => has(rules, k));
+  if (OWN_OFF[screen] && OFF.has(OWN_OFF[screen])) return false;   // 2.74.0
+  if (f && f.every(k => OFF.has(k))) return false;
+  if (!rules) return true;
+  return !f || f.some(k => has(rules, k) && !OFF.has(k));
 }
+/* 2.74.0 (owner, 8 Nov): features the Admin switched off in Central Hub (Settings, Apps) are hidden on every phone, for
+   everyone, whatever their access; nothing is deleted. Kept on the phone so it holds offline. */
+let OFF = new Set();
+const OWN_OFF = { chat: 'fr_chat' };
+export const setOff = list => { OFF = new Set((Array.isArray(list) ? list : []).filter(k => /^fr_[a-z]{2,12}$/.test(k))); };
+export const isOff = k => OFF.has(k);
 /** May a notification's link (#go=what/...) be opened? */
 export function linkOk(rules, link) {
   if (!rules || !link) return true;
@@ -37,6 +45,8 @@ export function linkOk(rules, link) {
 }
 /** May the person use this button (data-act and its data-*)? */
 export function actOk(rules, act, d = {}) {
+  if (ACT[act] && OFF.has(ACT[act][0])) return false;   // 2.74.0: switched off in Central Hub
+  if (DECIDE.has(act) && ['approve', 'changes', 'reopen'].includes(d.v) && OFF.has('fr_approve')) return false;
   if (!rules) return true;
   if (act === 'go') return screenOk(rules, d.to);
   if (DECIDE.has(act) && ['approve', 'changes', 'reopen'].includes(d.v)) return has(rules, 'fr_approve', 'D');

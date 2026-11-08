@@ -117,7 +117,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onDirect = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onDirect = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -172,6 +172,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'storeMoves'), snap => onStore(snap.docs.map(x => x.data())), () => {}));
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'poOpen'), snap => onPOs(snap.docs.map(x => x.data())), () => {}));   // 2.62.0 (R6)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'workShots'), snap => onShots(snap.docs.map(x => x.data())), () => {}));   // 2.66.0
+    stops.push(F.onSnapshot(F.doc(db, 'public', 'fieldFeatures'), d => onFeatures((d.data() || {}).off || []), () => {}));   // 2.74.0: features switched off
     // 2.73.0 (owner, R4): Discuss: the project's channel and this person's one-to-one chats, as on Central Hub
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => {}));
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'direct'), F.where('members', 'array-contains', u.email.toLowerCase())), snap => onDirect(snap.docs.map(x => x.data())), () => {}));
