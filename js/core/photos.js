@@ -33,13 +33,18 @@ export const deletePhoto = id => tx('readwrite', s => s.delete(id));
  * 2.51.0 (owner, 5 Nov): the camera original, full size and quality, for Drive. A JPEG from the camera is kept byte for
  * byte; another picture type becomes a full-size JPEG at 95%. Kept as 'o_<id>' until it is in Drive.
  */
-export const ORIG = id => `o_${id}`, SCREEN_MAX = 2560;
+export const ORIG = id => `o_${id}`, SCREEN_MAX = 1920, TILE_MAX = 640;   // 2.78.0: 1920 px screen copy, 640 px tile
 export async function original(file) {
   if (file.type === 'image/jpeg') return file;
   return reduce(file, 1e9, 0.95);
 }
-/** The screen copy for Central Hub: at most 2560 px, JPEG 92% (looks the same as the original on a screen). */
-export const screenCopy = blob => reduce(blob, SCREEN_MAX, 0.92);
+/**
+ * The screen copy for Central Hub. 2.78.0 (owner, 8 Nov: load quickly, same quality): at most 1920 px, JPEG 88%, about
+ * 300-500 KB, the same to the eye on a phone or a laptop. The original stays in Drive for Download original.
+ */
+export const screenCopy = blob => reduce(blob, SCREEN_MAX, 0.88);
+/** 2.78.0: the small picture for the tiles, at most 640 px, about 40-70 KB. */
+export const tileCopy = blob => reduce(blob, TILE_MAX, 0.8);
 async function reduce(file, max, q) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   const src = bmp || await new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = URL.createObjectURL(file); });

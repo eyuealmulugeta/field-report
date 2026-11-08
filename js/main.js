@@ -12,7 +12,7 @@ import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWai
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
-import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl, original, screenCopy, ORIG } from './core/photos.js';
+import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
 import { listen } from './core/voice.js';
 import * as S from './ui/screens.js';
 import * as W from './ui/work.js';
@@ -871,6 +871,7 @@ async function sendPhotos(k, name, step) {
     // original is not on this phone (taken before 2.51.0). Time and caption go with it, so the office sees it live.
     const meta = { time: ph.at || '', caption: ph.caption || '', zone: ph.zone || '' }, o = await getPhoto(ORIG(ph.id)).catch(() => null);
     const b64 = async x => (await toDataUrl(x)).split(',')[1];
+    await call('photoPut', { report: name, id: ph.id, kind: 'tile', data: await b64(await tileCopy(o || b)), ...meta });   // 2.78.0: the tile first, so it shows at once
     if (o) await call('photoPut', { report: name, id: ph.id, kind: 'screen', data: await b64(await screenCopy(o)), ...meta });
     const res = await call('photoPut', { report: name, id: ph.id, data: await b64(o || b), ...meta });
     if (o) deletePhoto(ORIG(ph.id)).catch(() => {});
@@ -880,12 +881,13 @@ async function sendPhotos(k, name, step) {
 
 /** 2.1.0: a photo this phone no longer has, read back from Drive (kept for this session only). */
 const fromDrive = new Map();
-async function drivePhoto(report, id) {
-  if (fromDrive.has(id)) return fromDrive.get(id);
-  const job = call('photoGet', { report, id }).then(res => fetch(`data:image/jpeg;base64,${res.data}`).then(x => x.blob())).catch(() => null);
-  fromDrive.set(id, job);
+async function drivePhoto(report, id, size = '') {
+  const key = size ? `${size}|${id}` : id;   // 2.78.0: size 'tile' = the small picture
+  if (fromDrive.has(key)) return fromDrive.get(key);
+  const job = call('photoGet', { report, id, ...(size ? { size } : {}) }).then(res => fetch(`data:image/jpeg;base64,${res.data}`).then(x => x.blob())).catch(() => null);
+  fromDrive.set(key, job);
   const b = await job;
-  if (!b) fromDrive.delete(id);   // offline: tried again next time
+  if (!b) fromDrive.delete(key);   // offline: tried again next time
   return b;
 }
 
@@ -902,7 +904,7 @@ async function mediaLoad() {
   draw();
   for (const ph of ui.mPhotos[k] || []) {
     if (ui.mUrl[ph.id]) continue;
-    const b = await drivePhoto(ph.report, ph.id);
+    const b = await drivePhoto(ph.report, ph.id, 'tile');   // 2.78.0: tiles first; the screen copy when one is opened
     if (b) { ui.mUrl[ph.id] = URL.createObjectURL(b); if (route() === 'media') draw(); }
   }
 }
@@ -1578,7 +1580,12 @@ const ACTS = {
   // 2.54.0 (owner): the GM's Dashboard: the week's photos and videos from site
   mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
   mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
-  mediaBig(d) { ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw(); },
+  mediaBig(d) {
+    ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw();
+    // 2.78.0: the tile shows at once, the sharp screen copy replaces it when it arrives
+    const ph = d.v && Object.values(ui.mPhotos || {}).flat().find(x => x.id === d.v);
+    if (ph) drivePhoto(ph.report, ph.id).then(b => { if (b && ui.mBig === ui.mUrl[ph.id]) { ui.mBig = URL.createObjectURL(b); draw(); } });
+  },
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   // 2.49.0 (owner, R3): Visitors
