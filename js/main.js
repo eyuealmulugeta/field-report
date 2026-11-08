@@ -1576,7 +1576,7 @@ const ACTS = {
   inboxRead(d) { if (d.t) store.set({ inboxRead: [...new Set([...(store.get().inboxRead || []), d.t])].slice(-200) }); draw(); },   // 2.39.0
   inboxGo(d) { ui.inboxOpen = false; if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.53.0: the list closes, so the page opened is seen   // 2.8.1: the same link twice opens again
   // 2.54.0 (owner): the GM's Dashboard: the week's photos and videos from site
-  mediaOpen() { ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
+  mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
   mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
   mediaBig(d) { ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw(); },
   spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },

@@ -38,6 +38,9 @@ export const dbBar = (ui, waiting = 0, why = '') => (ui.live === 'none' && ui.li
   : ui.liveRoute === 'read' && ui.live === 'signin' ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Live updates are off.</b> Tap to turn them on</button>` : '');
 
 export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
+// 2.77.0 (owner, 8 Nov): only the Admin and the GM see the Dashboard, at the bottom of the main screen
+export const mayDash = c => isGM(c) || (c.s.auth || {}).role === 'admin';
+export const dashBtn = c => (mayDash(c) ? html`<button type="button" class="btn o dash-btn" data-act="mediaOpen">${icon('cam')}Dashboard: photos and videos</button>` : '');
 export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'penalties', 'store', 'review']);
 // 2.17.0: "All projects" on Reports, Requests and Review
 export const ALL_PROJ = new Set(['reports', 'requests', 'review']);
