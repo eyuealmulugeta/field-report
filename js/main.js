@@ -1544,6 +1544,7 @@ const ACTS = {
       const res = await call('crewOk', { proj: p.code, wages });
       store.set({ projects: store.get().projects.map(x => (x.code === p.code ? { ...x, crewWait: res.crewWait || [], tradeWages: res.tradeWages || x.tradeWages } : x)) });
       rv.picks = {};
+      L.now('crew', { proj: p.code });   // 2.72.0 (owner, R3): Central Hub adds them at once, not when the Admin next opens Field users
       toast(`Approved ${res.approved || 0}. Central Hub adds them to the crew.`);
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Not approved: ${e.message}`); }
     finally { ui.busy = false; draw(); }
