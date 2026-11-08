@@ -32,6 +32,7 @@ import * as SP from './ui/spot.js';
 import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
 import { newVisit, visitMissing, visitRecord, VISIT_PHOTOS, PURPOSES } from './model/visit.js';
 import { shrinkVideo } from './core/video.js';
+import { openLiveCam } from './ui/livecam.js';   // 2.76.0
 import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
@@ -1261,16 +1262,25 @@ spotVid.addEventListener('change', () => spotFiles([...(spotVid.files || [])]));
 /* 2.50.0 (owner, 5 Nov, R4): a live video from the report camera. Central Hub only, never the report; kept 30 days. */
 const repVid = document.getElementById('repVid');
 const videoSet = (id, patch) => store.set({ videos: (store.get().videos || []).map(v => (v.id === id ? { ...v, ...patch } : v)) });
-// 2.54.0 (owner): a video from the gallery too, marked as such; the same 60 seconds and Dashboard only
-const repVidGal = document.getElementById('repVidGal');
+// 2.76.0 (owner, 8 Nov): videos are recorded live only; the gallery button of 2.54.0 is gone
 repVid.addEventListener('change', () => keepVideo(repVid.files?.[0], false));
-repVidGal.addEventListener('change', () => keepVideo(repVidGal.files?.[0], true));
-async function keepVideo(f, gal) {
+/** 2.76.0 (owner, 8 Nov): the report camera inside the app, PHOTO and VIDEO; the phone's own camera when it cannot be shown. */
+function liveCam(mode) {
+  const p = project();
+  openLiveCam({
+    mode, title: p ? p.name || p.code : '', maxBytes: VIDEO_AIM,
+    count: () => { const r = store.get().drafts?.[key()]; return (r?.photos || []).length + (store.get().videos || []).filter(v => v.proj === p?.code && v.date === realToday()).length; },
+    onPhoto: f => { ui.camFor = 'photo'; addPhotos([f]); },
+    onVideo: (f, secs) => keepVideo(f, false, secs),
+    fallback: m => { if (m === 'photo') camera(); else { repVid.value = ''; repVid.click(); } },
+  });
+}
+async function keepVideo(f, gal, secs = 0) {
   const p = project();
   if (!f || !p) return;
   const k = mediaKind(f);
   if (k.refused || k.kind !== 'video') { toast(k.refused || 'That is not a video.'); return; }
-  if (await videoSeconds(f) > VIDEO_SECONDS + 1) { toast(`The video is longer than ${VIDEO_SECONDS} seconds. Record a shorter one.`); return; }
+  if ((secs || await videoSeconds(f)) > VIDEO_SECONDS + 1) { toast(`The video is longer than ${VIDEO_SECONDS} seconds. Record a shorter one.`); return; }
   try {
     let blob = f;
     if (k.shrink) {
@@ -2226,9 +2236,8 @@ const ACTS = {
   workDone() { edit(r => { r.done.work = !r.done.work; }); if (report().done.work) go('today'); },
 
   /* photos */
-  logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; camera(); },
-  logVideo() { if (ui.vidWork) return; repVid.value = ''; repVid.click(); },   // 2.50.0
-  galVideo() { if (ui.vidWork) return; repVidGal.value = ''; repVidGal.click(); },   // 2.54.0
+  logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; liveCam('photo'); },   // 2.76.0: the camera inside the app
+  logVideo() { if (!ui.vidWork) liveCam('video'); },   // 2.50.0; 2.76.0: the camera inside the app, live only
   videoDrop(d) { const v = (store.get().videos || []).find(x => x.id === d.v); if (!v || v.sent) return; deletePhoto(v.id).catch(() => {}); store.set({ videos: store.get().videos.filter(x => x.id !== v.id) }); draw(); },
   galPhoto() { if (P.isGM({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0
   itemPhoto() { ui.camFor = 'item'; camera(); },
@@ -2244,7 +2253,7 @@ const ACTS = {
     ui.photoEditing = false;
     toast('Photo saved.');
     upNow();   // 2.52.0 (owner): sent to Drive at once, also after the report was sent, so Central Hub shows it
-    if (d.v === 'again') { ui.camFor = 'photo'; camera(); } else go(ui.photoBack || 'today');
+    if (d.v === 'again') { ui.camFor = 'photo'; liveCam('photo'); } else go(ui.photoBack || 'today');
   },
   async dropPhoto() {
     const p = ui.photo;

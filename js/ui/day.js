@@ -113,7 +113,7 @@ function videoList(c) {
   const list = c.project ? videosOf(c.s.videos || [], c.project.code, c.realToday) : [];
   return html`${c.ui.vidWork ? html`<p class="callout">${c.ui.vidWork}</p>` : ''}
     ${list.length ? html`<div class="vlist"><b class="small">Videos today</b>${list.map(v => html`<div class="li"><span>${icon('cam')} ${v.time}${v.gal ? ' · from gallery' : ''}</span><span class="grow"></span>${v.sent ? html`<span class="pill ok">Sent</span>` : v.gone ? html`<span class="pill warn">Lost on this phone</span>` : html`<span class="pill">Waiting</span><button type="button" class="btn sm o" data-act="videoDrop" data-v="${v.id}">Delete</button>`}</div>`)}</div>` : ''}
-    <p class="muted tiny">A video is at most 60 seconds. Videos go to Central Hub only, never into the client's report, and are deleted after ${VIDEO_KEEP_DAYS} days. Photos are taken live; a video may also come from the gallery (marked so).</p>`;
+    <p class="muted tiny">A video is at most 60 seconds. Videos go to Central Hub only, never into the client's report, and are deleted after ${VIDEO_KEEP_DAYS} days. Photos and videos are taken live with the camera; nothing comes from the gallery.</p>`;
 }
 
 export function photos(c) {
@@ -128,7 +128,6 @@ export function photos(c) {
         ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
         <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button>
         <button type="button" class="ptile add" data-act="logVideo" ${c.ui.vidWork ? 'disabled' : ''}>${icon('cam')}<span><b>Record a video</b></span></button>
-        <button type="button" class="ptile add" data-act="galVideo" ${c.ui.vidWork ? 'disabled' : ''}>${icon('doc')}<span><b>Video from gallery</b></span></button>
         ${isGM(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>
       ${videoList(c)}`,
     foot: doneBtn(r, 'photos', r.photos.length ? `Done · ${plural(r.photos.length, 'photo')}` : 'No photos today'),
