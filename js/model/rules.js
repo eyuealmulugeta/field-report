@@ -36,6 +36,16 @@ let OFF = new Set();
 const OWN_OFF = { chat: 'fr_chat' };
 export const setOff = list => { OFF = new Set((Array.isArray(list) ? list : []).filter(k => /^fr_[a-z]{2,12}$/.test(k))); };
 export const isOff = k => OFF.has(k);
+/** 2.74.2: a button whose feature Central Hub turned off. */
+export const actOffOnly = act => !!ACT[act] && OFF.has(ACT[act][0]);
+/** 2.74.2 (owner): the page is closed only because Central Hub turned its feature off (it shows "Turned off"). */
+export function screenOffOnly(rules, screen) {
+  if (screenOk(rules, screen)) return false;
+  const keep = OFF; OFF = new Set();
+  const ok = screenOk(rules, screen);
+  OFF = keep;
+  return ok;
+}
 /** May a notification's link (#go=what/...) be opened? */
 export function linkOk(rules, link) {
   if (!rules || !link) return true;
@@ -62,6 +72,10 @@ export const inboxOk = (rules, items, link) => (rules ? items.filter(x => linkOk
 export function hideOff(root, rules) {
   if (!rules || !root) return 0;
   let n = 0;
-  root.querySelectorAll('[data-act]').forEach(el => { if (!actOk(rules, el.dataset.act, el.dataset)) { el.remove(); n++; } });
+  root.querySelectorAll('[data-act]').forEach(el => {
+    const d = el.dataset;
+    if ((d.act === 'go' && screenOffOnly(rules, d.to)) || actOffOnly(d.act)) return;   // 2.74.2: turned off: kept and marked, says so
+    if (!actOk(rules, d.act, d)) { el.remove(); n++; }
+  });
   return n;
 }

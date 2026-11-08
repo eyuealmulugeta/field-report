@@ -3,7 +3,7 @@
 import { html, icon } from '../core/dom.js';
 import { PHASES, STEPS, stepStatus, stampLine } from '../model/report.js';
 import { APP_VERSION } from '../core/api.js';
-import { screenOk } from '../model/rules.js';
+import { screenOk, screenOffOnly } from '../model/rules.js';
 
 export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
@@ -22,7 +22,7 @@ export const REVIEW_TABS = [
 // 2.16.1: Review before Quick (owner, 1 Nov)
 // 2.37.0 (owner): a reviewer's Review and Crew & Hours open from Me, not the tab bar
 export const TECH_TABS = [{ id: 'share', title: 'Share work', icon: 'cam' }];   // 2.66.0
-export const tabsFor = (kind, rules = null) => kind === 'technician' ? TECH_TABS : (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : TABS).filter(t => screenOk(rules, t.id));   // 2.60.0 (G6)
+export const tabsFor = (kind, rules = null) => kind === 'technician' ? TECH_TABS : (kind === 'viewer' ? REVIEW_TABS.filter(t => t.id !== 'crewrev') : TABS).filter(t => screenOk(rules, t.id) || screenOffOnly(rules, t.id));   // 2.60.0 (G6); 2.74.2: a turned-off tab stays, marked
 
 /** 2.16.1: the GM (an exec account, or GM as position) switches project from a list at the top, as in Central Hub. */
 /** 2.35.0: the phone is not signed in to Central Hub's database while reports must also go there (data route Both). */
@@ -48,7 +48,7 @@ export const tabOf = on => (['requests', 'penalties', 'store', 'shots', 'review'
 /** 2.55.0 (owner): the two tabs inside Review. */
 export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button><button type="button" class="${on === 'shots' ? 'on' : ''}" data-act="go" data-to="shots" aria-pressed="${on === 'shots'}">Photos</button></div>`;   // Photos 2.66.0   // 2.57.0; Store 2.61.0
 export const nav = (on, badges = {}, kind = 'reporter', rules = null) => html`<nav class="nav">${tabsFor(kind, rules).map(t => html`
-  <button type="button" class="${t.id === tabOf(on) ? 'on' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
+  <button type="button" class="${t.id === tabOf(on) ? 'on' : ''} ${screenOffOnly(rules, t.id) ? 'off' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${screenOffOnly(rules, t.id) ? html`<i class="offt">Off</i>` : badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;
 
 /** Header for a tab: logo, title, subtitle and an optional pill on the right. */

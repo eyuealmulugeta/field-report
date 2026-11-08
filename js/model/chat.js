@@ -46,7 +46,7 @@ export const freshOf = (list = [], me = '', seen = 0) => list.filter(m => m.by !
 
 /** The record written for a new message. */
 export function messageOf({ text, me, name = '', title = '', open = '', pid = '', now = Date.now() }) {
-  const base = { id: newId(now), by: low(me), name, title, text: String(text || '').trim().slice(0, MAX_LENGTH), at: new Date(now).toISOString(), sentMs: now, from: 'Field Report' };
+  const base = { id: newId(now), by: low(me), name, title, text: String(text || '').trim().slice(0, MAX_LENGTH), at: new Date(now).toISOString(), sentMs: now, from: 'Field Report', _o: now * 1000 };   // 2.74.2: Central Hub's order stamp
   return isDm(open) ? { sec: 'direct', rec: { ...base, members: pairOf(me, open.slice(DM.length)) } } : { sec: 'messages', rec: { ...base, channel: pid } };
 }
 export const mayEdit = (m, me, now = Date.now()) => m.by === low(me) && !m.deleted && now - Number(m.sentMs || 0) < EDIT_MS;

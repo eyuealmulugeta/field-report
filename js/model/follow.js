@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'Turned off (2.74.2)', 'A feature the Admin turns off in Central Hub now keeps its tab, marked Off, and opens on a Turned off notice instead of disappearing. Its buttons say Turned off when tapped.'],
   ['chat', 'A new Discuss page (2.74.1)', 'Conversations along the top with unread counts, messages by day, the writing box at the bottom. Tap your own message to Edit it (first minute) or Delete it. The Discuss tab shows how many messages are new. A phone signed in with another account no longer keeps the last person\'s name or signature.'],
   ['doc', 'Features on or off (2.74.0)', 'The Admin can switch a Field Report feature off in Central Hub (Settings, Apps): it disappears from every phone within seconds and comes back when switched on. Nothing is deleted.'],
   ['users', 'PE and PM are one title (2.73.1)', 'Everything that said PM now says PE (Project Engineer). Discuss: correct a message in the first minute; Delete removes it for everyone in the first 5 minutes, after that only from your view.'],

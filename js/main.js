@@ -43,7 +43,7 @@ import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
 import { messageOf, freshOf, mayEdit, takeBackOk, threadOf } from './model/chat.js';
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
-import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff } from './model/rules.js';   // 2.60.0 (G6)
+import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff, screenOffOnly, actOffOnly } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
 import { openPad } from './ui/sigpad.js';
@@ -2357,6 +2357,7 @@ function route() {
   if (h === 'share') return 'today';
   if (kind() === 'viewer' && (h === 'today' || h === 'att' || h === 'crewrev' || NEEDS_REPORT.has(h))) return 'reports';
   if (kind() === 'reporter' && (h === 'review' || h === 'rev' || h === 'crewrev')) return 'today';
+  if (screenOffOnly(s.rules, h)) return h;   // 2.74.2 (owner): turned off in Central Hub: the page says so
   if (!screenOk(s.rules, h)) return firstOk(s.rules);   // 2.60.0 (owner, G6): a page the rules hide does not open by any address
   if (NEEDS_REPORT.has(h) && !working()) return 'today';
   if (h === 'item' && !ui.item) return 'work';
@@ -2367,6 +2368,12 @@ function route() {
   return SCREENS[h] ? h : 'today';
 }
 
+/** 2.74.2 (owner, 8 Nov): a page whose feature the Admin turned off in Central Hub (Settings, Apps). */
+function offScreen(r) {
+  const t = [...P.TABS, ...P.REVIEW_TABS, ...P.TECH_TABS].find(x => x.id === r);
+  const title = t ? t.title : r.charAt(0).toUpperCase() + r.slice(1);
+  return { tab: t ? r : 'today', head: P.head(title, 'Turned off', ''), body: html`<div class="offbox"><i class="offt">Turned off</i><b>${title} is turned off</b><span class="muted small">The Admin turned this off for everyone in Central Hub. Nothing was deleted: it comes back as it was when it is turned on again.</span></div>` };
+}
 function draw() {
   try { fetchForecast(); } catch { /* no forecast */ }   // 2.64.0
   // 2.40.0 (owner): an open list (the project list on Requests) is not closed by a live update; the page is drawn when it closes
@@ -2381,7 +2388,7 @@ function draw() {
   // on a computer, Today with a started report shows the summary; the day itself sits in the middle column
   const working = c.report && c.report.start && !c.report.nowork;
   let v = r === 'signin' ? S.signin(c) : r === 'profile' ? S.profile(c) : r === 'choose' ? S.chooseProject(c)
-    : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);
+    : screenOffOnly(c.s.rules, r) ? offScreen(r) : wide && r === 'today' && working ? D.glance(c) : SCREENS[r](c);   // 2.74.2
   if (ui.date && (r === 'today' || NEEDS_REPORT.has(r))) v = { ...v, body: html`${F.pastBand(c)}${v.body}` };
   if (!demo && !setup) { const w = dbWaiting(c.s.drafts); v = { ...v, body: html`${P.dbBar(ui, w.length, w.map(k => c.s.drafts[k].dbWhy).filter(Boolean).pop() || '')}${v.body}` }; }   // 2.35.0; 2.69.0 the reason
   if (P.TOP_PROJ.has(r) && P.isGM(c) && c.s.projects.length > 1) v = { ...v, head: html`${v.head || ''}${P.projTop(c, P.ALL_PROJ.has(r))}` };   // 2.16.1; 2.17.0 All projects
@@ -2430,6 +2437,7 @@ root.addEventListener('click', e => {
   if (!el || el.disabled) return;
   const fn = ACTS[el.dataset.act];
   if (fn && actOk(store.get().rules, el.dataset.act, el.dataset)) fn(el.dataset, el);   // 2.60.0 (G6)
+  else if (fn && actOffOnly(el.dataset.act)) toast('Turned off: the Admin turned this off in Central Hub.');   // 2.74.2
 });
 
 // 2.66.0: the technician's photo, from the camera only; refused on the phone when blurred, dark or too bright
