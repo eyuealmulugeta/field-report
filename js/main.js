@@ -40,7 +40,7 @@ import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './c
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
-import { messageOf, freshOf, mayEdit, isDm, takeBackOk } from './model/chat.js';
+import { messageOf, freshOf, mayEdit, takeBackOk, threadOf } from './model/chat.js';
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff } from './model/rules.js';   // 2.60.0 (G6)
@@ -404,7 +404,20 @@ function chatRing(list) {
   try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch { /* no vibration */ }
   if (route() !== 'chat') toast(`Discuss: ${m.name || m.by}: ${String(m.text || '').slice(0, 80)}`);
 }
-const chatSec = () => (isDm((ui.chat || {}).open) ? 'direct' : 'messages');
+/** 2.74.1: when each conversation was last opened (unread counts on the tab and the conversations). */
+const CHAT_READ = 'fr2_chatRead';
+try { ui.chatRead = JSON.parse(localStorage.getItem(CHAT_READ) || '{}') || {}; } catch { ui.chatRead = {}; }
+function chatMarkRead() {
+  const u = ui.chat || {}, me = String((store.get().auth || {}).email || '').toLowerCase(), id = u.open || '';
+  const list = threadOf({ ch: u.ch || [], dm: u.dm || [], open: id, me });
+  const top = list.reduce((t, m) => Math.max(t, Number(m.sentMs || Date.parse(m.at) || 0)), 0);
+  if (top > (ui.chatRead[id] || 0)) { ui.chatRead = { ...ui.chatRead, [id]: top }; try { localStorage.setItem(CHAT_READ, JSON.stringify(ui.chatRead)); } catch { /* private mode */ } }
+}
+function chatUnread() {
+  const u = ui.chat || {}, me = String((store.get().auth || {}).email || '').toLowerCase(), r = ui.chatRead || {};
+  const n = CHAT.unreadIn(u.ch || [], me, r['']) + (u.dm || []).filter(m => m.by !== me && !m.deleted && Number(m.sentMs || Date.parse(m.at) || 0) > (r[`dm:${m.by}`] || 0)).length;
+  return n > 99 ? '99+' : n;
+}
 const chatFind = id => [...((ui.chat || {}).ch || []), ...((ui.chat || {}).dm || [])].find(m => m.id === id);
 function regBuild() {
   const p = project();
@@ -672,7 +685,12 @@ async function signedIn(pending) {
   try {
     const a = await pending;
     const s = store.get();
-    store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...s.profile, name: s.profile.name || a.name || '' } });
+    // 2.74.1 (owner, 8 Nov): a phone signed in with another account forgets the last person's name, position and
+    // signature (a shared Kinshasa phone put one person's name on another account's reports); the account's own come back
+    const was = String(s.profile.of || (s.auth && s.auth.email) || '').toLowerCase(), now = String(a.email || '').toLowerCase();
+    const other = !!was && !!now && was !== now;
+    const prof = other ? { ...s.profile, name: '', position: '', sig: '', sigAt: 0, locked: false, sentNP: '' } : s.profile;
+    store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...prof, of: now, name: prof.name || a.name || '' } });
     applyMe(a.me);
     if ('rules' in a) store.set({ rules: cleanRules(a.rules) });   // 2.60.0 (G6)
     ui.signup = null;
@@ -1422,31 +1440,47 @@ const ACTS = {
   // 2.69.0 (owner): reports the database has not taken yet, sent again from the bar
   dbAgain() { dbResend(); },
   // 2.73.0 (owner, R4): Discuss
-  chatOpen: d => { (ui.chat ||= {}).open = d.v || ''; draw(); },
+  // 2.74.1 (owner): a proper chat page
+  chatOpen: d => { const u = ui.chat ||= {}; u.open = d.v || ''; u.pick = false; u.sel = ''; u.edit = ''; ui.chatScroll = -1; draw(); },
+  chatPick: () => { const u = ui.chat ||= {}; u.pick = !u.pick; draw(); },
+  chatSel: d => { const u = ui.chat ||= {}; u.sel = u.sel === d.v ? '' : d.v; draw(); },
+  chatEditCancel: () => { const u = ui.chat ||= {}; u.edit = ''; ui.chatText = ''; draw(); },
+  chatStart() {
+    const e = String(ui.chatTo || '').trim().toLowerCase(), me = String((store.get().auth || {}).email || '').toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(e) || e === me) return toast('Type the email of the person (their Central Hub or Field Report sign-in).');
+    ui.chatTo = ''; ACTS.chatOpen({ v: `dm:${e}` });
+  },
   async chatSend() {
     const text = String(ui.chatText || '').trim(), u = ui.chat ||= {};
     if (!text || u.busy) return;
     if (ui.live !== 'on') return toast(liveWhyText(ui.live, ui.liveWhy));
+    if (u.edit) {   // 2.74.1: the writing box holds the edit
+      const m = chatFind(u.edit), me = String((store.get().auth || {}).email || '').toLowerCase();
+      u.edit = ''; u.sel = '';
+      if (!m || !mayEdit(m, me)) { draw(); return toast('Too late to edit: a message can be edited only in the first minute.'); }
+      if (text !== m.text) try { await L.chatEdit(m.members ? 'direct' : 'messages', m.id, { text: text.slice(0, 2000), edited: true }); } catch { toast('Too late to edit: delete it and write it again.'); }
+      ui.chatText = ''; draw(); return;
+    }
     u.busy = true; draw();
     try {
       const auth = store.get().auth || {};
       const ok = await L.chatSend(({ email, pid }) => messageOf({ text, me: email, name: myName() || auth.name || email, title: auth.role === 'exec' ? 'GM' : '', open: u.open || '', pid }));
-      if (ok) ui.chatText = ''; else toast('Not sent: sign in to Central Hub again (Me).');
+      if (ok) { ui.chatText = ''; ui.chatScroll = -1; } else toast('Not sent: sign in to Central Hub again (Me).');
     } catch (e) { toast(`Not sent: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
     u.busy = false; draw();
   },
   async chatFix(d) {
     const m = chatFind(d.v), me = String((store.get().auth || {}).email || '').toLowerCase();
-    if (!m || !mayEdit(m, me)) return toast('A message can be corrected only in the first minute.');
-    const text = prompt('Correct your message', m.text);
-    if (text === null || !text.trim() || text.trim() === m.text) return;
-    try { await L.chatEdit(chatSec(), m.id, { text: text.trim().slice(0, 2000), edited: true }); } catch { toast('Too late to correct: delete it and write it again.'); }
+    if (!m || !mayEdit(m, me)) return toast('A message can be edited only in the first minute.');
+    const u = ui.chat ||= {}; u.edit = m.id; u.sel = ''; ui.chatText = m.text; draw();   // 2.74.1: edited in the writing box
+    const t = root.querySelector('[data-ui="chatText"]'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
   },
   async chatDel(d) {
     const m = chatFind(d.v);
     if (!m) return;
     const all = takeBackOk(m);   // 2.73.1 (owner): for everyone in the first 5 minutes, then only from my view
     if (!confirm(all ? 'Delete this message for everyone?' : 'Delete this message from your view? After 5 minutes the others still see it.')) return;
+    (ui.chat ||= {}).sel = '';
     try { await L.chatEdit(m.members ? 'direct' : 'messages', m.id, all ? { text: '', deleted: true, deletedAt: new Date().toISOString() } : { hiddenFor: [String((store.get().auth || {}).email || '').toLowerCase()] }); } catch (e) { toast(`Not deleted: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
   },
   revHide() {
@@ -2341,6 +2375,7 @@ function draw() {
   clSync();
   const r = route(), c = context();
   if (r === 'photos' || r === 'send') fitSoon();   // 2.11.0
+  if (r === 'chat') chatMarkRead();   // 2.74.1
   const setup = r === 'signin' || r === 'profile' || r === 'choose';
   const wide = layout !== 'phone' && !setup;
   // on a computer, Today with a started report shows the summary; the day itself sits in the middle column
@@ -2363,7 +2398,7 @@ function draw() {
   } else {
     root.innerHTML = page
     + `${v.fab ? '<button type="button" class="fab" data-act="fab" aria-label="Log now"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}`
-    + `${v.tab ? nav(v.tab, {}, c.kind, c.s.rules) : ''}`;
+    + `${v.tab ? nav(v.tab, { chat: r === 'chat' ? 0 : chatUnread() }, c.kind, c.s.rules) : ''}`;   // 2.74.1: unread messages
   }
   if (!setup) root.insertAdjacentHTML('beforeend', S.inboxFab(c));   // 2.37.0: the floating notifications circle
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
@@ -2372,6 +2407,10 @@ function draw() {
     + `${isDemo() ? '<div class="demo-flag">Demo</div>' : ''}`;
   if (ui.sheetNew) { root.querySelector('.sheet')?.classList.add('new'); ui.sheetNew = false; }
   if (same) { const bd = root.querySelector('.bd'); if (bd) bd.scrollTop = scroll; }
+  if (r === 'chat') {   // 2.74.1: the newest message in view on opening and when one arrives or is sent
+    const bd = root.querySelector('.bd'), n = root.querySelectorAll('.crow').length;
+    if (bd && (!same || ui.chatScroll !== n)) { ui.chatScroll = n; bd.scrollTop = bd.scrollHeight; }
+  }
   hideOff(root, c.s.rules);   // 2.60.0 (owner, G6): what the rules hide is not on the page by any means
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
