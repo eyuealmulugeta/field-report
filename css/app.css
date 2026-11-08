@@ -601,3 +601,16 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .inbox-pop { top: auto; bottom: calc(204px + env(safe-area-inset-bottom)); max-height: 55vh; }
 .app.wide ~ .inbox-fab, .app.wide .inbox-fab { bottom: 20px; right: 20px; }
 .app.wide ~ .inbox-pop, .app.wide .inbox-pop { bottom: 76px; max-height: 65vh; }
+/* 2.73.0 (owner, R4): Discuss */
+.chat-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
+.chip-b { border: 1px solid var(--line, #e2e8f0); background: var(--card, #fff); border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: inherit; }
+.chip-b.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.chat-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.msg { max-width: 86%; padding: 8px 10px; border-radius: 12px; background: var(--card, #fff); border: 1px solid var(--line, #e2e8f0); align-self: flex-start; }
+.msg.mine { align-self: flex-end; background: #e8f0fb; }
+.msg-h { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.msg-t { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+.msg-a { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+.chat-send { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; background: var(--bg, #f5f7fb); padding: 6px 0; }
+.chat-send textarea { flex: 1; }
+:root[data-theme="dark"] .msg.mine { background: #1d3150; }

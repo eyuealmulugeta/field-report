@@ -39,6 +39,8 @@ import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './core/signlog.js';   // 2.58.0 (G2)
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
+import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
+import { messageOf, freshOf, mayEdit, isDm } from './model/chat.js';
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
@@ -79,6 +81,7 @@ const SCREENS = {
   spot: SP.spot, attention: S.attention,              // 2.7.0
   quick: Q.quick,                                      // 2.11.0
   media: MD.media,                                     // 2.54.0: the GM's Dashboard
+  chat: CHAT.chat,                                     // 2.73.0 (owner, R4): Discuss
 };
 const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
 
@@ -309,6 +312,8 @@ async function goLive(at = '') {
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
     onShots: list => { ui.shList = list; draw(); },   // 2.66.0
+    onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); },   // 2.73.0 (owner, R4)
+    onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); },
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -378,6 +383,23 @@ const HUB_ENGINE = 'https://hub.amistadprefab.com/js/engine/attendance.js';
 let ENG = null, regWs = null, regProj = null, regT = 0;
 const fixKey = (date, key) => `sr_${date}_${String(key).replace(/[\/.#$\[\]\s]/g, '_')}`;
 const myName = () => (store.get().profile || {}).name || '';
+/* 2.73.0 (owner, 8 Nov, R4): Discuss. A new message from someone else rings and shows a note with who wrote and what;
+   the first read after opening only remembers how things are. */
+const CHAT_SEEN = 'fr2_chatSeen';
+function chatRing(list) {
+  const me = String((store.get().auth || {}).email || '').toLowerCase();
+  let seen = 0; try { seen = Number(localStorage.getItem(CHAT_SEEN) || 0); } catch { /* private mode */ }
+  const fresh = freshOf(list, me, seen);
+  if (!fresh.length) return;
+  const top = Math.max(...fresh.map(m => Number(m.sentMs || Date.parse(m.at) || 0)));
+  try { localStorage.setItem(CHAT_SEEN, String(top)); } catch { /* private mode */ }
+  if (!seen) return;
+  const m = fresh[fresh.length - 1];
+  try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch { /* no vibration */ }
+  if (route() !== 'chat') toast(`Discuss: ${m.name || m.by}: ${String(m.text || '').slice(0, 80)}`);
+}
+const chatSec = () => (isDm((ui.chat || {}).open) ? 'direct' : 'messages');
+const chatFind = id => [...((ui.chat || {}).ch || []), ...((ui.chat || {}).dm || [])].find(m => m.id === id);
 function regBuild() {
   const p = project();
   if (!ENG || !regWs || !regProj || !p) return;
@@ -1393,6 +1415,32 @@ const ACTS = {
   // 2.68.0 (owner): Remove in a report's details: off this phone's lists; Central Hub keeps it
   // 2.69.0 (owner): reports the database has not taken yet, sent again from the bar
   dbAgain() { dbResend(); },
+  // 2.73.0 (owner, R4): Discuss
+  chatOpen: d => { (ui.chat ||= {}).open = d.v || ''; draw(); },
+  async chatSend() {
+    const text = String(ui.chatText || '').trim(), u = ui.chat ||= {};
+    if (!text || u.busy) return;
+    if (ui.live !== 'on') return toast(liveWhyText(ui.live, ui.liveWhy));
+    u.busy = true; draw();
+    try {
+      const auth = store.get().auth || {};
+      const ok = await L.chatSend(({ email, pid }) => messageOf({ text, me: email, name: myName() || auth.name || email, title: auth.role === 'exec' ? 'GM' : '', open: u.open || '', pid }));
+      if (ok) ui.chatText = ''; else toast('Not sent: sign in to Central Hub again (Me).');
+    } catch (e) { toast(`Not sent: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
+    u.busy = false; draw();
+  },
+  async chatFix(d) {
+    const m = chatFind(d.v), me = String((store.get().auth || {}).email || '').toLowerCase();
+    if (!m || !mayEdit(m, me)) return toast('A message can be corrected only in the first 30 seconds.');
+    const text = prompt('Correct your message', m.text);
+    if (text === null || !text.trim() || text.trim() === m.text) return;
+    try { await L.chatEdit(chatSec(), m.id, { text: text.trim().slice(0, 2000), edited: true }); } catch { toast('Too late to correct: delete it and write it again.'); }
+  },
+  async chatDel(d) {
+    const m = chatFind(d.v);
+    if (!m || !confirm('Delete this message for everyone?')) return;
+    try { await L.chatEdit(m.members ? 'direct' : 'messages', m.id, { text: '', deleted: true, deletedAt: new Date().toISOString() }); } catch (e) { toast(`Not deleted: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
+  },
   revHide() {
     const rv = ui.rv || {}, x = rv.open, p = project();
     if (!x || !p || !confirm(`Remove report No. ${x.no} of ${x.date} from this phone? Central Hub keeps it.`)) return;

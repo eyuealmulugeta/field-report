@@ -10,6 +10,7 @@ export const TABS = [
   { id: 'att', title: 'Office', icon: 'users' },   // 2.13.1: the page itself says Attendance   // 2.10.0
   { id: 'reports', title: 'Review', icon: 'doc' },   // 2.55.0 (owner): Review holds Reports and Requests side by side
   { id: 'quick', title: 'Quick', icon: 'plus' },   // 2.11.0: the + tab
+  { id: 'chat', title: 'Discuss', icon: 'chat' },   // 2.73.0 (owner, R4): talk with Central Hub
 ];   // 2.8.0: Me is the person button at the top right (`head`)
 
 /** 2.6.0: a reviewer or viewer account: Review, Crew and Me. */

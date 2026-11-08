@@ -166,6 +166,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['chat', 'Discuss with Central Hub (2.73.0)', 'The new Discuss tab: write in your project channel with everyone in Central Hub, or one-to-one. A new message rings and shows a note. Correct a message in the first 30 seconds, delete it at any time.'],
   ['users', 'Approved crew reaches Central Hub at once (2.72.0)', 'Crew you approve on the phone is added to the project in Central Hub within seconds.'],
   ['users', 'Crew Edit and nationality (2.71.0)', 'Edit on a crew member no longer opens Google: if the employee data cannot open, it says why. Nationality is chosen from every country in the world.'],
   ['users', 'Project not linked (2.70.0)', 'If your email is not on this project in Central Hub, a bar at the top says so: approvals and changes cannot arrive by themselves until the Admin puts you on the project in the Manpower Directory.'],
