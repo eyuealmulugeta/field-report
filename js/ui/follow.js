@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
 import { rateReport, rateLine, checkLines } from '../model/rating.js';
@@ -20,19 +20,16 @@ const allOn = c => !!c.ui.allProj && isGM(c);
 
 /** 2.17.0: the GM's All projects: every report sent on the account's projects, newest first, from Central Hub. */
 function allReports(c) {
-  const since = new Date(Date.parse(`${c.realToday}T00:00:00Z`) - 31 * 864e5).toISOString().slice(0, 10);
-  const rows = c.s.projects.flatMap(p => ((c.s.others || {})[p.code] || []).filter(o => o && o.date >= since && !(c.s.hidden || {})[`${p.code}|${o.date}`]).map(o => {
-    const k = (o.name && c.s.known[o.name]) || {}, st = k.status || o.status;
-    return { ...o, p, kind: st === 'approved' || st === 'changes' ? st : 'submitted', last: lastStep(k.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null) };
-  })).sort((a, b) => b.date.localeCompare(a.date) || Number(b.no) - Number(a.no));
-  const f = c.ui.rf || '', n = counts(rows), list = rows.filter(x => !f || x.kind === f);
+  // 2.75.0: every project's own list (waiting, sent back, approved, missing, today), with its own filter (starts on All)
+  const rows = allDays(c.realToday, c.s.projects, c.s.drafts || {}, c.s.known || {}, c.s.others || {}, c.s.hidden || {});
+  const f = c.ui.rfAll || '', n = counts(rows), list = rows.filter(x => !f || x.kind === f);
   return {
     tab: 'reports',
-    head: head('Reports', 'All projects · last 31 days', c.ui.checking ? 'Refreshing…' : ''),
-    body: html`<div class="chips">${FILTERS.filter(([k]) => k !== 'missing').map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
+    head: head('Reports', 'All projects · this month', c.ui.checking ? 'Refreshing…' : ''),
+    body: html`<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rfAll" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openAll" data-p="${x.p.code}" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
-        <div class="n"><b>${x.p.name} · Report #${x.no}</b><span>${[x.by, stepLine(x.last)].filter(Boolean).join(' · ')}</span></div>${pill(x.kind)}</button>`)}</div>`
+        <div class="n"><b>${x.p.name} · ${x.no ? `Report #${x.no}` : x.kind === 'today' ? 'Today' : x.kind === 'nowork' ? 'No work' : 'No report'}</b><span>${[x.by, stepLine(x.last)].filter(Boolean).join(' · ')}</span></div>${x.late ? html`<span class="pill warn">${x.late}</span>` : ''}${pill(x.kind)}</button>`)}</div>`
         : html`<div class="box pad muted small">Nothing here.</div>`}`,
   };
 }

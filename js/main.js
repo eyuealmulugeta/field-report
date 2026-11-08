@@ -1382,7 +1382,7 @@ const ACTS = {
   projTop(d) {
     // 2.17.0: All projects (Reports, Requests, Review)
     if (d.v === '*') {
-      ui.allProj = true;
+      ui.allProj = true; ui.rfAll = '';   // 2.75.0: starts on All
       if (route() === 'review') { ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); }
       if (route() === 'reports') for (const p of store.get().projects) teamDays(p);
       return draw();

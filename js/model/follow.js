@@ -130,6 +130,16 @@ export const toCheck = (rows, known, now = Date.now(), every = 10 * 60e3) => row
   && !(known[x.name] && now - known[x.name].checked < every));
 
 /** The counts on the filter chips. */
+/**
+ * 2.75.0 (owner, 8 Nov: "when the project is set to All, report is showing only the approved ones and hiding the rest"):
+ * All projects is every project's own list (monthDays: waiting, sent back, approved, missing, today), one after another,
+ * newest first, each row with its project. Days off and nothing-to-show days stay out.
+ */
+export function allDays(today, projects, drafts = {}, known = {}, others = {}, hidden = {}) {
+  return (projects || []).flatMap(p => monthDays(today, p, drafts, known, others[p.code] || []).filter(x => x.kind !== 'off' && !hidden[`${p.code}|${x.date}`]).map(x => ({ ...x, p })))
+    .sort((a, b) => b.date.localeCompare(a.date) || String(a.p.name).localeCompare(String(b.p.name)) || Number(b.no) - Number(a.no));
+}
+
 export const counts = rows => rows.reduce((a, x) => { a[x.kind] = (a[x.kind] || 0) + 1; return a; }, {});
 
 /** Every request written on this phone for the project, newest first: [{ date, no, ...request }]. */
@@ -166,6 +176,7 @@ export function draftChoice(remote, local, { today, dev }) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'All projects shows every report (2.75.0)', 'With All projects chosen, Reports lists each project’s month like its own page: waiting, sent back, approved, missing and today, with their own filter starting on All.'],
   ['doc', 'Turned off (2.74.2)', 'A feature the Admin turns off in Central Hub now keeps its tab, marked Off, and opens on a Turned off notice instead of disappearing. Its buttons say Turned off when tapped.'],
   ['chat', 'A new Discuss page (2.74.1)', 'Conversations along the top with unread counts, messages by day, the writing box at the bottom. Tap your own message to Edit it (first minute) or Delete it. The Discuss tab shows how many messages are new. A phone signed in with another account no longer keeps the last person\'s name or signature.'],
   ['doc', 'Features on or off (2.74.0)', 'The Admin can switch a Field Report feature off in Central Hub (Settings, Apps): it disappears from every phone within seconds and comes back when switched on. Nothing is deleted.'],
