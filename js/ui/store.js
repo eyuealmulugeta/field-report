@@ -1,5 +1,5 @@
 // 2.61.0 (owner, 7 Nov, R5): Review > Store. What is in the store, receive / issue / return / transfer out / weekly
-// count, each waiting for the PM; the stock card of an item; the keeper and the minimums (PM, PE or GM).
+// count, each waiting for the PE; the stock card of an item; the keeper and the minimums (PE or GM).
 
 import { html, icon } from '../core/dom.js';
 import { head, reviewTabs } from './parts.js';
@@ -42,7 +42,7 @@ function form(c, book, items, pos = []) {
     ${k === 'transfer' ? html`<label class="lab" for="smProj">To project</label><select id="smProj" class="fld" data-ui="smProj"><option value="">Choose…</option>${others.map(p => html`<option value="${p.code}" ${p.code === f.toProject ? 'selected' : ''}>${p.name} · ${p.code}</option>`)}</select>` : ''}
     <label class="lab" for="smNote">Note</label><input id="smNote" class="fld" data-ui="smNote" value="${f.note || ''}" placeholder="Optional">
     <div class="row"><button type="button" class="btn p" data-act="smSave" ${c.ui.busy ? 'disabled' : ''}>Send for approval</button><button type="button" class="btn t" data-act="smClose">Cancel</button></div>
-    <p class="tiny muted">The PM approves it; until then it shows as waiting and the books do not change.</p></div>`;
+    <p class="tiny muted">The PE approves it; until then it shows as waiting and the books do not change.</p></div>`;
 }
 
 export function store(c) {
@@ -62,7 +62,7 @@ export function store(c) {
       ${due.due ? html`<p class="callout warn small">Weekly stock count due${due.last ? ` (last ${due.last})` : ''}.</p>` : ''}
       ${low.length ? html`<p class="callout warn small">Low: ${low.map(e => `${e.item} ${n(e.qty)} ${e.unit}`).join(', ')}. <button type="button" class="btn t slim" data-act="go" data-to="requests">Make a material request</button></p>` : ''}
       ${may && !c.ui.sm ? html`<div class="seg wide sm-kinds" role="group" aria-label="Record">${KINDS.map(([v, w]) => html`<button type="button" data-act="smOpen" data-v="${v}">${w}</button>`)}</div>` : ''}
-      ${!may && !c.ui.sm ? html`<p class="tiny muted">Only the store keeper, the Site Engineer, the PM or the GM records movements.</p>` : ''}
+      ${!may && !c.ui.sm ? html`<p class="tiny muted">Only the store keeper, the Site Engineer, the PE or the GM records movements.</p>` : ''}
       ${c.ui.sm ? form(c, book, items, pos) : ''}
       ${pos.length && !c.ui.sm ? html`<div class="k">Deliveries still to come</div>${pos.map(p => html`<div class="li item"><div class="n"><b>${p.number} · ${p.supplier}</b><span>${p.lines.filter(l => l.left > 0).map(l => `${l.item} ${n(l.left)} of ${n(l.qty)} ${l.unit}${l.waiting ? ` (${n(l.waiting)} waiting)` : ''}`).join(', ')}</span></div><span class="pill ${p.late ? 'bad' : ''}">${p.late ? 'Late' : p.due ? `By ${String(p.due).slice(5)}` : 'Open'}</span></div>`)}` : ''}
       ${card ? html`<div class="box pad"><div class="row"><b>${cardItem ? `${cardItem.item} · ${n(cardItem.qty)} ${cardItem.unit}` : 'Stock card'}</b><button type="button" class="btn t slim" data-act="smCard" data-v="">Close</button></div>

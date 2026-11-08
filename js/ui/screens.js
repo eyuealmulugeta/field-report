@@ -326,7 +326,7 @@ const stampAt = at => (at && !Number.isNaN(Date.parse(at)) ? new Date(at).toLoca
 /** 2.13.0: the HR photo from Central Hub, else the initials. */
 const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src ? html`<span class="av"><img src="${src}" alt=""></span>` : html`<span class="av">${initials(x.name)}</span>`; };
 /** 2.13.0: crew the site added can be corrected or taken off from here (live updates on). */
-// 2.17.0: delete from the list: anyone of the site asks, the PM or the GM confirms
+// 2.17.0: delete from the list: anyone of the site asks, the PE or the GM confirms
 const dropOk = c => c.kind === 'reviewer' || isGM(c);   // 2.41.0 (owner): the Project engineer or the GM, not the Site engineer
 /** 2.17.1: Office: the project's crew with Delete, and who was deleted, by whom and when (last 30 days). */
 function crewAdmin(c, started) {

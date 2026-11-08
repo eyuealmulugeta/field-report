@@ -339,7 +339,7 @@ export async function chatEdit(sec, id, patch) {
   return true;
 }
 
-/** 2.66.0: a technician's work photos, waiting for the SE / PM (projects/<id>/workShots/<id>). */
+/** 2.66.0: a technician's work photos, waiting for the SE / PE (projects/<id>/workShots/<id>). */
 export async function saveShot(make) {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
@@ -347,7 +347,7 @@ export async function saveShot(make) {
   await F.setDoc(F.doc(db, 'projects', pid, 'workShots', id), make({ email, at, pid, id }));
   return true;
 }
-/** 2.66.0: approved, or rejected with a reason, by the SE, PM, GM or Admin. */
+/** 2.66.0: approved, or rejected with a reason, by the SE, PE, GM or Admin. */
 export async function shotStatus(id, status, byName = '', reason = '') {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
@@ -355,7 +355,7 @@ export async function shotStatus(id, status, byName = '', reason = '') {
   return true;
 }
 
-/** 2.61.0 (R5): a store movement, waiting for the PM (projects/<id>/storeMoves/<id>). */
+/** 2.61.0 (R5): a store movement, waiting for the PE (projects/<id>/storeMoves/<id>). */
 export async function saveMove(make) {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString();
@@ -363,14 +363,14 @@ export async function saveMove(make) {
   await F.setDoc(F.doc(db, 'projects', pid, 'storeMoves', id), make({ email, at, pid, id }));
   return true;
 }
-/** 2.61.0: approved or rejected by the PM (or PE, GM), or cancelled by the one who recorded it. */
+/** 2.61.0: approved or rejected by the PE (or GM), or cancelled by the one who recorded it. */
 export async function moveStatus(id, status, byName = '') {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), at = new Date().toISOString(), by = byName || email;
   await F.updateDoc(F.doc(db, 'projects', pid, 'storeMoves', id), { status, ...(status === 'cancelled' ? {} : { decidedBy: email, decidedByName: by, decidedAt: at }), log: F.arrayUnion({ at, by: email, byName: by, status, note: 'On Field Report' }) });
   return true;
 }
-/** 2.61.0: the store's keeper (or the person delegated) and the items' minimums, set by the PM, PE or GM. */
+/** 2.61.0: the store's keeper (or the person delegated) and the items' minimums, set by the PE or GM. */
 export async function setKeeper({ keeper = '', keeperName = '', mins = {}, byName = '' }) {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase();

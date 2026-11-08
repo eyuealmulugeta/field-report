@@ -40,7 +40,7 @@ import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './c
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
-import { messageOf, freshOf, mayEdit, isDm } from './model/chat.js';
+import { messageOf, freshOf, mayEdit, isDm, takeBackOk } from './model/chat.js';
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff } from './model/rules.js';   // 2.60.0 (G6)
@@ -606,7 +606,7 @@ function oneSignal(appId, who) {
   });
 }
 
-/** The project's reminder time (2.7.0, set by the PM or GM; 17:00 when none): a reminder when today's report is not sent (on the phone, while the app is open or in the background). */
+/** The project's reminder time (2.7.0, set by the PE or GM; 17:00 when none): a reminder when today's report is not sent (on the phone, while the app is open or in the background). */
 function remindTick() {
   const s = store.get(), r = s.drafts[draftKey(s.proj, realToday())];
   if (!s.proj || now() < remindAt() || s.remindedOn === realToday()) return;   // 2.8.0: one reminder per project, no switch in Me
@@ -1431,15 +1431,17 @@ const ACTS = {
   },
   async chatFix(d) {
     const m = chatFind(d.v), me = String((store.get().auth || {}).email || '').toLowerCase();
-    if (!m || !mayEdit(m, me)) return toast('A message can be corrected only in the first 30 seconds.');
+    if (!m || !mayEdit(m, me)) return toast('A message can be corrected only in the first minute.');
     const text = prompt('Correct your message', m.text);
     if (text === null || !text.trim() || text.trim() === m.text) return;
     try { await L.chatEdit(chatSec(), m.id, { text: text.trim().slice(0, 2000), edited: true }); } catch { toast('Too late to correct: delete it and write it again.'); }
   },
   async chatDel(d) {
     const m = chatFind(d.v);
-    if (!m || !confirm('Delete this message for everyone?')) return;
-    try { await L.chatEdit(m.members ? 'direct' : 'messages', m.id, { text: '', deleted: true, deletedAt: new Date().toISOString() }); } catch (e) { toast(`Not deleted: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
+    if (!m) return;
+    const all = takeBackOk(m);   // 2.73.1 (owner): for everyone in the first 5 minutes, then only from my view
+    if (!confirm(all ? 'Delete this message for everyone?' : 'Delete this message from your view? After 5 minutes the others still see it.')) return;
+    try { await L.chatEdit(m.members ? 'direct' : 'messages', m.id, all ? { text: '', deleted: true, deletedAt: new Date().toISOString() } : { hiddenFor: [String((store.get().auth || {}).email || '').toLowerCase()] }); } catch (e) { toast(`Not deleted: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
   },
   revHide() {
     const rv = ui.rv || {}, x = rv.open, p = project();
@@ -1711,7 +1713,7 @@ const ACTS = {
   addExtra: () => edit(r => { r.crew.extra.push({ trade: '', qty: 1 }); }),
   crewPhoto() {
     if (ui.date) return toast('The crew photo is taken on the day itself.');
-    if (crewClock() > crewCloses(crewStart())) return toast(`Crew photos close at ${crewCloses(crewStart())}. Tell the Project Manager.`);
+    if (crewClock() > crewCloses(crewStart())) return toast(`Crew photos close at ${crewCloses(crewStart())}. Tell the Project Engineer.`);
     ensureReport(); ui.camFor = 'crew'; camera();
   },
   clTrade() { ui.cl.trades.push({ trade: '', wage: '' }); saveCl(); draw(); },
@@ -1728,7 +1730,7 @@ const ACTS = {
     catch (e) { toast(`Not changed: ${e.message}`); }
     draw();
   },
-  // 2.17.0: delete from the crew list: the site asks, the PM or the GM confirms (the server takes them off in Central Hub too)
+  // 2.17.0: delete from the crew list: the site asks, the PE or the GM confirms (the server takes them off in Central Hub too)
   async crewOff(d) {
     // 2.41.0 (owner, 3 Nov): the Project engineer and the GM delete at once (with who and when); the Site engineer and anyone else ask them
     const boss = kind() === 'reviewer' || P.isGM({ s: store.get() });
@@ -1868,7 +1870,7 @@ const ACTS = {
     catch (e) { toast(`Not saved: ${e.message}`); }
     ui.busy = false; draw();
   },
-  // 2.66.0 (owner): a technician's work photos; the SE / PM approves or rejects with a reason
+  // 2.66.0 (owner): a technician's work photos; the SE / PE approves or rejects with a reason
   shTake() { const i = document.getElementById('shCam'); i.value = ''; i.click(); },
   shDel(d) { if (ui.sh && ui.sh.photos) { ui.sh.photos.splice(Number(d.v), 1); draw(); } },
   async shSave() {
@@ -1880,7 +1882,7 @@ const ACTS = {
     try {
       const geo = await where(), t = tasks.find(x => x.id === f.taskId);
       const ok = await L.saveShot(({ email, at, pid, id }) => shotRecord({ ...f, taskName: t ? t.name : '' }, { email, byName: (store.get().profile || {}).name || '', at, pid, id, dev: devId(), geo, date: realToday() }));
-      if (ok) { ui.sh = null; toast('Sent to the Site Engineer / PM.'); } else toast('Not connected to Central Hub. Try again.');
+      if (ok) { ui.sh = null; toast('Sent to the Site Engineer / PE.'); } else toast('Not connected to Central Hub. Try again.');
     } catch (e) { toast(`Not sent: ${e.message}`); }
     ui.busy = false; draw();
   },
@@ -1904,7 +1906,7 @@ const ACTS = {
     try {
       let rec = null;
       await L.saveMove(o => (rec = moveRecord(f, { book, projects, byName: (store.get().profile || {}).name || '', ...o })));
-      ui.sm = null; toast('Sent to the PM for approval.');
+      ui.sm = null; toast('Sent to the PE for approval.');
       if (rec) logAct({ action: 'save', channel: 'Store', doc: moveLine(rec) });
     } catch (e) { toast(`Not saved: ${e.message}`); }
     ui.busy = false; draw();

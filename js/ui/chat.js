@@ -27,6 +27,6 @@ export function chat(c) {
       <div class="chat-send"><textarea class="fld" rows="2" data-ui="chatText" placeholder="Message to ${who}" aria-label="Message">${c.ui.chatText || ''}</textarea>
         <button type="button" class="btn p" data-act="chatSend" ${off || u.busy ? 'disabled' : ''}>Send</button></div>
       ${people.length ? html`<div class="k">Start a chat</div><div class="chat-tabs">${people.map(x => html`<button type="button" class="chip-b" data-act="chatOpen" data-v="${DM + x.email}">${x.name}${x.title ? html` <span class="muted">${x.title}</span>` : ''}</button>`)}</div>` : ''}
-      <p class="tiny muted">Everyone on this project in Central Hub and Field Report reads the channel. A chat is read only by the two of you. You can correct a message within 30 seconds and delete it at any time.</p>`,
+      <p class="tiny muted">Everyone on this project in Central Hub and Field Report reads the channel. A chat is read only by the two of you. You can correct a message within 1 minute. Delete removes it for everyone in the first 5 minutes; after that only from your view.</p>`,
   };
 }

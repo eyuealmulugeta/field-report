@@ -18,7 +18,7 @@ export const REVIEW_TABS = [
   { id: 'reports', title: 'Review', icon: 'doc' },   // 2.55.0: Reports and Requests inside
   { id: 'crewrev', title: 'Crew', icon: 'users' },
 ];
-/** 2.7.0: one account (owner, 31 Oct): the PM and GM keep every page of the site and get Review as well. A viewer reads only. */
+/** 2.7.0: one account (owner, 31 Oct): the PE and GM keep every page of the site and get Review as well. A viewer reads only. */
 // 2.16.1: Review before Quick (owner, 1 Nov)
 // 2.37.0 (owner): a reviewer's Review and Crew & Hours open from Me, not the tab bar
 export const TECH_TABS = [{ id: 'share', title: 'Share work', icon: 'cam' }];   // 2.66.0

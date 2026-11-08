@@ -1,5 +1,5 @@
 // 2.7.0: Spotlight. A note about a person or the project, with photos or videos from the camera or the gallery.
-// It goes to Central Hub only (never into the report); the PM, GM and Coordinator are told. Kept on the phone until sent.
+// It goes to Central Hub only (never into the report); the PE, GM and Coordinator are told. Kept on the phone until sent.
 
 // 2.21.0 (Central Hub v0.49.0, owner's Spotlight): a note about a person has a category; a project update a topic
 export const SPOT_CATS = ['Safety', 'Quality', 'Teamwork', 'Punctuality', 'Conduct', 'Other'];

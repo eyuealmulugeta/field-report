@@ -1,5 +1,5 @@
 // 2.66.0 (owner, 7 Nov): Share work for a technician (photos of the work executed, checked for clearness on the phone), and
-// Review > Photos for the Site Engineer or PM (approve, or reject with a reason).
+// Review > Photos for the Site Engineer or PE (approve, or reject with a reason).
 
 import { html, icon } from '../core/dom.js';
 import { head, reviewTabs } from './parts.js';
@@ -24,7 +24,7 @@ export function share(c) {
         ${tasks.length ? html`<label class="lab" for="shTask">Task</label><select id="shTask" class="fld" data-ui="shTask"><option value="">Choose the task…</option>${tasks.map(x => html`<option value="${x.id}" ${x.id === f.taskId ? 'selected' : ''}>${x.name}</option>`)}</select>` : ''}
         <label class="lab" for="shNote">What was done</label><input id="shNote" class="fld" data-ui="shNote" value="${f.note || ''}" placeholder="e.g. Column C3 welded and painted">
         <div class="row"><button type="button" class="btn p" data-act="shSave" ${c.ui.busy ? 'disabled' : ''}>Send</button></div>
-        <p class="tiny muted">The Site Engineer or PM approves it. A photo that is not clear is refused on the phone.</p></div>
+        <p class="tiny muted">The Site Engineer or PE approves it. A photo that is not clear is refused on the phone.</p></div>
       <div class="k">Sent</div>
       ${mine.length ? mine.map(x => html`<div class="li item"><span class="time">${t(x.at)}</span><div class="n"><b>${x.taskName || 'Work'}</b><span>${x.note}${x.status === 'rejected' ? ` · ${reasonWord(x.reason)}${x.why ? `: ${x.why}` : ''}` : ''}</span></div><span class="pill ${SHOT_TONE[x.status] || ''}">${SHOT_WORD[x.status] || x.status}</span></div>`) : html`<p class="muted small">Nothing sent yet.</p>`}`,
   };

@@ -10,7 +10,7 @@ import { crewCloses } from '../model/crew.js';
 
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-/** 2.7.0: the project's working hours; the PM or GM with the right sets them. Late attendance = start + 15 min. */
+/** 2.7.0: the project's working hours; the PE or GM with the right sets them. Late attendance = start + 15 min. */
 function hoursBox(c) {
   const p = c.project, may = p.hoursEdit, off = (c.ui.hr || {}).off || p.nwDow || [0];
   const start = c.ui.hrStart || p.defStart || '08:00', end = c.ui.hrEnd || p.defEnd || '17:00', rem = c.ui.hrRemind || p.remindAt || end;
