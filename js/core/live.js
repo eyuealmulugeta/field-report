@@ -242,6 +242,8 @@ export async function now(action, body = {}) {
   catch (e) {
     if (['crewDrop', 'crewOff', 'crewPerson', 'crewSave'].includes(action)) throw e;
     if (action === 'report' && e && e.code && String(e.code).includes('permission-denied')) return { ok: false, refused: String(e.message || '') };   // 2.69.0
+    // 2.82.0 (owner, 9 Nov: Kinshasa's 09/11 never reached the database, no reason anywhere): any other failure says why
+    if (action === 'report') return { ok: false, failed: `Not sent: ${String((e && (e.message || e.code)) || 'no answer').replace(/^Firebase(Error)?:\s*/, '').slice(0, 120)}. It is sent again by itself.` };
     return null;
   }
 }

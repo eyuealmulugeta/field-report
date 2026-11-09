@@ -371,11 +371,15 @@ async function dbCopy(k) {
   const body = dbBody(k);
   if (!body || !L.liveOn()) return false;
   const res = await L.now('report', body);
-  if (!res || !res.ok) { if (res && res.refused) editKey(k, x => { x.dbWhy = res.refused; }); return false; }   // 2.69.0: the reason, shown on the bar
+  if (!res || !res.ok) { if (res && (res.refused || res.failed)) editKey(k, x => { x.dbWhy = res.refused || res.failed; }); return false; }   // 2.69.0: the reason, shown on the bar; 2.82.0 any failure
   editKey(k, x => { x.dbAt = Date.now(); delete x.dbWhy; });
   return true;
 }
 let dbBusy = false;
+// 2.82.0: a copy still missing is sent again every 5 minutes while the app is open, and when the phone is back online,
+// not only when the live link starts (a failed send waited for the next start before)
+if (typeof document !== 'undefined') setInterval(() => { if (document.visibilityState !== 'hidden') dbResend(); }, 5 * 60e3);
+if (typeof document !== 'undefined') addEventListener('online', () => setTimeout(() => dbResend(), 5e3));
 async function dbResend() {
   if (dbBusy || demo || ui.liveRoute !== 'both' || !L.liveOn()) return;
   dbBusy = true;
