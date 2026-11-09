@@ -31,6 +31,11 @@ export function reportFull(r, project = {}, profile = {}, signedAt = '') {
 /** The route the Admin set: 'script' (default, also when it cannot be read) or 'read'. */
 /** 2.19.0: the routes that read live. */
 export const LIVE = new Set(['read', 'both']);
+/** 2.79.0: whether the live link should be tried again now (not when on, connecting, or waiting for the person's sign-in tap). */
+export function healDue(live, at, now, force = false) {
+  if (live === 'on' || live === 'connecting' || live === 'signin') return false;
+  return force || now - at >= (live === 'none' ? 300e3 : 55e3);
+}
 /** 2.19.0: what the database keeps of a report (E3a): its figures, not its text or photos. */
 export const reportLite = m => ({ hash: m.hash || '', preparedBy: m.preparedBy || '', manpower: { head: (m.manpower || {}).head || 0, manHours: (m.manpower || {}).manHours || 0 }, items: (m.items || []).map(() => 1), photos: m.photos || 0, attention: m.attention || [], rating: m.rating || null });
 

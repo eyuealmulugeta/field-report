@@ -278,6 +278,20 @@ async function checkStatus(force) {
  * database with the Google sign-in just made (at) and listens to its project's reports: approvals and comments land
  * in `known` at once. Anything that fails leaves the normal refresh (checkStatus) in charge.
  */
+/**
+ * 2.79.0 (owner, 9 Nov: Discuss said "Not connected to Central Hub" and stayed so): the live link was made only when the
+ * app opened, a project was chosen or the person signed in. A drop (no network at opening, the phone asleep, a database
+ * error) was never mended. Now it is tried again by itself: when the phone is back online, when the app comes to the
+ * front, and every minute while it is not on ('none', not linked, every 5 minutes; 'signin' needs the person's tap).
+ */
+let healAt = 0;
+function liveHeal(force = false) {
+  if (demo || !store.get().auth || !project() || !L.healDue(ui.live, healAt, Date.now(), force)) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  healAt = Date.now();
+  goLive();
+}
+
 async function goLive(at = '') {
   if (demo) return;
   ui.liveRoute = await L.routeOf();
@@ -1387,6 +1401,7 @@ const ACTS = {
   },
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); goLive(); },
   liveConnect: () => signedIn(signIn(store.get().profile.name || '')),
+  liveRetry: () => { toast('Connecting to Central Hub…'); liveHeal(true); },   // 2.79.0
   // 2.71.0 (owner): the crew Edit opened Google's account page when the project was not linked; now it says why
   liveWhy: () => toast(liveWhyText(ui.live, ui.liveWhy)),   // 2.12.0: the Google sign-in again, for live updates
   // 2.8.0: switch the project and stay on the page (Reports); on Review, its reports load
@@ -2567,10 +2582,11 @@ window.addEventListener('hashchange', () => {
   if (h !== 'me') sendProfile();
   if (h === 'today' || h === '') pullDraft();
 });
-window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flushSpots(); flushVideos(); });
+window.addEventListener('online', () => { flush(); checkStatus(); upNow(); flushSpots(); flushVideos(); liveHeal(true); });   // 2.79.0: and the live link
 setTimeout(() => flushVideos(), 4000);   // 2.50.0: a video left waiting is sent once the app is open
 // 2.1.1: the office's approvals show without opening Reports: when the app comes back to the front, and every 10 minutes
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store.get().auth) { checkStatus(); flushSpots(); liveHeal(true); } });
+setInterval(() => { if (document.visibilityState === 'visible') liveHeal(); }, 60e3);   // 2.79.0
 setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth) checkStatus(); }, 10 * 60e3);
 setInterval(remindTick, 60e3);
 setInterval(shareLater, 60e3);   // 2.25.0: requests not shared yet go again

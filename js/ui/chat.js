@@ -64,7 +64,7 @@ export function chat(c) {
         ${people.length ? people.map(x => html`<button type="button" class="cperson" data-act="chatOpen" data-v="${DM + x.email}">${face(x.email, x.name)}<span><b>${x.name}</b><i>${x.title || x.email}</i></span></button>`) : html`<p class="muted small">People who write in the project channel appear here.</p>`}
         <div class="cto"><input class="fld" type="email" inputmode="email" autocomplete="off" data-ui="chatTo" placeholder="Or type their email" value="${c.ui.chatTo || ''}" aria-label="Email of the person"><button type="button" class="cgo" data-act="chatStart">Start</button></div>
       </div>` : ''}
-      ${off ? html`<p class="callout warn small">${c.ui.live === 'none' ? 'This project is not linked to your email in Central Hub: ask the Admin.' : 'Not connected to Central Hub. Messages arrive when the phone is online and signed in.'}</p>` : ''}
+      ${off ? offLine(c.ui.live) : ''}
       <div class="clog">${rows.length ? rows : html`<div class="cempty">${other ? face(other, who, 'big') : html`<span class="av ch big" aria-hidden="true">#</span>`}<b>${who}</b><span>${other ? 'Only the two of you read this chat.' : 'Everyone on this project in Central Hub and Field Report reads this channel.'}</span><span>Say hello 👋</span></div>`}</div>
       <div class="cbox">
         ${editing ? html`<div class="cedit"><span>Editing your message</span><button type="button" data-act="chatEditCancel">Cancel</button></div>` : ''}
@@ -74,4 +74,11 @@ export function chat(c) {
       </div>
     </div>`,
   };
+}
+
+/** 2.79.0 (owner, 9 Nov): what Discuss says when the live link is not on, with the one thing that mends it. */
+export function offLine(live) {
+  if (live === 'none') return html`<p class="callout warn small">This project is not linked to your email in Central Hub: ask the Admin.</p>`;
+  if (live === 'signin') return html`<button type="button" class="callout warn small li" data-act="liveConnect"><b>Discuss needs one sign-in on this phone.</b> Tap to connect</button>`;
+  return html`<button type="button" class="callout warn small li" data-act="liveRetry"><b>Connecting to Central Hub…</b> It tries again by itself; tap to try now</button>`;
 }
