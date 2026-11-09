@@ -46,7 +46,7 @@ import { messageOf, freshOf, mayEdit, takeBackOk, threadOf } from './model/chat.
 import { receiptWrites, chatKey, keep as keepReceipt } from './model/receipts.js';   // 2.84.0: Sent / Delivered / Seen
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
-import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff, screenOffOnly, actOffOnly } from './model/rules.js';   // 2.60.0 (G6)
+import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff, isOff, screenOffOnly, actOffOnly } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
 import { openPad } from './ui/sigpad.js';
@@ -341,7 +341,8 @@ async function goLive(at = '') {
     onFeatures: list => {   // 2.74.0 (owner): Central Hub switched features on or off
       const k = JSON.stringify(list || []);
       try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
-      setOff(list); draw();
+      setOff(list); if (isOff('fr_chat')) { ui.pop = null; ui.popText = ''; }   // 2.88.0: Discuss off closes its pop-up at once
+      draw();
     },
     // 2.86.0 (owner, 9 Nov): Discuss is on as soon as its own channel answers, whatever the reports link is doing
     onChat: list => { (ui.chat ||= {}).ch = list; ui.chatLive = true; chatRing(list); draw(); rcptTick(); },   // 2.73.0 (owner, R4)
@@ -427,6 +428,7 @@ const myName = () => (store.get().profile || {}).name || '';
    the first read after opening only remembers how things are. */
 const CHAT_SEEN = 'fr2_chatSeen';
 function chatRing(list) {
+  if (isOff('fr_chat')) return;   // 2.88.0 (owner, 9 Nov): Discuss turned off: no sound, no pop-up
   const me = String((store.get().auth || {}).email || '').toLowerCase();
   let seen = 0; try { seen = Number(localStorage.getItem(CHAT_SEEN) || 0); } catch { /* private mode */ }
   const fresh = freshOf(list, me, seen);
@@ -1533,6 +1535,7 @@ const ACTS = {
   async popSend() {
     const p = ui.pop, text = String(ui.popText || '').trim();
     if (!p || !text) return;
+    if (isOff('fr_chat')) { ui.pop = null; draw(); return toast('Discuss is turned off by the Admin.'); }   // 2.88.0
     if (ui.live !== 'on') return toast(liveWhyText(ui.live, ui.liveWhy));
     ui.pop = null; ui.popText = ''; draw();
     try {
@@ -1550,6 +1553,7 @@ const ACTS = {
   },
   async chatSend() {
     const text = String(ui.chatText || '').trim(), u = ui.chat ||= {};
+    if (isOff('fr_chat')) return toast('Discuss is turned off by the Admin.');   // 2.88.0
     if (!text || u.busy) return;
     if (ui.live !== 'on') return toast(liveWhyText(ui.live, ui.liveWhy));
     if (u.edit) {   // 2.74.1: the writing box holds the edit
@@ -2440,7 +2444,7 @@ function openLink(h) {
     if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
     go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
   }
-  else if (what === 'chat') { go('chat'); ACTS.chatOpen({ v: d || '' }); }   // 2.85.0 (D2): Reply on a message notification
+  else if (what === 'chat') { if (isOff('fr_chat')) return toast('Discuss is turned off by the Admin.'); go('chat'); ACTS.chatOpen({ v: d || '' }); }   // 2.85.0 (D2): Reply on a message notification
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else if (what === 'devices') { go('me'); devCheck(true); }   // 2.53.0: a new device waits on Me > Devices
   else if (what === 'me' || what === 'requests') go(what);

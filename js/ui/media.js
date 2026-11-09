@@ -4,6 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { stepHead } from './parts.js';
 import { shotsBody } from './share.js';
+import { isOff } from '../model/rules.js';   // 2.88.0
 
 /** Monday to Sunday of the week of `today`, as YYYY-MM-DD. */
 export function weekOf(today) {
@@ -16,8 +17,9 @@ export const weekStep = (day, n, today) => { const d = new Date(Date.parse(`${da
 
 export function media(c) {
   // 2.87.0 (owner, 9 Nov): the technicians' work photos are a tab here (were Review > Photos)
-  const work = c.ui.mTab === 'work', waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
-  const top = html`<div class="seg wide att-tabs" role="group" aria-label="Dashboard"><button type="button" class="${work ? '' : 'on'}" data-act="mediaTab" data-v="" aria-pressed="${!work}">Photos and videos</button><button type="button" class="${work ? 'on' : ''}" data-act="mediaTab" data-v="work" aria-pressed="${work}">Work photos${waiting ? ` · ${waiting}` : ''}</button></div>`;
+  const shotsOn = !isOff('fr_shots');   // 2.88.0 (owner): Work photos switched off in Central Hub: no tab here
+  const work = shotsOn && c.ui.mTab === 'work', waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
+  const top = !shotsOn ? '' : html`<div class="seg wide att-tabs" role="group" aria-label="Dashboard"><button type="button" class="${work ? '' : 'on'}" data-act="mediaTab" data-v="" aria-pressed="${!work}">Photos and videos</button><button type="button" class="${work ? 'on' : ''}" data-act="mediaTab" data-v="work" aria-pressed="${work}">Work photos${waiting ? ` · ${waiting}` : ''}</button></div>`;
   if (work) return { head: stepHead('Dashboard', `${c.project.name} · work photos from technicians`, 'today'), body: html`${top}${shotsBody(c)}` };
   const code = c.project.code, day = c.ui.mDay || c.realToday, k = `${code}|${day}`;
   const photos = (c.ui.mPhotos || {})[k], vids = ((c.ui.mVids || {})[code] || []).filter(v => v.date === day);
