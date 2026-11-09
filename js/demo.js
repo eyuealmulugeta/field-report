@@ -105,8 +105,8 @@ export async function demoServer(action, body) {
     case 'signin': {
       // demo only: ?demo&newdevice shows the refusal a new device gets; ?demo&admin signs in as the Admin
       const q = new URLSearchParams(location.search);
-      // 2.4.0: ?demo&signup shows the sign-up form, and after sending it the wait
-      if (q.has('signup')) return { ok: false, code: 'SIGNUP', email: 'new.person@example.com', status: 'wait', error: 'Your request to use Field Report was sent (new.person@example.com). Please wait until it is approved: you get an email when it is.' };
+      // 2.83.0: ?demo&unauth: an email the Admin has not added
+      if (q.has('unauth')) return { ok: false, code: 'AUTH', error: 'Unauthorized user, please contact the Admin', ticket: 'demo' };
       if (q.has('newdevice')) return { ok: false, code: 'DEVICE', error: 'This phone is new, so the Admin must approve it first. The Admin has been told. Sign in again after the approval.', status: 'wait', ticket: '', whereUrl: '' };
       return { ok: true, token: 'demo', who: 'demo', role: q.has('admin') ? 'admin' : q.has('pm') ? 'coordinator' : q.has('viewer') ? 'viewer' : 'engineer', email: 'demo@example.com', name: q.has('pm') ? 'Demo Project Engineer' : 'Demo Engineer', days: 30 };
     }

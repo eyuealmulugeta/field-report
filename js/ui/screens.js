@@ -45,25 +45,13 @@ export function inboxBox(c) {
 export const READY = new Set(['start', 'crew', 'work', 'equipment', 'materials', 'safety', 'photos', 'end', 'send']);
 
 export function signin(c) {
-  const su = c.ui.signup;
-  // 2.4.0: a Google account without access signs up: full name and phone, then waits for the office
-  if (su && !su.sent) return {
-    head: head('Sign up', su.email || 'Your Google account'),
-    body: html`<p class="muted">This Google account has no access to Field Report yet. Send your details to the office to ask for it.</p>
-      <label class="lab" for="sun">Full name</label><input id="sun" class="fld" autocomplete="name" value="${c.s.profile.name || ''}">
-      <label class="lab" for="sup">Phone</label><input id="sup" class="fld" type="tel" autocomplete="tel" placeholder="+251 …">
-      <p class="muted small">You sign once your request is approved.</p>
-      ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}`,
-    foot: html`<button type="button" class="btn p" data-act="signUp" ${c.ui.busy ? 'disabled' : ''}>${c.ui.busy ? 'Sending…' : 'Send the request'}</button>
-      <button type="button" class="btn t" data-act="signupBack">Use another account</button>`,
-  };
+  // 2.83.0 (owner, 9 Nov): no sign-up form; access is given by the Admin in Central Hub
   return {
     body: html`<div class="center-page signin-page">
       <img class="logo big" src="icon-192.png" alt="Amistad Prefab">
       <div><b class="title">Amistad Prefab</b><div class="muted">Field Report</div></div>
-      ${su ? html`<p class="callout ok narrow">Please wait until your request is approved. You get an email when it is, then sign in again.</p>` : ''}
       ${c.ui.error ? html`<p class="callout bad">${c.ui.error}</p>` : ''}
-      <button type="button" class="btn o signin-btn" data-act="${su ? 'signupBack' : 'signin'}" ${c.ui.busy ? 'disabled' : ''}>${su ? 'Back' : html`<b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}`}</button>
+      <button type="button" class="btn o signin-btn" data-act="signin" ${c.ui.busy ? 'disabled' : ''}><b class="g">G</b>${c.ui.busy ? 'Signing in…' : 'Sign in with Google'}</button>
       ${isDemo() ? html`<div class="center muted small">Demo, nothing is sent</div>` : ''}
     </div>`,
   };

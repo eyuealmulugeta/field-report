@@ -2,7 +2,7 @@
 // Requests are JSON sent as text/plain, so the browser does not ask the script for permission first.
 
 export const SCRIPT = 'https://script.google.com/macros/s/AKfycbw60G2k1_o25WQtvwUnoQ0JRecC0ty_KPHqK82QVDglGeXIKRhoGsi1Pvi12SBJRWNL/exec';
-export const APP_VERSION = '2.82.0';
+export const APP_VERSION = '2.83.0';
 
 const DEV_RE = /^[A-Za-z0-9_-]{8,40}$/;
 const devCookie = () => { try { return (/(?:^|;\s*)afr_devid=([A-Za-z0-9_-]{8,40})/.exec(document.cookie) || [])[1] || ''; } catch { return ''; } };
@@ -114,12 +114,9 @@ async function signinPost(body) {
   body = { ...body, fp: deviceFp(), ...(w ? { wiped: 1 } : {}) };   // 2.56.0
   try { const r = await post('signin', body); sendWhere(r); try { localStorage.removeItem('afr_wiped'); } catch { /* fine */ } return r; }
   catch (e) {
-    // 2.4.0 (script 7.35.0): a Google account without access asks to join; the sign-up form sends the name and phone with the same sign-in
-    if (e.code === 'SIGNUP') {
-      sendWhere(e.reply);
-      try { if (body.accessToken) sessionStorage.setItem(SIGNUP, body.accessToken); } catch { /* the form asks to sign in again */ }
-      throw Object.assign(new ApiError(e.message, 'SIGNUP'), { reply: e.reply });
-    }
+    // 2.83.0 (owner, 9 Nov; script 7.60.0): no sign-up form. An email the Admin has not added is told one line only; the
+    // request for the Admin is kept by the script without telling the person (an older script's SIGNUP answer says the same)
+    if (e.code === 'SIGNUP' || (e.code === 'AUTH' && e.reply && e.reply.ticket)) { sendWhere(e.reply); throw new ApiError(UNAUTHORIZED, 'AUTH'); }
     if (e.code !== 'DEVICE') throw e;
     sendWhere(e.reply);
     throw new ApiError('Unauthorized user. Please contact the Admin.', 'DEVICE');   // 2.42.2 (owner): one short line for a new or refused phone
@@ -132,15 +129,8 @@ const OAUTH = 'fr2_oauth';
 let googleAt = '';
 /** 2.12.0: the Google access token of the sign-in just made, once, for the Firebase sign-in (js/core/live.js). */
 export const takeGoogleToken = () => { const t = googleAt; googleAt = ''; return t; };
-const SIGNUP = 'fr2_signup';
-
-/** 2.4.0: send the sign-up form (full name, phone) with the Google sign-in just made. Answers like a sign-in. */
-export function signUp(form) {
-  let at = '';
-  try { at = sessionStorage.getItem(SIGNUP) || ''; } catch { /* below */ }
-  if (!at && !fake) return Promise.reject(new ApiError('Sign in with Google again, then send the form.', 'AUTH'));
-  return signinPost({ accessToken: at || 'demo', signup: form, ua: deviceUa() });
-}
+/** 2.83.0 (owner, 9 Nov): what an email the Admin has not added is told. */
+export const UNAUTHORIZED = 'Unauthorized user, please contact the Admin';
 
 /**
  * Google sign-in, then the script's own session: { token, who, role, email, name, days }.

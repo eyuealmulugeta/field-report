@@ -1,6 +1,6 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, deviceUa, deviceMode, takeGoogleToken, SCRIPT } from './core/api.js';
+import { post, signIn, signInReturn, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, deviceUa, deviceMode, takeGoogleToken, SCRIPT } from './core/api.js';
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
 import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
@@ -720,7 +720,6 @@ async function signedIn(pending) {
     store.set({ auth: { token: a.token, who: a.who, role: a.role, email: a.email, name: a.name }, profile: { ...prof, of: now, name: prof.name || a.name || '' } });
     applyMe(a.me);
     if ('rules' in a) store.set({ rules: cleanRules(a.rules) });   // 2.60.0 (G6)
-    ui.signup = null;
     oldAppClear();
     sigFetch();
     await loadProjects();
@@ -730,8 +729,7 @@ async function signedIn(pending) {
     checkStatus(); devCheck(true); inboxCheck(true); pullDraft();   // 2.53.0: a draft lost with the sign-out comes back
     goLive(takeGoogleToken());
   } catch (e) {
-    if (e.code === 'SIGNUP') ui.signup = { email: (e.reply && e.reply.email) || (ui.signup || {}).email || '', sent: !!(ui.signup && ui.signup.asking), msg: e.message };
-    else ui.error = e.message;
+    ui.error = e.message;
   }
   ui.busy = false; draw();
 }
@@ -1387,14 +1385,6 @@ const ACTS = {
   quickEdit() { ui.quickEdit = !ui.quickEdit; draw(); },   // 2.11.0
   quickPin(d) { Q.quickToggle(d.v); draw(); },
   signin: () => signedIn(signIn(store.get().profile.name || '')),
-  /** 2.4.0: the sign-up form: full name and phone go with the Google sign-in just made. */
-  signUp() {
-    const name = (root.querySelector('#sun') || {}).value || '', phone = (root.querySelector('#sup') || {}).value || '';
-    if (!name.trim()) return toast('Write your full name first.');
-    ui.signup = { ...(ui.signup || {}), asking: true };
-    signedIn(signUp({ name: name.trim(), phone: phone.trim() }));
-  },
-  signupBack() { ui.signup = null; draw(); },
   /** 2.4.0: sign full screen (or choose a PNG); kept on this phone and in Drive. d.v === 'report' also signs today's report. */
   async sigFull(d) {
     const png = await openPad(d.v === 'report' ? 'Sign the report' : 'Your signature');
