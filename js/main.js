@@ -43,6 +43,7 @@ import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
 import { messageOf, freshOf, mayEdit, takeBackOk, threadOf } from './model/chat.js';
+import { receiptWrites, chatKey, keep as keepReceipt } from './model/receipts.js';   // 2.84.0: Sent / Delivered / Seen
 import * as SH from './ui/share.js';   // 2.66.0: technicians' work photos
 import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './model/shots.js';
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff, screenOffOnly, actOffOnly } from './model/rules.js';   // 2.60.0 (G6)
@@ -341,8 +342,9 @@ async function goLive(at = '') {
       try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
       setOff(list); draw();
     },
-    onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); },   // 2.73.0 (owner, R4)
-    onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); },
+    onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); rcptTick(); },   // 2.73.0 (owner, R4)
+    onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); rcptTick(); },
+    onSeen: (k, list) => { const r = ui.rcpt ||= { ch: [], dm: [] }; r[k] = list; r[k === 'ch' ? 'c' : 'd'] = true; draw(); rcptTick(); },   // 2.84.0
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
     onReqAll: (code, list) => { (ui.reqAll ||= {})[code] = list; if (ui.allProj) draw(); },
@@ -434,9 +436,19 @@ function chatRing(list) {
 /** 2.74.1: when each conversation was last opened (unread counts on the tab and the conversations). */
 const CHAT_READ = 'fr2_chatRead';
 try { ui.chatRead = JSON.parse(localStorage.getItem(CHAT_READ) || '{}') || {}; } catch { ui.chatRead = {}; }
+/** 2.84.0 (owner, 9 Nov): write this phone's Delivered (got) or, for the conversation on screen, Seen. */
+function rcptTick(field = 'got', only = '') {
+  const r = ui.rcpt, me = String((store.get().auth || {}).email || '').toLowerCase();
+  if (!r || !r.c || !r.d || !me || (field === 'seen' && typeof document !== 'undefined' && document.hidden)) return;
+  const writes = receiptWrites({ list: [...((ui.chat || {}).ch || []), ...((ui.chat || {}).dm || [])], mine: [...r.ch, ...r.dm], me, name: myName() || (store.get().auth || {}).name || '', field, only });
+  if (!writes.length) return;
+  for (const w of writes) { if (w.sec === 'dmSeen') r.dm = keepReceipt(r.dm, w); else r.ch = keepReceipt(r.ch, w); }
+  L.putSeen(writes).catch(() => {});
+}
 function chatMarkRead() {
   const u = ui.chat || {}, me = String((store.get().auth || {}).email || '').toLowerCase(), id = u.open || '';
   const list = threadOf({ ch: u.ch || [], dm: u.dm || [], open: id, me });
+  if (list.length) rcptTick('seen', chatKey(list[list.length - 1]));   // 2.84.0: Seen
   const top = list.reduce((t, m) => Math.max(t, Number(m.sentMs || Date.parse(m.at) || 0)), 0);
   if (top > (ui.chatRead[id] || 0)) { ui.chatRead = { ...ui.chatRead, [id]: top }; try { localStorage.setItem(CHAT_READ, JSON.stringify(ui.chatRead)); } catch { /* private mode */ } }
 }

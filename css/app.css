@@ -637,6 +637,9 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 .cn { font-size: 12px; font-weight: 700; color: hsl(212 55% 40%); } .cn i { font-style: normal; font-weight: 500; color: var(--muted); }
 .ct { white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.35; }
 .cm { align-self: flex-end; font-size: 11px; opacity: .7; }
+/* 2.84.0: Sent / Delivered / Seen */
+.cm .rc { font-weight: 500; margin-left: 4px; white-space: nowrap; }
+.cm .rc-seen { color: #a5f3fc; font-weight: 700; opacity: 1; }   /* light on the own (brand) bubble */
 .cact { display: flex; justify-content: flex-end; gap: 8px; margin: 4px 0 2px; }
 .cact button { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--card, #fff); border: 1px solid var(--line, #e2e8f0); color: var(--brand); }
 .cact .del { color: #c62828; }

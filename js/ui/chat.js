@@ -6,6 +6,7 @@
 import { html } from '../core/dom.js';
 import { head } from './parts.js';
 import { threadOf, chatsOf, peopleOf, isDm, DM, mayEdit, takeBackOk, low } from '../model/chat.js';
+import { tagOf, tick } from '../model/receipts.js';   // 2.84.0
 
 const pad = n => String(n).padStart(2, '0');
 const hm = at => { const d = new Date(at); return isNaN(d) ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -46,7 +47,7 @@ export function chat(c) {
       <div class="cb ${m.deleted ? 'gone' : ''} ${sel ? 'sel' : ''}" ${mine && !m.deleted ? html`data-act="chatSel" data-v="${m.id}" role="button" tabindex="0" aria-label="Your message: tap for Edit or Delete"` : ''}>
         ${!mine && first && !other ? html`<span class="cn">${m.name || m.by}${m.title ? html` <i>${m.title}</i>` : ''}${m.from === 'Field Report' ? '' : html` <i>· Central Hub</i>`}</span>` : ''}
         <span class="ct">${m.deleted ? 'This message was deleted' : m.text}</span>
-        <span class="cm">${m.edited && !m.deleted ? 'edited · ' : ''}${hm(m.at)}</span>
+        <span class="cm">${m.edited && !m.deleted ? 'edited · ' : ''}${hm(m.at)}${mine && !m.deleted ? rtag(tagOf(m, [...((c.ui.rcpt || {}).ch || []), ...((c.ui.rcpt || {}).dm || [])], me)) : ''}</span>
       </div></div>
       ${sel ? html`<div class="cact">${mayEdit(m, me) ? html`<button type="button" data-act="chatFix" data-v="${m.id}">Edit</button>` : ''}<button type="button" class="del" data-act="chatDel" data-v="${m.id}">${takeBackOk(m) ? 'Delete for everyone' : 'Delete for me'}</button></div>` : ''}`;
   });
@@ -75,6 +76,9 @@ export function chat(c) {
     </div>`,
   };
 }
+
+/** 2.84.0 (owner, 9 Nov): Sent / Delivered / Seen under one's own message; in the channel, who (tap and hold). */
+const rtag = t => html` <b class="rc rc-${t.k}" title="${t.names}">${tick(t)} ${t.text}</b>`;
 
 /** 2.79.0 (owner, 9 Nov): what Discuss says when the live link is not on, with the one thing that mends it. */
 export function offLine(live) {
