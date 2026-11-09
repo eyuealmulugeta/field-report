@@ -36,7 +36,8 @@ export function chat(c) {
   const list = threadOf({ ch, dm, open, me });
   const other = isDm(open) ? open.slice(DM.length) : '';
   const who = other ? (who0(other) || {}).n || (chats.find(x => x.email === other) || people.find(x => x.email === other) || {}).name || 'Colleague' : `${p.name || 'Project'} channel`;
-  const off = c.ui.live !== 'on';
+  // 2.86.0 (owner, 9 Nov): only Discuss's own link counts: a drop of the reports link no longer shows "Connecting" here
+  const off = c.ui.live !== 'on' && !c.ui.chatLive;
   const convs = [{ id: '', name: `${p.code || 'Project'} channel`, n: unreadIn(ch, me, read['']), ch: true },
     ...chats.map(x => ({ id: DM + x.email, name: x.name || x.email, email: x.email, n: unreadIn(threadOf({ dm, open: DM + x.email, me }), me, read[DM + x.email]) }))];
   if (other && !convs.some(x => x.id === open)) convs.push({ id: open, name: who, email: other, n: 0 });

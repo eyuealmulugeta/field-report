@@ -304,7 +304,7 @@ function liveHeal(force = false) {
 async function goLive(at = '') {
   if (demo) return;
   ui.liveRoute = await L.routeOf();
-  if (!L.LIVE.has(ui.liveRoute)) { ui.live = ''; await L.stop(); return; }
+  if (!L.LIVE.has(ui.liveRoute)) { ui.live = ''; ui.chatLive = false; await L.stop(); return; }
   if (at && !(await L.connect(at))) { ui.live = 'error'; ui.liveWhy = L.liveWhy(); draw(); return; }
   const p = project(), a = store.get().auth;
   if (!p || !a) return;
@@ -342,7 +342,9 @@ async function goLive(at = '') {
       try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
       setOff(list); draw();
     },
-    onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); rcptTick(); },   // 2.73.0 (owner, R4)
+    // 2.86.0 (owner, 9 Nov): Discuss is on as soon as its own channel answers, whatever the reports link is doing
+    onChat: list => { (ui.chat ||= {}).ch = list; ui.chatLive = true; chatRing(list); draw(); rcptTick(); },   // 2.73.0 (owner, R4)
+    onChatOff: () => { ui.chatLive = false; draw(); },
     onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); rcptTick(); },
     onPeople: d => { ui.people = d; if (route() === 'chat') draw(); },   // 2.85.0
     onSeen: (k, list) => { const r = ui.rcpt ||= { ch: [], dm: [] }; r[k] = list; r[k === 'ch' ? 'c' : 'd'] = true; draw(); rcptTick(); },   // 2.84.0
@@ -353,6 +355,7 @@ async function goLive(at = '') {
   });
   if (st === 'stale') return;   // 2.19.2: a newer start is in charge
   ui.live = st;
+  if (st !== 'on') ui.chatLive = false;   // 2.86.0
   ui.liveWhy = L.liveWhy();
   if (ui.live === 'on') { sigSync(); dbResend(); }   // 2.19.1; 2.35.0: database copies still missing
   draw();
@@ -1495,7 +1498,7 @@ const ACTS = {
   async signout() {
     if (!confirm('Sign out? Reports not yet sent stay on this phone.')) return;
     await here.signOut(Date.now());   // 2.58.0: the end of this session in the sign-in history
-    L.stop(); ui.live = '';
+    L.stop(); ui.live = ''; ui.chatLive = false;
     store.set({ auth: null, rules: null }); go('');
   },
   startDay() { ensureReport(); go('start'); fetchWeather(); },

@@ -123,7 +123,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onDirect = () => {}, onSeen = () => {}, onPeople = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onChatOff = () => {}, onDirect = () => {}, onSeen = () => {}, onPeople = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -181,7 +181,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'workShots'), snap => onShots(snap.docs.map(x => x.data())), () => {}));   // 2.66.0
     stops.push(F.onSnapshot(F.doc(db, 'public', 'fieldFeatures'), d => onFeatures((d.data() || {}).off || []), () => {}));   // 2.74.0: features switched off
     // 2.73.0 (owner, R4): Discuss: the project's channel and this person's one-to-one chats, as on Central Hub
-    stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => {}));
+    stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => onChatOff()));   // 2.86.0: Discuss knows its own link
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'direct'), F.where('members', 'array-contains', u.email.toLowerCase())), snap => onDirect(snap.docs.map(x => x.data())), () => {}));
     // 2.84.0 (owner, 9 Nov): Sent / Delivered / Seen: who has received and seen the channel and this person's chats
     stops.push(F.onSnapshot(F.doc(db, 'directory', 'people'), d => onPeople(d.exists() ? d.data() : null), () => {}));   // 2.85.0: names, positions, projects
