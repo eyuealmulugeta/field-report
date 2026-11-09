@@ -8,7 +8,9 @@ import { SPOT_TONES, SPOT_MAX, aboutList, catsFor, PROJECT_ABOUT, VIDEO_SECONDS 
 import { VISIT_TYPES, PURPOSES, VISIT_PHOTOS, visitsOf, visitCounts } from '../model/visit.js';
 
 // 2.49.0 (owner, R3): Spotlight has two tabs, Notes and Visitors
-const tabs = t => html`<div class="chips spot-tabs" role="tablist"><button type="button" class="chip ${t === 'notes' ? 'on' : ''}" data-act="spotTab" data-v="notes" aria-selected="${t === 'notes'}">Notes</button><button type="button" class="chip ${t === 'visits' ? 'on' : ''}" data-act="spotTab" data-v="visits" aria-selected="${t === 'visits'}">Visitors</button></div>`;
+// 2.87.0 (owner, 9 Nov): and Attention (a serious issue for the client), which was its own page
+export const spotTabs = t => html`<div class="chips spot-tabs" role="tablist"><button type="button" class="chip ${t === 'notes' ? 'on' : ''}" data-act="spotTab" data-v="notes" aria-selected="${t === 'notes'}">Notes</button><button type="button" class="chip ${t === 'visits' ? 'on' : ''}" data-act="spotTab" data-v="visits" aria-selected="${t === 'visits'}">Visitors</button><button type="button" class="chip ${t === 'attention' ? 'on' : ''}" data-act="spotTab" data-v="attention" aria-selected="${t === 'attention'}">Attention</button></div>`;
+const tabs = spotTabs;
 const FOOT = html`<p class="muted tiny">All photos are taken live with the camera, not uploaded.</p>`;
 
 function visitForm(c) {

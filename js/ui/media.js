@@ -3,6 +3,7 @@
 
 import { html, icon } from '../core/dom.js';
 import { stepHead } from './parts.js';
+import { shotsBody } from './share.js';
 
 /** Monday to Sunday of the week of `today`, as YYYY-MM-DD. */
 export function weekOf(today) {
@@ -14,6 +15,10 @@ export function weekOf(today) {
 export const weekStep = (day, n, today) => { const d = new Date(Date.parse(`${day}T00:00:00Z`) + n * 7 * 864e5).toISOString().slice(0, 10); return d > today ? today : d; };
 
 export function media(c) {
+  // 2.87.0 (owner, 9 Nov): the technicians' work photos are a tab here (were Review > Photos)
+  const work = c.ui.mTab === 'work', waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
+  const top = html`<div class="seg wide att-tabs" role="group" aria-label="Dashboard"><button type="button" class="${work ? '' : 'on'}" data-act="mediaTab" data-v="" aria-pressed="${!work}">Photos and videos</button><button type="button" class="${work ? 'on' : ''}" data-act="mediaTab" data-v="work" aria-pressed="${work}">Work photos${waiting ? ` · ${waiting}` : ''}</button></div>`;
+  if (work) return { head: stepHead('Dashboard', `${c.project.name} · work photos from technicians`, 'today'), body: html`${top}${shotsBody(c)}` };
   const code = c.project.code, day = c.ui.mDay || c.realToday, k = `${code}|${day}`;
   const photos = (c.ui.mPhotos || {})[k], vids = ((c.ui.mVids || {})[code] || []).filter(v => v.date === day);
   const urls = c.ui.mUrl || {};
@@ -24,7 +29,7 @@ export function media(c) {
   const big = c.ui.mBig ? html`<div class="m-big" data-act="mediaBig" data-v=""><img src="${c.ui.mBig}" alt="Site photo"><span class="muted small">Tap to close</span></div>` : '';
   return {
     head: stepHead('Dashboard', `${c.project.name} · photos and videos from site`, 'today'),
-    body: html`${tabs}${big}
+    body: html`${top}${tabs}${big}
       ${photos === undefined ? html`<p class="muted">Getting the photos from the site…</p>` : ''}
       ${vids.length ? html`<div class="k">Videos · ${vids.length}</div><div class="m-grid">${vids.map(v => html`<a class="m-tile m-vid" href="https://drive.google.com/file/d/${v.fileId}/view" target="_blank" rel="noopener" aria-label="Open the video">
         <video muted autoplay loop playsinline preload="auto" poster="https://drive.google.com/thumbnail?id=${v.fileId}&sz=w600" ${(c.ui.mVurl || {})[v.id] ? html`src="${c.ui.mVurl[v.id]}"` : ''}></video>

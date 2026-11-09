@@ -9,7 +9,7 @@ export const TABS = [
   { id: 'today', title: 'Today', icon: 'home' },
   { id: 'att', title: 'Office', icon: 'users' },   // 2.13.1: the page itself says Attendance   // 2.10.0
   { id: 'reports', title: 'Review', icon: 'doc' },   // 2.55.0 (owner): Review holds Reports and Requests side by side
-  { id: 'quick', title: 'Quick', icon: 'plus' },   // 2.11.0: the + tab
+  // 2.87.0 (owner, 9 Nov): the Quick tab is gone: Log now is the + button on Today, its shortcuts are on Today already
   { id: 'chat', title: 'Discuss', icon: 'chat' },   // 2.73.0 (owner, R4): talk with Central Hub
 ];   // 2.8.0: Me is the person button at the top right (`head`)
 
@@ -47,9 +47,9 @@ export const ALL_PROJ = new Set(['reports', 'requests', 'review']);
 export const projTop = (c, all = false) => html`<div class="proj-top"><select data-proj aria-label="Project">${all ? html`<option value="*" ${c.ui && c.ui.allProj ? 'selected' : ''}>All projects</option>` : ''}${c.s.projects.map(x => html`<option value="${x.code}" ${x.code === c.s.proj && !(all && c.ui && c.ui.allProj) ? 'selected' : ''}>${x.name} · ${x.code}</option>`)}</select></div>`;
 
 // 2.55.0: Requests, Review and a report's review light the Review tab
-export const tabOf = on => (['requests', 'penalties', 'store', 'shots', 'review', 'rev'].includes(on) ? 'reports' : on);
+export const tabOf = on => (['requests', 'penalties', 'store', 'review', 'rev'].includes(on) ? 'reports' : on === 'shots' ? 'today' : on);
 /** 2.55.0 (owner): the two tabs inside Review. */
-export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button><button type="button" class="${on === 'shots' ? 'on' : ''}" data-act="go" data-to="shots" aria-pressed="${on === 'shots'}">Photos</button></div>`;   // Photos 2.66.0   // 2.57.0; Store 2.61.0
+export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button></div>`;   // 2.87.0 (owner, 9 Nov): Photos moved to the Dashboard (Work photos)   // Photos 2.66.0   // 2.57.0; Store 2.61.0
 export const nav = (on, badges = {}, kind = 'reporter', rules = null) => html`<nav class="nav">${tabsFor(kind, rules).map(t => html`
   <button type="button" class="${t.id === tabOf(on) ? 'on' : ''} ${screenOffOnly(rules, t.id) ? 'off' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${screenOffOnly(rules, t.id) ? html`<i class="offt">Off</i>` : badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;

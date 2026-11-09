@@ -2,7 +2,7 @@
 // Review > Photos for the Site Engineer or PE (approve, or reject with a reason).
 
 import { html, icon } from '../core/dom.js';
-import { head, reviewTabs } from './parts.js';
+import { stepHead } from './parts.js';
 import { MAX_PHOTOS, REJECT_REASONS, reasonWord, SHOT_WORD, SHOT_TONE, sortShots, mayReview } from '../model/shots.js';
 
 const t = at => String(at || '').slice(5, 16).replace('T', ' ');
@@ -30,21 +30,26 @@ export function share(c) {
   };
 }
 
-/** Review > Photos. */
+/** 2.87.0 (owner, 9 Nov): on Today, for whoever approves work photos and has no Dashboard: how many are waiting. */
+export function shotsBtn(c, dash) {
+  if (dash || !mayReview((c.s.auth || {}).role || '')) return '';
+  const waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
+  return html`<button type="button" class="btn o dash-btn" data-act="go" data-to="shots">${icon('cam')}Work photos${waiting ? ` · ${waiting} waiting` : ''}</button>`;
+}
+
+/** Work photos (2.87.0: a tab of the Dashboard, and its own page from Today; was Review > Photos). */
 export function shots(c) {
+  const v = shotsBody(c), waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
+  return { head: stepHead('Work photos', `Shared by technicians${waiting ? ` · ${waiting} waiting` : ''}`, 'today'), body: v };
+}
+export function shotsBody(c) {
   const role = (c.s.auth || {}).role || '', list = sortShots(c.ui.shList || []).slice(0, 60), may = mayReview(role);
-  const waiting = list.filter(x => x.status === 'waiting').length;
-  return {
-    tab: 'shots',
-    head: head('Work photos', `${list.length} shared by technicians`, waiting ? `${waiting} waiting` : ''),
-    body: html`${reviewTabs('shots')}
-      ${list.length ? list.map(x => html`<div class="box pad sh-rev"><div class="row"><b>${x.byName}</b><span class="pill ${SHOT_TONE[x.status] || ''}">${SHOT_WORD[x.status] || x.status}</span></div>
+  return html`${list.length ? list.map(x => html`<div class="box pad sh-rev"><div class="row"><b>${x.byName}</b><span class="pill ${SHOT_TONE[x.status] || ''}">${SHOT_WORD[x.status] || x.status}</span></div>
         <div class="muted small">${t(x.at)} · ${x.taskName || 'No task'}${x.geo ? html` · <a href="https://maps.google.com/?q=${x.geo.lat},${x.geo.lng}" target="_blank" rel="noopener">place</a>` : ''}</div>
         <p>${x.note}</p><div class="sh-photos">${(x.photos || []).map((u, i) => html`<img src="${u}" alt="Photo ${i + 1}">`)}</div>
         ${x.status === 'waiting' && may ? html`<div class="row"><button type="button" class="btn p slim" data-act="shOk" data-id="${x.id}">Approve</button>
           <select class="fld slim" data-ui="shWhy.${x.id}" aria-label="Reason">${REJECT_REASONS.map(([v, w]) => html`<option value="${v}">${w}</option>`)}</select>
           <button type="button" class="btn t slim bad-t" data-act="shNo" data-id="${x.id}">Reject</button></div>` : ''}
         ${x.status !== 'waiting' ? html`<div class="tiny muted">${x.status === 'rejected' ? `${reasonWord(x.reason)} · ` : ''}by ${x.decidedByName || ''}</div>` : ''}</div>`)
-        : html`<p class="muted small">No work photos yet. Technicians share them from their own account.</p>`}`,
-  };
+        : html`<p class="muted small">No work photos yet. Technicians share them from their own account.</p>`}`;
 }

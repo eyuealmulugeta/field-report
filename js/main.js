@@ -82,8 +82,9 @@ const SCREENS = {
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
   view: V.view,
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
-  spot: SP.spot, attention: S.attention,              // 2.7.0
-  quick: Q.quick,                                      // 2.11.0
+  // 2.87.0 (owner, 9 Nov): Attention is the third tab of Spotlight
+  spot: c => { if (c.ui.spotTab !== 'attention' || !c.report) return SP.spot(c); const v = S.attention(c); return { head: P.stepHead('Spotlight', `${c.project.name} · Attention: for the client`, 'today'), body: html`${SP.spotTabs('attention')}${v.body}` }; },
+  attention: S.attention,              // 2.7.0
   media: MD.media,                                     // 2.54.0: the GM's Dashboard
   chat: CHAT.chat,                                     // 2.73.0 (owner, R4): Discuss
 };
@@ -1628,7 +1629,7 @@ const ACTS = {
     } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was saved.' : `Not saved: ${e.message}`); }
     finally { ui.busy = false; draw(); }
   },
-  attOpen() { if (ui.date) return toast('Attention is added on the day itself.'); ensureReport(); go('attention'); },
+  attOpen() { if (ui.date) return toast('Attention is added on the day itself.'); ensureReport(); if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } ui.spotTab = 'attention'; go('spot'); },   // 2.87.0: inside Spotlight
   attAdd() {
     const text = String(ui.attText || '').trim();
     if (!text) return toast('Write the issue first.');
@@ -1664,6 +1665,7 @@ const ACTS = {
   inboxGo(d) { ui.inboxOpen = false; if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.53.0: the list closes, so the page opened is seen   // 2.8.1: the same link twice opens again
   // 2.54.0 (owner): the GM's Dashboard: the week's photos and videos from site
   mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
+  mediaTab(d) { ui.mTab = d.v; ui.mBig = ''; draw(); },   // 2.87.0
   mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
   mediaBig(d) {
     ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw();
@@ -1671,10 +1673,10 @@ const ACTS = {
     const ph = d.v && Object.values(ui.mPhotos || {}).flat().find(x => x.id === d.v);
     if (ph) drivePhoto(ph.report, ph.id).then(b => { if (b && ui.mBig === ui.mUrl[ph.id]) { ui.mBig = URL.createObjectURL(b); draw(); } });
   },
-  spotOpen() { if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
+  spotOpen() { if (ui.spotTab === 'attention') ui.spotTab = 'notes'; if (!ui.spot) { ui.spot = newSpot(); ui.spotAbout = ''; ui.spotNote = ''; } go('spot'); },
   spotTone(d) { ui.spot.tone = d.v; draw(); },
   // 2.49.0 (owner, R3): Visitors
-  spotTab(d) { ui.spotTab = d.v; draw(); },
+  spotTab(d) { if (d.v === 'attention') { if (ui.date) return toast('Attention is added on the day itself.'); ensureReport(); } ui.spotTab = d.v; draw(); },
   visitNew() { ui.visit = newVisit(); Object.assign(ui, { vName: '', vOrg: '', vIn: now(), vOut: '', vPurpose: PURPOSES[0], vResult: '', vSummary: '' }); draw(); },
   visType(d) { ui.visit.type = d.v; draw(); },
   visitCam() { ui.camFor = 'visit'; spotIn(spotCam); },
@@ -1946,7 +1948,7 @@ const ACTS = {
     } catch (e) { toast(`Attendance not sent: ${e.message}`); }
   },
   noWork: () => { ui.sheet = 'nowork'; ui.sheetNew = true; ui.nwReason = ''; ui.nwNote = ''; draw(); },
-  fab: () => go('quick'),   // 2.39.0: Log now is in Quick
+  fab: () => { ui.sheet = 'log'; draw(); },   // 2.87.0: Log now opens over Today (no Quick tab)
   later: () => toast('This part comes in the next build.'),
 
   /* slice 5: reports, corrections, drafts, preferences */
@@ -2389,7 +2391,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
 [300, 1500].forEach(ms => setTimeout(relayout, ms));
 
 /** The open step's tab in the menu. */
-const TAB_OF = { quick: 'quick', att: 'att', reports: 'reports', requests: 'reports', me: 'me', review: 'reports', rev: 'reports', crewrev: 'me' };   // 2.55.0
+const TAB_OF = { att: 'att', reports: 'reports', requests: 'reports', me: 'me', review: 'reports', rev: 'reports', crewrev: 'me' };   // 2.55.0
 if (true) { TAB_OF.review = TAB_OF.rev = TAB_OF.crewrev = 'me'; }   // 2.37.0: from Me (a viewer has no rail tab but Review)
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
@@ -2634,7 +2636,7 @@ addEventListener('keydown', e => {
   }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
-  if (k === 'n' && working()) { e.preventDefault(); go('quick'); return; }
+  if (k === 'n' && working()) { e.preventDefault(); ACTS.fab(); return; }
   if (/^[1-9]$/.test(k) && working()) {
     const step = STEPS[Number(k) - 1];
     if (S.READY.has(step.id)) go(step.id); else toast('This part comes in the next build.');

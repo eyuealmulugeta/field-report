@@ -14,7 +14,8 @@ import { inboxLink, monthDays } from '../model/follow.js';
 import { inboxOk } from '../model/rules.js';
 import { totals, STATES, STATE_LETTER, initials, wageDiffers, CREW_ST_WORD, crewCloses, dayConfirm } from '../model/crew.js';
 import { thumb } from './work.js';
-import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop, dashBtn } from './parts.js';
+import { head, stepHead, nav, chips, stepper, dayList, kpi, isGM, projTop, dashBtn, mayDash } from './parts.js';
+import { shotsBtn } from './share.js';
 
 /** 2.4.0: the saved signature, or a button to sign full screen (or choose a PNG). */
 const sigLine = p => (p.sig ? html`<div class="box pad sigbox"><img src="${p.sig}" alt="Your signature"><div class="spread small"><span class="muted">Signs every report you send</span><button type="button" class="btn t slim" data-act="sigFull">Change</button></div></div>`
@@ -118,7 +119,7 @@ export function today(c) {
       body: html`${widget(c)}${sentBox(c)}<div class="bar"><i style="width:${Math.round(n / 9 * 100)}%"></i></div>
         ${c.evening ? html`<p class="callout warn">It is after ${p.remindAt || '17:00'}. Finish steps 8 and 9 and send today's report.</p>` : ''}
         ${c.needs.length && !c.past ? html`<div class="k">Needs you</div>${needsBox(c)}` : ''}${attBox(r)}${dayList(r, READY)}
-        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button><button type="button" class="btn t bad-t" data-act="attOpen">Attention</button></div>${dashBtn(c)}`,
+        <div class="row-links"><button type="button" class="btn t" data-act="go" data-to="att">Office attendance</button><button type="button" class="btn t" data-act="noWork">No work today</button><button type="button" class="btn t" data-act="spotOpen">Spotlight</button></div>${dashBtn(c)}${shotsBtn(c, mayDash(c))}`,   // 2.87.0: Attention is inside Spotlight
     };
   }
   return {
@@ -134,9 +135,9 @@ export function today(c) {
         <button type="button" class="box pad tile" data-act="startCrew"><b>Attendance</b><span class="muted small">Take it now</span></button>
         <button type="button" class="box pad tile" data-act="noWork"><b>No work today</b><span class="muted small">Give the reason</span></button>
       </div>
-      <div class="row2"><button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight</button><button type="button" class="btn o bad-t" data-act="attOpen">${icon('alert')}Attention</button></div>
+      <button type="button" class="btn o" data-act="spotOpen">${icon('bell')}Spotlight · notes, visitors, attention</button>
       <div class="k">This week</div>${weekStrip(c)}
-      <div class="k">Needs you</div>${needsBox(c)}${dashBtn(c)}`,   // 2.77.0 Dashboard at the bottom; 2.44.2 (owner): no report file name on Today
+      <div class="k">Needs you</div>${needsBox(c)}${dashBtn(c)}${shotsBtn(c, mayDash(c))}`,   // 2.77.0 Dashboard at the bottom; 2.44.2 (owner): no report file name on Today
   };
 }
 
