@@ -26,7 +26,20 @@ const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking |
  * [{ date, no, kind, status, version, comment, report, name }]. `known` is the office's answers by file name.
  */
 /** 2.9.0: `others`: the reports of this project sent from any phone (script projectDays): a day this phone has not sent shows them. */
-export function monthDays(today, project, drafts, known = {}, others = []) {
+/** 2.80.0: "2026-11" moved by n months; the last day of a month; "November 2026". */
+export const shiftMonth = (m, n) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
+export const monthEnd = m => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10); };
+export const monthName = m => new Date(`${m}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/**
+ * 2.80.0 (owner, 9 Nov): the days of one month for Reports. This month: up to today; an earlier month: every day of it
+ * (its reports from Central Hub in `others`). real = the real today, so an earlier month has no "Today".
+ */
+export function monthRows(month, real, project, drafts, known = {}, others = []) {
+  const past = month < real.slice(0, 7);
+  return monthDays(past ? monthEnd(month) : real, project, drafts, known, (others || []).filter(o => String(o.date || '').startsWith(month)), real, past)
+    .filter(x => x.date.startsWith(month));
+}
+export function monthDays(today, project, drafts, known = {}, others = [], real = today, whole = false) {
   const sent = new Map();
   for (const o of others || []) if (o && o.date && (!sent.has(o.date) || Number(o.no) > Number(sent.get(o.date).no))) sent.set(o.date, o);
   const first = today.slice(0, 8) + '01';
@@ -34,7 +47,7 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
   const mine = Object.keys(drafts).filter(k => k.startsWith(project.code + '|')).map(k => k.split('|')[1]).sort()[0] || today;
   // 2.17.0: with the project's reports from Central Hub, the whole month shows (not only from this phone's first)
   const start = Number(today.slice(8)) < 8 ? addDays(today, -31) : first;
-  const from = (others || []).length ? start : [start, mine].sort()[1];
+  const from = (others || []).length || whole ? start : [start, mine].sort()[1];   // 2.80.0: an earlier month shows all its days
   const out = [];
   for (let d = today; d >= from; d = addDays(d, -1)) {
     const r = drafts[`${project.code}|${d}`];
@@ -49,8 +62,8 @@ export function monthDays(today, project, drafts, known = {}, others = []) {
       row.last = lastStep(k && k.history) || { kind: 'submit', at: r.sentAt };   // 2.17.0
       row.late = lateTag(d, r.firstSentAt || r.sentAt, lateAfter(project));   // 2.47.0: a re-send after a send-back keeps the first send's tag
     } else if (r && r.queuedAt) row.kind = 'queued';
-    else if (r && r.start) row.kind = d === today ? 'today' : 'draft';
-    else row.kind = d === today ? 'today' : isOff(project, d) ? 'off' : 'missing';
+    else if (r && r.start) row.kind = d === real ? 'today' : 'draft';
+    else row.kind = d === real ? 'today' : isOff(project, d) ? 'off' : 'missing';
     const o = sent.get(d);
     // 2.41.0: 'queued' too: a report this phone kept but the Admin or another phone sent is sent, not "Not sent yet"
     if (o && ['today', 'draft', 'missing', 'off', 'queued'].includes(row.kind)) {
@@ -135,8 +148,8 @@ export const toCheck = (rows, known, now = Date.now(), every = 10 * 60e3) => row
  * All projects is every project's own list (monthDays: waiting, sent back, approved, missing, today), one after another,
  * newest first, each row with its project. Days off and nothing-to-show days stay out.
  */
-export function allDays(today, projects, drafts = {}, known = {}, others = {}, hidden = {}) {
-  return (projects || []).flatMap(p => monthDays(today, p, drafts, known, others[p.code] || []).filter(x => x.kind !== 'off' && !hidden[`${p.code}|${x.date}`]).map(x => ({ ...x, p })))
+export function allDays(today, projects, drafts = {}, known = {}, others = {}, hidden = {}, month = '') {
+  return (projects || []).flatMap(p => (month ? monthRows(month, today, p, drafts, known, others[p.code] || []) : monthDays(today, p, drafts, known, others[p.code] || [])).filter(x => x.kind !== 'off' && !hidden[`${p.code}|${x.date}`]).map(x => ({ ...x, p })))
     .sort((a, b) => b.date.localeCompare(a.date) || String(a.p.name).localeCompare(String(b.p.name)) || Number(b.no) - Number(a.no));
 }
 

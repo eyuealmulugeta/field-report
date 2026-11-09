@@ -62,6 +62,7 @@ export function knownOf(rec, now = Date.now()) {
 
 let fb = null;          // { auth, db, F } once loaded
 let pid = '';           // 2.13.0: the Central Hub project listened to
+let codesMap = {};      // 2.80.0: every project of the account (code -> Central Hub project)
 let stops = [];
 let gen = 0;   // 2.19.2: only the newest listen() subscribes
 let state = 'off';      // off | connecting | on | error
@@ -136,6 +137,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     if (mine !== gen) return 'stale';
     stops.forEach(f => f()); stops = [];
     pid = acc.exists() ? (acc.data().codes || {})[String(code).toUpperCase()] : '';
+    codesMap = acc.exists() ? acc.data().codes || {} : {};
     // 2.42.0 (owner): someone who joined later sees the posts and logs from their joining on ('' = all of them)
     from = acc.exists() ? String((acc.data().joined || {})[String(code).toUpperCase()] || acc.data().since || '') : '';
     if (!pid) { state = 'off'; why = `no Central Hub project for ${String(code).toUpperCase()} on ${u.email}`; return 'none'; }
@@ -198,6 +200,15 @@ export function dayOf(rec) {
   return { date: rec.date, no: f.no || '', name: f.pdf, by: rec.by || '', status: k[1].status, version: k[1].version, at: f.receivedAt || f.pressedAt || '', history: k[1].history, live: true };
 }
 const signedIn = () => fb && fb.auth.currentUser && pid;
+
+/** 2.80.0 (owner, 9 Nov): one month's reports of a project from Central Hub, for Reports by month (null when not connected). */
+export async function monthReports(code, month) {
+  const p2 = codesMap[String(code).toUpperCase()];
+  if (!fb || !fb.auth.currentUser || !p2 || !/^\d{4}-\d{2}$/.test(month)) return null;
+  const { F, db } = fb;
+  const snap = await F.getDocs(F.query(F.collection(db, 'projects', p2, 'reports'), F.where('date', '>=', `${month}-01`), F.where('date', '<=', `${month}-31`)));
+  return snap.docs.map(x => dayOf(x.data())).filter(Boolean);
+}
 
 /**
  * 2.19.1: the person's signature, the same in Field Report and Central Hub on every device: Central Hub's prefs/<email>

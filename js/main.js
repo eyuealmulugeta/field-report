@@ -1,6 +1,6 @@
 // Starts the app: picks the screen from the address (#today, #start, #crew…), draws it, and handles taps and typing.
 
-import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, deviceUa, deviceMode, takeGoogleToken } from './core/api.js';
+import { post, signIn, signInReturn, signUp, useFake, isDemo, ApiError, APP_VERSION, deviceId, deviceRestore, deviceUa, deviceMode, takeGoogleToken, SCRIPT } from './core/api.js';
 import * as L from './core/live.js';
 import * as P from './ui/parts.js';
 import { partOf, slotOf } from './model/rating.js';   // 2.18.0   // 2.16.1
@@ -26,6 +26,7 @@ import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
 import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests } from './model/follow.js';
+import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
@@ -284,6 +285,13 @@ async function checkStatus(force) {
  * error) was never mended. Now it is tried again by itself: when the phone is back online, when the app comes to the
  * front, and every minute while it is not on ('none', not linked, every 5 minutes; 'signin' needs the person's tap).
  */
+/** 2.80.0: an earlier month's reports for Reports (the open project, or every project on the GM's All projects). */
+async function monthLoad(month) {
+  const s = store.get(), list = (ui.allProj && P.isGM({ s }) ? s.projects : [project()]).filter(Boolean);
+  ui.mBusy = true; draw();
+  await Promise.all(list.map(p => L.monthReports(p.code, month).then(r => { if (r) (ui.mRows ||= {})[`${p.code}|${month}`] = r; }).catch(() => {})));
+  ui.mBusy = false; draw();
+}
 let healAt = 0;
 function liveHeal(force = false) {
   if (demo || !store.get().auth || !project() || !L.healDue(ui.live, healAt, Date.now(), force)) return;
@@ -1401,6 +1409,14 @@ const ACTS = {
   },
   pickProject: d => { store.set({ proj: d.v }); go('today'); loadSetup(); goLive(); },
   liveConnect: () => signedIn(signIn(store.get().profile.name || '')),
+  // 2.80.0 (owner, 9 Nov): Reports by month: < > steps a month; an earlier month is read from Central Hub
+  repMonth(d) {
+    const cur = realToday().slice(0, 7);
+    let m = FM.shiftMonth(ui.rMonth || cur, Number(d.v) || 0);
+    if (m > cur) m = cur;
+    ui.rMonth = m === cur ? '' : m;
+    if (ui.rMonth) monthLoad(m); else draw();
+  },
   liveRetry: () => { toast('Connecting to Central Hub…'); liveHeal(true); },   // 2.79.0
   // 2.71.0 (owner): the crew Edit opened Google's account page when the project was not linked; now it says why
   liveWhy: () => toast(liveWhyText(ui.live, ui.liveWhy)),   // 2.12.0: the Google sign-in again, for live updates
@@ -2158,8 +2174,8 @@ const ACTS = {
   eqQty: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const e = r.equipment[i]; e.qty = Math.max(0, e.qty + Number(d.d)); if (!e.qty && confirm(`Take ${e.name} off today's list?`)) r.equipment.splice(i, 1); else if (!e.qty) e.qty = 1; }); },
   eqHrs: (d, el) => { const i = Number(el.closest('[data-i]').dataset.i); edit(r => { const e = r.equipment[i]; e.hrs = Math.max(0, Math.min(24, (Number(e.hrs) || 0) + Number(d.d))); }); },
   eqState: d => edit(r => { r.equipment[Number(d.i)].status = d.v; }),
-  newRecv() { openRecv(); ui.camFor = 'recv'; camera(); },   // 2.5.0: a delivery starts with its photo
-  logDelivery() { ui.sheet = ''; openRecv(); ui.camFor = 'recv'; camera(); },
+  newRecv() { openRecv(); },   // 2.80.0 (owner, 9 Nov): the form opens; the camera only when Photo is tapped (was 2.5.0: started with the photo)
+  logDelivery() { ui.sheet = ''; openRecv(); },
   openRecv: d => openRecv(d.v),
   recvQty: d => { ui.recv.qty = Math.max(0, (num(ui.recv.qty) || 0) + Number(d.d)); draw(); },
   recvPhoto() { ui.camFor = 'recv'; camera(); },
@@ -2358,8 +2374,8 @@ function openLink(h) {
   else if (what === 'review' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) { go('reports'); setTimeout(() => { ui.daySel = d; ui.sheet = 'day'; draw(); }, 60); }
   // 2.68.0 (owner): Remind later: the same notification again in 30 minutes
   else if (what === 'later' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) {
-    go('reports');
-    call('remindLater', { date: d, proj: code, no }).then(r => toast(`I will remind you in ${r.minutes || 30} minutes.`)).catch(e => toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`));
+    // 2.80.0 (owner, 9 Nov): quiet: no page change, no message (the notification worker does it without opening the app)
+    call('remindLater', { date: d, proj: code, no }).catch(e => toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`));
   }
   // 2.54.0 (owner): Approve or Send back tapped on the phone notification: the report opens, Approve asks once, Send back waits for the reason
   else if (what === 'act') {
@@ -2405,7 +2421,21 @@ function offScreen(r) {
   const title = t ? t.title : r.charAt(0).toUpperCase() + r.slice(1);
   return { tab: t ? r : 'today', head: P.head(title, 'Turned off', ''), body: html`<div class="offbox"><i class="offt">Turned off</i><b>${title} is turned off</b><span class="muted small">The Admin turned this off for everyone in Central Hub. Nothing was deleted: it comes back as it was when it is turned on again.</span></div>` };
 }
+/**
+ * 2.80.0 (owner, 9 Nov): Remind later on a notification is done by the notification worker (push/), without opening the
+ * app. It needs what the app sends with every request; it is kept on this phone only (the app's own storage), and
+ * removed at sign-out.
+ */
+let kitAt = null;
+function kitSync() {
+  const t = token() || '';
+  if (kitAt === t || demo || typeof caches === 'undefined') return;
+  kitAt = t;
+  caches.open('fr2-kit').then(c => (t ? c.put('kit.json', new Response(JSON.stringify({ url: SCRIPT, token: t, dev: deviceId(), mode: deviceMode(), app: APP_VERSION }))) : c.delete('kit.json'))).catch(() => {});
+}
+
 function draw() {
+  kitSync();
   try { fetchForecast(); } catch { /* no forecast */ }   // 2.64.0
   // 2.40.0 (owner): an open list (the project list on Requests) is not closed by a live update; the page is drawn when it closes
   if (document.activeElement && document.activeElement.tagName === 'SELECT') { ui.drawLater = true; return; }

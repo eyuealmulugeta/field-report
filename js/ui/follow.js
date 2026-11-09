@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
 import { rateReport, rateLine, checkLines } from '../model/rating.js';
@@ -17,16 +17,25 @@ const STEP_DONE = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', r
 /** 2.17.0: "Approved by Abel · 1 Nov, 09:12": the report's newest step. */
 const stepLine = s => (s && s.at ? `${STEP_DONE[s.kind] || 'Sent'}${s.by ? ` by ${s.by}` : ''} · ${stampOf(s.at)}` : '');
 const allOn = c => !!c.ui.allProj && isGM(c);
+/** 2.80.0 (owner, 9 Nov): Reports by month: < November 2026 >; an earlier month's reports come from Central Hub. */
+const monthOf = c => c.ui.rMonth || c.realToday.slice(0, 7);
+const othersFor = (c, code) => { const m = monthOf(c), cur = m === c.realToday.slice(0, 7); return cur ? (c.s.others || {})[code] || [] : (c.ui.mRows || {})[`${code}|${m}`]; };
+export function monthBar(c, codes) {
+  const m = monthOf(c), cur = m === c.realToday.slice(0, 7), missing = !cur && codes.some(k => !(c.ui.mRows || {})[`${k}|${m}`]);
+  return html`<div class="spread rmonth"><button type="button" class="btn t slim" data-act="repMonth" data-v="-1" aria-label="Month before">‹</button><b>${monthName(m)}</b><button type="button" class="btn t slim" data-act="repMonth" data-v="1" aria-label="Month after" ${cur ? 'disabled' : ''}>›</button></div>
+    ${c.ui.mBusy ? html`<p class="muted small center">Reading ${monthName(m)} from Central Hub…</p>` : missing ? html`<button type="button" class="btn o" data-act="repMonth" data-v="0">Load ${monthName(m)}</button>` : ''}`;
+}
 
 /** 2.17.0: the GM's All projects: every report sent on the account's projects, newest first, from Central Hub. */
 function allReports(c) {
   // 2.75.0: every project's own list (waiting, sent back, approved, missing, today), with its own filter (starts on All)
-  const rows = allDays(c.realToday, c.s.projects, c.s.drafts || {}, c.s.known || {}, c.s.others || {}, c.s.hidden || {});
+  const others = Object.fromEntries((c.s.projects || []).map(p => [p.code, othersFor(c, p.code) || []]));
+  const rows = allDays(c.realToday, c.s.projects, c.s.drafts || {}, c.s.known || {}, others, c.s.hidden || {}, monthOf(c));
   const f = c.ui.rfAll || '', n = counts(rows), list = rows.filter(x => !f || x.kind === f);
   return {
     tab: 'reports',
-    head: head('Reports', 'All projects · this month', c.ui.checking ? 'Refreshing…' : ''),
-    body: html`<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rfAll" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
+    head: head('Reports', `All projects · ${monthName(monthOf(c))}`, c.ui.checking ? 'Refreshing…' : ''),
+    body: html`${monthBar(c, (c.s.projects || []).map(p => p.code))}<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rfAll" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openAll" data-p="${x.p.code}" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
         <div class="n"><b>${x.p.name} · ${x.no ? `Report #${x.no}` : x.kind === 'today' ? 'Today' : x.kind === 'nowork' ? 'No work' : 'No report'}</b><span>${[x.by, stepLine(x.last)].filter(Boolean).join(' · ')}</span></div>${x.late ? html`<span class="pill warn">${x.late}</span>` : ''}${pill(x.kind)}</button>`)}</div>`
@@ -36,15 +45,15 @@ function allReports(c) {
 
 export function reports(c) {
   if (allOn(c)) return allReports(c);
-  const rows = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).filter(x => !(c.s.hidden || {})[`${c.project.code}|${x.date}`]);
+  const rows = monthRows(monthOf(c), c.realToday, c.project, c.s.drafts, c.s.known, othersFor(c, c.project.code) || []).filter(x => !(c.s.hidden || {})[`${c.project.code}|${x.date}`]);
   const n = counts(rows), f = c.ui.rf || '';
   const list = rows.filter(x => !f || x.kind === f);
   return {
     tab: 'reports',
-    head: head('Reports', `${c.project.name} · this month`, c.ui.checking ? 'Refreshing…' : ''),
+    head: head('Reports', `${c.project.name} · ${monthName(monthOf(c))}`, c.ui.checking ? 'Refreshing…' : ''),
     // 2.1.1: the button sits at the top; a footer hides the bottom bar (Home, Today…) on a tab page
     body: html`<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Refreshing…' : 'Refresh'}</button>
-      <div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
+      ${monthBar(c, [c.project.code])}<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
         <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
@@ -67,7 +76,9 @@ export const officeLine = steps => {
 };
 
 export function daySheet(c) {
-  const x = monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code]).find(y => y.date === c.ui.daySel);
+  // 2.80.0: a day of an earlier month (Reports by month) is found in that month's reports from Central Hub
+  const dm = String(c.ui.daySel || '').slice(0, 7), old = dm && dm < c.realToday.slice(0, 7) && (c.ui.mRows || {})[`${c.project.code}|${dm}`];
+  const x = (old ? monthRows(dm, c.realToday, c.project, c.s.drafts, c.s.known, old) : monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code])).find(y => y.date === c.ui.daySel);
   if (!x) return '';
   const k = (x.name && c.s.known[x.name]) || {};
   const comments = k.comments || [];
