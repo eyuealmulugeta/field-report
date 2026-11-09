@@ -344,6 +344,7 @@ async function goLive(at = '') {
     },
     onChat: list => { (ui.chat ||= {}).ch = list; chatRing(list); draw(); rcptTick(); },   // 2.73.0 (owner, R4)
     onDirect: list => { (ui.chat ||= {}).dm = list; chatRing(list); draw(); rcptTick(); },
+    onPeople: d => { ui.people = d; if (route() === 'chat') draw(); },   // 2.85.0
     onSeen: (k, list) => { const r = ui.rcpt ||= { ch: [], dm: [] }; r[k] = list; r[k === 'ch' ? 'c' : 'd'] = true; draw(); rcptTick(); },   // 2.84.0
     // 2.17.0: every phone's reports, live; the GM's other projects too
     onDays: (code, days) => liveDays(code, days),
@@ -431,7 +432,10 @@ function chatRing(list) {
   if (!seen) return;
   const m = fresh[fresh.length - 1];
   try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch { /* no vibration */ }
-  if (route() !== 'chat') toast(`Discuss: ${m.name || m.by}: ${String(m.text || '').slice(0, 80)}`);
+  chatTone();   // 2.85.0 (owner, 9 Nov, D2): a sound
+  // 2.85.0: a pop-up with Reply and Close, unless that conversation is on the screen
+  const open = m.members ? `dm:${m.by}` : '';
+  if (!(route() === 'chat' && ((ui.chat || {}).open || '') === open && !document.hidden)) { ui.pop = { open, m, n: fresh.length }; ui.popText = ''; draw(); clearTimeout(chatRing.t); chatRing.t = setTimeout(() => { if (ui.pop && !ui.popText) { ui.pop = null; draw(); } }, 30000); }
 }
 /** 2.74.1: when each conversation was last opened (unread counts on the tab and the conversations). */
 const CHAT_READ = 'fr2_chatRead';
@@ -444,6 +448,23 @@ function rcptTick(field = 'got', only = '') {
   if (!writes.length) return;
   for (const w of writes) { if (w.sec === 'dmSeen') r.dm = keepReceipt(r.dm, w); else r.ch = keepReceipt(r.ch, w); }
   L.putSeen(writes).catch(() => {});
+}
+/** 2.85.0: a short two-note ring made by the phone (no sound file); phones allow it once the app has been touched. */
+function chatTone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const tone = (f, at) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.0001, ctx.currentTime + at); g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.25); o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.3); };
+    tone(880, 0); tone(1320, 0.15); setTimeout(() => ctx.close(), 800);
+  } catch { /* no sound here */ }
+}
+/** 2.85.0: the new-message pop-up: name · position, where, the text; Reply, Close; tap the text to open the chat. */
+function popHtml() {
+  const p = ui.pop; if (!p) return '';
+  const m = p.m, d = ((ui.people || {}).people || []).find(x => x.e === m.by), proj = project() || {};
+  const who = d ? `${d.n}${d.t ? ` · ${d.t}` : ''}` : (m.name || 'Colleague');
+  return `<div class="cpop" role="alertdialog" aria-label="New message"><div class="cph"><b>${escText(who)}</b><span>${escText(m.members ? 'to you' : `${proj.code || 'Project'} channel`)}${p.n > 1 ? ` · ${p.n - 1} more` : ''}</span><button type="button" class="cpx" data-act="popClose" aria-label="Close">✕</button></div>`
+    + `<button type="button" class="cpt" data-act="popOpen">${escText(String(m.text || '').slice(0, 400))}</button>`
+    + `<div class="cpr"><textarea rows="1" data-ui="popText" placeholder="Reply…" aria-label="Reply" maxlength="2000">${escText(ui.popText || '')}</textarea><button type="button" class="cps" data-act="popSend">Reply</button><button type="button" class="cpc" data-act="popClose">Close</button></div></div>`;
 }
 function chatMarkRead() {
   const u = ui.chat || {}, me = String((store.get().auth || {}).email || '').toLowerCase(), id = u.open || '';
@@ -928,13 +949,15 @@ async function drivePhoto(report, id, size = '') {
 }
 
 /** 2.54.0: the GM's Dashboard: the day's photos (script dayPhotos), the project's videos (videoList), each photo read from Drive. */
-async function mediaLoad() {
+async function mediaLoad(again = false) {
   const p = project(), day = ui.mDay || realToday();
   if (!p) return;
   const k = `${p.code}|${day}`;
-  ui.mPhotos ||= {}; ui.mVids ||= {}; ui.mUrl ||= {}; ui.mErr = '';
+  ui.mPhotos ||= {}; ui.mVids ||= {}; ui.mUrl ||= {}; ui.mVurl ||= {}; ui.mErr = '';
+  // 2.85.0 (owner, 9 Nov, D1): the page looks again every minute while it is open, so a new photo or video shows by itself
+  clearTimeout(mediaLoad.t); mediaLoad.t = setTimeout(() => { if (route() === 'media' && !document.hidden) mediaLoad(true); }, 60e3);
   try {
-    if (!ui.mVids[p.code]) ui.mVids[p.code] = (await call('videoList', { proj: p.code })).videos || [];
+    if (!ui.mVids[p.code] || again) ui.mVids[p.code] = (await call('videoList', { proj: p.code })).videos || [];
     ui.mPhotos[k] = (await call('dayPhotos', { proj: p.code, date: day })).photos || [];
   } catch (e) { ui.mErr = e.message; ui.mPhotos[k] = ui.mPhotos[k] || []; }
   draw();
@@ -942,6 +965,14 @@ async function mediaLoad() {
     if (ui.mUrl[ph.id]) continue;
     const b = await drivePhoto(ph.report, ph.id, 'tile');   // 2.78.0: tiles first; the screen copy when one is opened
     if (b) { ui.mUrl[ph.id] = URL.createObjectURL(b); if (route() === 'media') draw(); }
+  }
+  // 2.85.0 (D1): the day's videos play in their tiles (muted), fetched one at a time after the photos
+  for (const v of (ui.mVids[p.code] || []).filter(x => x.date === day)) {
+    if (ui.mVurl[v.id] || route() !== 'media') continue;
+    try {
+      const out = await call('videoGet', { proj: p.code, id: v.id });
+      if (out && out.data) { const b = await fetch(`data:${out.type || 'video/mp4'};base64,${out.data}`).then(r => r.blob()); ui.mVurl[v.id] = URL.createObjectURL(b); if (route() === 'media') draw(); }
+    } catch { /* stays on its cover picture; a tap opens it in Drive */ }
   }
 }
 
@@ -1491,7 +1522,21 @@ const ACTS = {
   // 2.73.0 (owner, R4): Discuss
   // 2.74.1 (owner): a proper chat page
   chatOpen: d => { const u = ui.chat ||= {}; u.open = d.v || ''; u.pick = false; u.sel = ''; u.edit = ''; ui.chatScroll = -1; draw(); },
-  chatPick: () => { const u = ui.chat ||= {}; u.pick = !u.pick; draw(); },
+  chatPick: () => { const u = ui.chat ||= {}; u.pick = !u.pick; ui.chatFT = ''; draw(); },
+  // 2.85.0 (D2): the pop-up
+  popClose: () => { ui.pop = null; ui.popText = ''; draw(); },
+  popOpen: () => { const o = (ui.pop || {}).open || ''; ui.pop = null; go('chat'); ACTS.chatOpen({ v: o }); },
+  async popSend() {
+    const p = ui.pop, text = String(ui.popText || '').trim();
+    if (!p || !text) return;
+    if (ui.live !== 'on') return toast(liveWhyText(ui.live, ui.liveWhy));
+    ui.pop = null; ui.popText = ''; draw();
+    try {
+      const auth = store.get().auth || {};
+      const ok = await L.chatSend(({ email, pid }) => messageOf({ text, me: email, name: myName() || auth.name || email, title: auth.role === 'exec' ? 'GM' : '', open: p.open, pid }));
+      if (ok) { toast('Reply sent.'); L.chatPushOut(ok.id, ok.dm); } else toast('Not sent: sign in to Central Hub again (Me).');
+    } catch (e) { toast(`Not sent: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
+  },
   chatSel: d => { const u = ui.chat ||= {}; u.sel = u.sel === d.v ? '' : d.v; draw(); },
   chatEditCancel: () => { const u = ui.chat ||= {}; u.edit = ''; ui.chatText = ''; draw(); },
   chatStart() {
@@ -1514,7 +1559,7 @@ const ACTS = {
     try {
       const auth = store.get().auth || {};
       const ok = await L.chatSend(({ email, pid }) => messageOf({ text, me: email, name: myName() || auth.name || email, title: auth.role === 'exec' ? 'GM' : '', open: u.open || '', pid }));
-      if (ok) { ui.chatText = ''; ui.chatScroll = -1; } else toast('Not sent: sign in to Central Hub again (Me).');
+      if (ok) { ui.chatText = ''; ui.chatScroll = -1; L.chatPushOut(ok.id, ok.dm); } else toast('Not sent: sign in to Central Hub again (Me).');
     } catch (e) { toast(`Not sent: ${String(e && (e.code || e.message) || e).slice(0, 80)}`); }
     u.busy = false; draw();
   },
@@ -2390,6 +2435,7 @@ function openLink(h) {
     if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
     go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
   }
+  else if (what === 'chat') { go('chat'); ACTS.chatOpen({ v: d || '' }); }   // 2.85.0 (D2): Reply on a message notification
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else if (what === 'devices') { go('me'); devCheck(true); }   // 2.53.0: a new device waits on Me > Devices
   else if (what === 'me' || what === 'requests') go(what);
@@ -2478,6 +2524,7 @@ function draw() {
   const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`
     + `${ui.toast ? `<div class="toast" role="status">${escText(ui.toast)}</div>` : ''}`
+    + popHtml()   // 2.85.0 (D2)
     + `${isDemo() ? '<div class="demo-flag">Demo</div>' : ''}`;
   if (ui.sheetNew) { root.querySelector('.sheet')?.classList.add('new'); ui.sheetNew = false; }
   if (same) { const bd = root.querySelector('.bd'); if (bd) bd.scrollTop = scroll; }
@@ -2527,6 +2574,10 @@ document.getElementById('smCam').addEventListener('change', async e => {
   try { ui.sm.photo = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
 });
 root.addEventListener('change', e => {
+  // 2.85.0 (D4): New chat by project, position and name
+  if (e.target.dataset.ui === 'chatFP') { ui.chatFP = e.target.value; ui.chatFT = ''; draw(); return; }
+  if (e.target.dataset.ui === 'chatFT') { ui.chatFT = e.target.value; draw(); return; }
+  if (e.target.dataset.ui === 'chatFW') { if (e.target.value) ACTS.chatOpen({ v: `dm:${e.target.value}` }); return; }
   // 2.62.0 (R6): a Receive against a PO takes its supplier and number
   if (e.target.dataset.ui === 'smTask' && ui.sm) { const p = project(), t = (((p && p.setup) || {}).tasks || []).find(x => x.id === e.target.value); ui.sm.taskId = t ? t.id : ''; ui.sm.taskName = t ? t.name : ''; return; }   // 2.63.0 (R7)
   if (e.target.dataset.ui === 'smReq' && ui.sm) { const r = (ui.liveReqs || []).find(x => x.id === e.target.value); ui.sm.reqId = r ? r.id : ''; if (r && r.vendor) ui.sm.supplier = r.vendor; draw(); return; }   // 2.67.0

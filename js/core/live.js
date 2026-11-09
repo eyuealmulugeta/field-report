@@ -123,7 +123,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onDirect = () => {}, onSeen = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onDirect = () => {}, onSeen = () => {}, onPeople = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -184,6 +184,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => {}));
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'direct'), F.where('members', 'array-contains', u.email.toLowerCase())), snap => onDirect(snap.docs.map(x => x.data())), () => {}));
     // 2.84.0 (owner, 9 Nov): Sent / Delivered / Seen: who has received and seen the channel and this person's chats
+    stops.push(F.onSnapshot(F.doc(db, 'directory', 'people'), d => onPeople(d.exists() ? d.data() : null), () => {}));   // 2.85.0: names, positions, projects
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'chatSeen'), F.where('chat', '==', pid)), snap => onSeen('ch', snap.docs.map(x => x.data())), () => {}));
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'dmSeen'), F.where('members', 'array-contains', u.email.toLowerCase())), snap => onSeen('dm', snap.docs.map(x => x.data())), () => {}));
     // 2.16.0: Central Hub's attendance corrections (the office's, and the site's waiting for review)
@@ -352,7 +353,12 @@ export async function chatSend(make) {
   if (!signedIn()) return false;
   const { F, db, auth } = fb, { sec, rec } = make({ email: auth.currentUser.email.toLowerCase(), pid });
   await F.setDoc(F.doc(db, 'company', 'main', sec, rec.id), rec);
-  return true;
+  return { id: rec.id, dm: sec === 'direct' };   // 2.85.0: for the phones' notification
+}
+/** 2.85.0 (owner, 9 Nov, D2): the others' phones are told (Central Hub chatPush, then the script's OneSignal push). */
+export async function chatPushOut(id, dm) {
+  if (!signedIn() || !id) return;
+  await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'chatPush')({ id, dm: !!dm }).catch(() => {});
 }
 /** 2.84.0: this person's Delivered / Seen records (model/receipts.js receiptWrites). */
 export async function putSeen(writes) {
