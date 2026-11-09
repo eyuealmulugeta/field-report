@@ -573,6 +573,9 @@ html, body, .app, .ws, .bd { overflow-x: hidden; }
 
 /* 2.54.0: the GM's Dashboard */
 .m-days { overflow-x: auto; flex-wrap: nowrap; }
+/* 2.81.0: week arrows */
+.m-week { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.m-week b { flex: 1; text-align: center; }
 .m-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .m-tile { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: none; text-align: left; min-height: 120px; }
 .m-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
