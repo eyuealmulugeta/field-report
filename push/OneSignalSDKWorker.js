@@ -8,7 +8,8 @@ self.addEventListener('notificationclick', e => {
   e.stopImmediatePropagation();
   e.notification.close();
   e.waitUntil(caches.open('fr2-kit').then(c => c.match('kit.json')).then(r => (r ? r.json() : null)).then(k => {
-    if (!k || !k.token) return self.clients.openWindow('./#go=later/' + m[1] + '/' + m[2] + '/' + m[3]);
+    // 2.90.1 (owner, 10 Nov): the app's own address (one folder up from push/), not push/ itself, which has no page (404)
+    if (!k || !k.token) return self.clients.openWindow(new URL('../#go=later/' + m[1] + '/' + m[2] + '/' + m[3], self.registration.scope).href);
     return fetch(k.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow',
       body: JSON.stringify({ action: 'remindLater', date: m[1], proj: m[2], no: m[3], token: k.token, dev: k.dev, mode: k.mode, app: k.app }) });
   }).catch(() => {}));
