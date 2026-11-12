@@ -7,7 +7,7 @@ import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipme
 import { stepHead, chips, stepper, mayGallery } from './parts.js';
 import { thumb } from './work.js';
 import { fitLine } from '../pdf.js';
-import { CLIENT_PHOTOS, clientLeft } from '../model/pdfplan.js';
+import { CLIENT_PHOTOS, clientNeed, clientProblem } from '../model/pdfplan.js';
 import { videosOf, VIDEO_KEEP_DAYS } from '../model/video.js';
 
 
@@ -126,16 +126,16 @@ function galAskLine(c) {
 
 /** 2.99.0 (owner): with more than 12 photos, the Site Engineer ticks the 12 for the client; the rest go to the office and the Dashboard. */
 function pickLine(r) {
-  if (r.photos.length <= CLIENT_PHOTOS) return r.photos.length ? html`<p class="muted small">All ${plural(r.photos.length, 'photo')} go in the client's report (up to ${CLIENT_PHOTOS}).</p>` : '';
-  const left = clientLeft(r.photos), n = CLIENT_PHOTOS - left;
-  return html`<div class="callout ${left ? 'warn' : ''} small"><b>For the client: ${n} of ${CLIENT_PHOTOS} chosen.</b> ${left ? `Tick ${plural(left, 'more photo')} "For client".` : 'Done.'} The other photos go to the office and the Dashboard only.
-    <div class="row"><button type="button" class="btn t slim" data-act="pickAuto">Choose ${CLIENT_PHOTOS} for me</button>${n ? html`<button type="button" class="btn t slim" data-act="pickNone">Untick all</button>` : ''}</div></div>`;
+  // 3.0.2 (owner): exactly 12, no more, no less; the report cannot be sent otherwise
+  const n = r.photos.filter(p => p.client).length, why = clientProblem(r.photos), x = clientNeed(r.photos);
+  return html`<div class="callout ${why ? 'warn' : ''} small"><b>For the client: ${n} of ${CLIENT_PHOTOS} chosen.</b> ${why ? `${why}.` : 'Exactly 12: ready.'} The other photos go to the office and the Dashboard only.
+    ${x.take ? '' : html`<div class="row"><button type="button" class="btn t slim" data-act="pickAuto">Choose ${CLIENT_PHOTOS} for me</button>${n ? html`<button type="button" class="btn t slim" data-act="pickNone">Untick all</button>` : ''}</div>`}</div>`;
 }
 
 export function photos(c) {
   const r = c.report, list = [...r.photos].reverse();
   const missing = r.photos.filter(photoNeedsCaption).length;
-  const work = id => r.items.find(i => i.id === id), pick = r.photos.length > CLIENT_PHOTOS;
+  const work = id => r.items.find(i => i.id === id), pick = r.photos.length > 0;   // 3.0.2: always
   return {
     head: stepHead('Photos', `Step 7 of 9 · ${plural(r.photos.length, 'photo')} today`),
     body: html`${fitLine(c.ui.fit) ? html`<p class="soft small"><b>${fitLine(c.ui.fit)}</b></p>` : ''}
