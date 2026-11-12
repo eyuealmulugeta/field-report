@@ -9,7 +9,7 @@ import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
-import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
+import { mergeStaff, withPreparer, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, photoKeys, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
@@ -117,6 +117,8 @@ const working = () => { const r = report(); return r && r.start ? r : null; };
 const remindAt = () => (project() || {}).remindAt || '17:00';
 const crewStart = () => (project() || {}).defStart || '08:00';
 const kind = () => kindOf((store.get().auth || {}).role || 'engineer');
+/** 3.0.1: today's attendance with the Site Engineer who prepares the report (present). */
+const withSE = rows => withPreparer(rows, store.get().profile || {}, (store.get().auth || {}).role || '');
 
 function lastReport(code, before) {
   const d = store.get().drafts;
@@ -159,7 +161,7 @@ function ensureReport() {
   if (report() && report().start) return report();
   const p = project(), prof = store.get().profile;
   const r = newReport({ ...p, defStart: prof.defStart || p.defStart, defEnd: prof.defEnd || p.defEnd }, today(), nextNo(p), lastReport(p.code, today()));
-  r.crew.rows = applyMarks(mergeStaff([], p.staff, p.gone), !ui.date && ui.marksOf === p.code ? ui.marks : null);   // 2.15.0: marks made on another device
+  r.crew.rows = withSE(applyMarks(mergeStaff([], p.staff, p.gone), !ui.date && ui.marksOf === p.code ? ui.marks : null));   // 3.0.1: the SE is counted   // 2.15.0: marks made on another device
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
   syncNo(key()).catch(() => {});   // offline: checked again when it is sent
   return r;
@@ -227,7 +229,7 @@ async function loadProjects() {
   for (const p of projects) {
     const k = draftKey(p.code, t), r = drafts[k];
     if (!r || r.sentAt || r.nowork || !r.crew || !p.staff.length) continue;
-    const rows = mergeStaff(r.crew.rows, p.staff, p.gone);
+    const rows = withSE(mergeStaff(r.crew.rows, p.staff, p.gone));   // 3.0.1
     if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) { drafts[k] = { ...r, crew: { ...r.crew, rows }, updated: Date.now() }; changed = true; }
   }
   if (changed) store.set({ drafts });
@@ -554,6 +556,7 @@ function crewFollow() {
   let rows = applyMarks(p.staff.length ? mergeStaff(r.crew.rows, p.staff, p.gone) : r.crew.rows, ui.marksOf === p.code ? ui.marks : null);
   // 2.17.0: only Central Hub's crew (and labour added on site today) once the team is known
   if (ui.teamOf === p.code) { const ok = new Set(p.staff.map(s => String(s.id || s.name).toLowerCase())); rows = rows.filter(x => x.added || ok.has(String(x.id || x.name).toLowerCase())); }
+  rows = withSE(rows);   // 3.0.1 (owner): the Site Engineer preparing the report is always present
   if (JSON.stringify(rows) !== JSON.stringify(r.crew.rows)) editKey(k, x => { x.crew.rows = rows; });
 }
 
@@ -966,6 +969,7 @@ async function sendReport(k, step = () => {}) {
     // 2.3.1: a script older than 7.34.0 has no reportNo: the phone's own number is used, as before
     try { await syncNo(k); } catch (e) { if (e.code === 'OFFLINE' || e.code === 'BUSY') { queueReport(k); return 'queued'; } }
   }
+  if (store.get().drafts[k].crew && !store.get().drafts[k].nowork) editKey(k, x => { x.crew.rows = withSE(x.crew.rows); });   // 3.0.1: the SE counted, never unsigned by it
   const r = store.get().drafts[k];
   const name = pdfName(p, r.date, r.no), meta = reportMeta(r, p, store.get().profile);
   // 2.7.0: when Send was pressed on the phone (earlier than the arrival when it waited for a connection)
