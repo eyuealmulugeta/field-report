@@ -21,7 +21,8 @@ import * as Y from './ui/day.js';
 import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
-import { buildPdf, loadPdfLib, photoCaption, weatherFile } from './pdf.js';
+import { buildPdf, loadPdfLib, loadPdfView, photoCaption, weatherFile } from './pdf.js';
+import { progressRows } from './model/pdfplan.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
@@ -39,6 +40,7 @@ import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './core/signlog.js';   // 2.58.0 (G2)
+import * as SL from './ui/spotlive.js';   // 2.92.0
 import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
 import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
@@ -64,6 +66,8 @@ if (demo) store.set({ drafts: demoDrafts() });
 
 await deviceRestore().catch(() => '');   // 2.56.0: the device id back from IndexedDB or its cache before any request
 const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
+if (demo) ui.spotLive = [];   // 2.92.0: Spotlight live starts empty in the demo
+const finalLocked = () => { const r = report(), p = project(); return !r || !p || finalStamp(r, p) === 'APPROVED'; };   // 2.94.0
 const realToday = () => (demo ? demoToday() : todayIn());
 /** The day being reported: today, or an earlier day opened from Reports to write or correct. */
 const today = () => ui.date || realToday();
@@ -75,20 +79,23 @@ const SCREENS = {
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
   end: E.end, request: E.request, send: E.send,
   // 2.55.0 (owner): Reports and Requests are the two tabs inside Review
-  reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports')}${v.body}` }; },
+  reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports', c)}${v.body}` }; },
   penalties: PN.penalties,   // 2.57.0
+  spotlive: SL.spotlive,   // 2.92.0
   store: SM.store,   // 2.61.0 (R5)
   share: SH.share, shots: SH.shots,   // 2.66.0
-  requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests')}${v.body}` }; },
+  requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests', c)}${v.body}` }; },
   view: V.view,
+  final: V.final,   // 2.94.0 (owner R5)
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
   // 2.87.0 (owner, 9 Nov): Attention is the third tab of Spotlight
-  spot: c => { if (c.ui.spotTab !== 'attention' || !c.report) return SP.spot(c); const v = S.attention(c); return { head: P.stepHead('Spotlight', `${c.project.name} · Attention: for the client`, 'today'), body: html`${SP.spotTabs('attention')}${v.body}` }; },
+  spot: c => { if (!ui.spot) { ui.spot = newSpot(); c = { ...c, ui }; }   // 2.92.0: opened from an address, the form is made here
+    if (c.ui.spotTab !== 'attention' || !c.report) return SP.spot(c); const v = S.attention(c); return { head: P.stepHead('Spotlight', `${c.project.name} · Attention: for the client`, 'today'), body: html`${SP.spotTabs('attention')}${v.body}` }; },
   attention: S.attention,              // 2.7.0
   media: MD.media,                                     // 2.54.0: the GM's Dashboard
   chat: CHAT.chat,                                     // 2.73.0 (owner, R4): Discuss
 };
-const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send']);
+const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send', 'final']);
 
 /* ---------- state helpers ---------- */
 
@@ -187,6 +194,8 @@ function editKey(k, fn) {
 /* ---------- server ---------- */
 
 const token = () => (store.get().auth || {}).token;
+/** 2.92.0: who sees Spotlight live (the rules give it to the Admin and the GM only). */
+const seesSpots = () => P.seesSpotLive({ s: store.get() });
 
 async function call(action, body) {
   try { return await post(action, body, token()); }
@@ -338,6 +347,7 @@ async function goLive(at = '') {
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
     onShots: list => { ui.shList = list; draw(); },   // 2.66.0
+    onSpots: seesSpots() ? list => { ui.spotLive = list; draw(); } : null,   // 2.92.0: the Admin and the GM
     onFeatures: list => {   // 2.74.0 (owner): Central Hub switched features on or off
       const k = JSON.stringify(list || []);
       try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
@@ -711,25 +721,58 @@ let pdfSignedAt = '';
 /** The report PDF, with the report's photos (from this phone, or from Drive) and the saved signature. */
 async function makePdf(r, p, step = () => {}) {
   step('Making the PDF…');
+  const doc = await pdfDoc(r, p);
+  const blob = doc.output('blob');
+  if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
+  ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
+  logAct({ action: 'generate', channel: 'PDF', doc: ui.pdf.name, no: r.no ? `#${r.no}` : '' });   // 2.59.0
+  return blob;
+}
+
+/** The report's PDF document (jsPDF); 2.94.0: also drawn in the app as the view-only final report (view.stamp). */
+async function pdfDoc(r, p, view = null) {
   const JsPDF = await loadPdfLib();
   const photos = [];
   for (const ph of r.photos) {
     const b = await getPhoto(ph.id).catch(() => null) || (ph.drive ? await drivePhoto(pdfName(p, r.date, r.no), ph.id) : null);
     if (!b) continue;
     const bmp = await createImageBitmap(b).catch(() => null);
-    photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, at: ph.at || '', cap: photoCaption(ph, r.items) });
+    photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, at: ph.at || '', cap: photoCaption(ph, r.items), gal: !!ph.gallery });
     if (bmp) bmp.close();
   }
   const prof = store.get().profile;
   const pic = f => (f ? fetch(f).then(x => x.blob()).then(toDataUrl).catch(() => '') : '');
   const [logo, weather] = await Promise.all([pic('icon-192.png'), pic(weatherFile(weatherTerm(r.start.cond)) && `img/weather/${weatherFile(weatherTerm(r.start.cond))}.png`)]);
-  pdfSignedAt = now();   // 2.23.0: kept with the whole report, so Central Hub prints the same time
-  const doc = buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, sig: r.signed ? prof.sig : '', signedAt: pdfSignedAt });
-  const blob = doc.output('blob');
-  if (ui.pdf) URL.revokeObjectURL(ui.pdf.url);
-  ui.pdf = { key: draftKey(r.proj, r.date), at: r.updated, blob, url: URL.createObjectURL(blob), name: pdfName(p, r.date, r.no) };
-  logAct({ action: 'generate', channel: 'PDF', doc: ui.pdf.name, no: r.no ? `#${r.no}` : '' });   // 2.59.0
-  return blob;
+  if (!view) pdfSignedAt = now();   // 2.23.0: kept with the whole report, so Central Hub prints the same time
+  return buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, progress: progressRows(p.setup, r.items), sig: r.signed ? prof.sig : '', signedAt: view ? pdfSignedAt || now() : pdfSignedAt, ...(view ? { stamp: view.stamp } : {}) });
+}
+
+/**
+ * 2.94.0 (owner, 12 Nov, R5): the Site Engineer sees the final report as the office gets it, inside the app: the PDF
+ * pages drawn on the screen, with no file, no share and no download. DRAFT until the PE or the GM approves, then APPROVED.
+ */
+const finalStamp = (r, p) => ((store.get().known || {})[pdfName(p, r.date, r.no)] || {}).status === 'approved' ? 'APPROVED' : 'DRAFT';
+async function renderFinal() {
+  const r = report(), p = project();
+  if (!r || !p) return;
+  const stamp = finalStamp(r, p), k = `${key()}|${r.updated}|${stamp}`;
+  if (ui.finalFor === k && (ui.finalPages || ui.finalBusy)) return;
+  ui.finalFor = k; ui.finalBusy = true; ui.finalErr = ''; draw();
+  try {
+    const [doc, L] = await Promise.all([pdfDoc(r, p, { stamp }), loadPdfView()]);
+    const pdf = await L.getDocument({ data: new Uint8Array(doc.output('arraybuffer')) }).promise;
+    const pages = [], w = Math.min(1000, Math.max(320, (root.clientWidth || 360) - 32)) * Math.min(2, window.devicePixelRatio || 1);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const pg = await pdf.getPage(i), vp = pg.getViewport({ scale: w / pg.getViewport({ scale: 1 }).width });
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(vp.width); cv.height = Math.round(vp.height); cv.className = 'fp-page'; cv.setAttribute('aria-label', `Page ${i} of ${pdf.numPages}`);
+      await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp, intent: 'print' }).promise;   // print: draws even while the screen is busy
+      pages.push(cv);
+    }
+    pdf.destroy();
+    if (ui.finalFor === k) { ui.finalPages = pages; logAct({ action: 'view', channel: 'Final report (view only)', doc: pdfName(p, r.date, r.no), no: r.no ? `#${r.no}` : '' }); }
+  } catch (e) { if (ui.finalFor === k) { ui.finalErr = e.message; ui.finalFor = ''; } }
+  ui.finalBusy = false; draw();
 }
 
 /** 2.11.0: how many photos fill the last photo page: the PDF laid out without the pictures, when jsPDF is at hand. */
@@ -740,7 +783,7 @@ function fitSoon() {
   if (ui.fit && ui.fit.key === key) return;
   ui.fit = { key };
   loadPdfLib().then(J => {
-    const doc = buildPdf(J, { r, project: p, profile: store.get().profile, photos: r.photos.map(ph => ({ data: '', w: 4, h: 3, at: ph.at, cap: photoCaption(ph, r.items) })), signedAt: '00:00' });
+    const doc = buildPdf(J, { r, project: p, profile: store.get().profile, progress: progressRows(p.setup, r.items), photos: r.photos.map(ph => ({ data: '', w: 4, h: 3, at: ph.at, cap: photoCaption(ph, r.items) })), signedAt: '00:00' });
     if (ui.fit.key === key) { ui.fit = { key, ...doc.photoFit }; draw(); }
   }).catch(() => {});   // offline and never loaded: no hint
 }
@@ -1156,7 +1199,7 @@ cam.addEventListener('change', () => addPhotos([...(cam.files || [])]));
 // 2.32.0 (owner): the GM may add report photos from the gallery too; they are marked as such (Central Hub shows "From gallery")
 const gal = document.getElementById('gal');
 gal.addEventListener('change', async () => {
-  if (!P.isGM({ s: store.get() })) return;
+  if (!P.mayGallery({ s: store.get() })) return;
   const files = [...(gal.files || [])].filter(f => /^image\//.test(f.type));
   ui.camFor = 'photo';
   for (const f of files) { ui.fromGallery = timeIn('Africa/Addis_Ababa', new Date(f.lastModified || Date.now())); await addPhoto(f); }
@@ -1404,13 +1447,15 @@ async function flushSpots() {
         if (blob) await call('spotMedia', { proj: x.proj, id: x.id, n, type: m.type, data: await toDataUrl(blob) });
         spotSet(x.id, y => { y.media[n].up = true; });
       }
-      await call('spotPut', { proj: x.proj, id: x.id, about: x.about, tone: x.tone, cat: x.cat, note: x.note, madeAt: `${x.date}T${x.time}`, ...(x.visit ? { visit: x.visit } : {}) });
+      const put = await call('spotPut', { proj: x.proj, id: x.id, about: x.about, tone: x.tone, cat: x.cat, note: x.note, madeAt: `${x.date}T${x.time}`, ...(x.visit ? { visit: x.visit } : {}) });
+      if (put && put.note) L.saveSpot(put.note).catch(() => {});   // 2.92.0: the live copy for the Admin's and the GM's pages
+      if (demo && put && put.note) ui.spotLive = [put.note, ...(ui.spotLive || [])];   // 2.92.0: the demo has no database
       spotSet(x.id, y => { y.sent = true; y.sentAt = Date.now(); });
       x.media.forEach(m => deletePhoto(m.id).catch(() => {}));
       toast(x.visit ? `Visit sent: ${x.visit.name}.` : `Spotlight sent: ${x.cat} · ${x.about}.`);
     }
     // 2.49.0: the time a visitor left, after the visit was sent
-    for (const x of outs) { await call('visitOut', { proj: x.proj, id: x.id, out: x.visit.tout }); spotSet(x.id, y => { y.outPending = false; }); }
+    for (const x of outs) { await call('visitOut', { proj: x.proj, id: x.id, out: x.visit.tout }); L.spotVisitOut(x.id, { ...x.visit }).catch(() => {}); spotSet(x.id, y => { y.outPending = false; }); }
   } catch (e) { if (e.code !== 'OFFLINE') toast(`Spotlight not sent yet: ${e.message}`); }
   finally { spotting = false; }
 }
@@ -1668,8 +1713,11 @@ const ACTS = {
   inboxRead(d) { if (d.t) store.set({ inboxRead: [...new Set([...(store.get().inboxRead || []), d.t])].slice(-200) }); draw(); },   // 2.39.0
   inboxGo(d) { ui.inboxOpen = false; if (d.t) ACTS.inboxRead(d); if (location.hash === d.v) openLink(d.v.slice(1)); else location.hash = d.v; },   // 2.53.0: the list closes, so the page opened is seen   // 2.8.1: the same link twice opens again
   // 2.54.0 (owner): the GM's Dashboard: the week's photos and videos from site
-  mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; go('media'); mediaLoad(); },
+  mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; ui.mTab = P.mayBoard({ s: store.get() }) ? 'board' : ''; go('media'); mediaLoad(); },   // 2.95.0: the GM opens on Overview
+  // 2.95.0 (R6): a line of Needs you opens its own page
+  gmGo(d) { const to = d.to || ''; if (to === 'media:work') { ui.mTab = 'work'; draw(); } else if (to === 'rev') { go('rev'); ACTS.revLoad(); } else if (SCREENS[to]) go(to); },
   mediaTab(d) { ui.mTab = d.v; ui.mBig = ''; draw(); },   // 2.87.0
+  slFilter(d) { ui.slF = d.v || ''; draw(); },   // 2.92.0
   mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
   mediaBig(d) {
     ui.mBig = d.v ? (ui.mUrl || {})[d.v] || '' : ''; draw();
@@ -1964,6 +2012,14 @@ const ACTS = {
     go('today'); draw();
   },
   backToToday() { ui.date = ''; go('today'); draw(); },
+  seeFinal() { ui.sheet = ''; go('final'); renderFinal(); },   // 2.94.0 (R5)
+  // 2.94.0: the photo layout is the one thing the Site Engineer changes here (not after approval)
+  photoCols(d) { if (!finalLocked()) { edit(r => { r.photoCols = Number(d.v) === 2 ? 2 : 3; }); renderFinal(); } },
+  photoMove(d) {
+    if (finalLocked()) return;
+    edit(r => { const i = r.photos.findIndex(x => x.id === d.v), j = i + Number(d.dir); if (i < 0 || j < 0 || j >= r.photos.length) return; const a = [...r.photos]; [a[i], a[j]] = [a[j], a[i]]; r.photos = a; });
+    renderFinal();
+  },
   viewReport(d) {
     ui.viewKey = d.v ? draftKey(store.get().proj, d.v) : key();
     ui.viewBack = d.back || route();
@@ -2337,7 +2393,15 @@ const ACTS = {
   logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; liveCam('photo'); },   // 2.76.0: the camera inside the app
   logVideo() { if (!ui.vidWork) liveCam('video'); },   // 2.50.0; 2.76.0: the camera inside the app, live only
   videoDrop(d) { const v = (store.get().videos || []).find(x => x.id === d.v); if (!v || v.sent) return; deletePhoto(v.id).catch(() => {}); store.set({ videos: store.get().videos.filter(x => x.id !== v.id) }); draw(); },
-  galPhoto() { if (P.isGM({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0
+  galPhoto() { if (P.mayGallery({ s: store.get() })) { gal.value = ''; gal.click(); } },   // 2.32.0; 2.93.0 the PE too
+  // 2.93.0 (owner, 12 Nov): the Site Engineer is not on site: ask the Project Engineer and the GM to add the gallery photos
+  async galAsk() {
+    const p = project(), k = `${p ? p.code : ''}|${realToday()}`;
+    if (!p || (ui.galAsked || {})[k]) return;
+    try { await call('galleryAsk', { proj: p.code, date: realToday() }); (ui.galAsked ||= {})[k] = new Date().toTimeString().slice(0, 5); toast('Asked the Project Engineer and the GM to add the photos from the gallery.'); }
+    catch (e) { toast(e.code === 'OFFLINE' ? 'No connection: not asked yet.' : `Not asked: ${e.message}`); }
+    draw();
+  },
   itemPhoto() { ui.camFor = 'item'; camera(); },
   photoItem: d => { ui.photo.itemId = ui.photo.itemId === d.v ? '' : d.v; draw(); },
   savePhoto(d) {
@@ -2395,7 +2459,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
 [300, 1500].forEach(ms => setTimeout(relayout, ms));
 
 /** The open step's tab in the menu. */
-const TAB_OF = { att: 'att', reports: 'reports', requests: 'reports', me: 'me', review: 'reports', rev: 'reports', crewrev: 'me' };   // 2.55.0
+const TAB_OF = { att: 'att', reports: 'reports', requests: 'reports', spotlive: 'reports', me: 'me', review: 'reports', rev: 'reports', crewrev: 'me' };   // 2.55.0
 if (true) { TAB_OF.review = TAB_OF.rev = TAB_OF.crewrev = 'me'; }   // 2.37.0: from Me (a viewer has no rail tab but Review)
 /** Screens with a long form: the day column folds away on a computer. */
 const FOLD = new Set(['item', 'photo', 'delivery', 'delay', 'request']);
@@ -2444,6 +2508,7 @@ function openLink(h) {
     if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
     go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
   }
+  else if (what === 'gal') go('photos');   // 2.93.0: gallery photos asked by the Site Engineer
   else if (what === 'chat') { if (isOff('fr_chat')) return toast('Discuss is turned off by the Admin.'); go('chat'); ACTS.chatOpen({ v: d || '' }); }   // 2.85.0 (D2): Reply on a message notification
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
   else if (what === 'devices') { go('me'); devCheck(true); }   // 2.53.0: a new device waits on Me > Devices
@@ -2544,6 +2609,7 @@ function draw() {
   hideOff(root, c.s.rules);   // 2.60.0 (owner, G6): what the rules hide is not on the page by any means
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
+  if (r === 'final') { const box = root.querySelector('#finalPages'); if (box && ui.finalPages && !ui.finalBusy) box.replaceChildren(...ui.finalPages); }   // 2.94.0: the drawn pages survive a redraw
   bindSig();
   empFrame();   // 2.16.0
   if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* a time field has no caret */ } } }
@@ -2553,8 +2619,20 @@ const escText = s => String(s).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&l
 
 /* ---------- events ---------- */
 
+// 2.91.0 (owner, 12 Nov: "the bell responds on the first tap"): every store change redraws the whole page (store.subscribe(draw)),
+// and live updates come in bursts, above all just after the app comes to the front. A redraw between the finger going
+// down and coming up replaces the bell, so the phone sends no click and the first tap is lost. The finger coming up
+// lands on the new bell, so the bell opens on pointerup; the click that follows a normal tap is then skipped.
+let bellUp = 0;
+root.addEventListener('contextmenu', e => { if (e.target.closest('.fp')) e.preventDefault(); });   // 2.94.0: no "save image" on the final report
+root.addEventListener('pointerup', e => {
+  if (e.button !== 0 || !e.target.closest('.inbox-fab')) return;
+  bellUp = Date.now();
+  ACTS.inboxToggle({}, e.target.closest('.inbox-fab'));
+});
 root.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
+  if (el && el.dataset.act === 'inboxToggle' && Date.now() - bellUp < 800) return;   // 2.91.0: already opened on pointerup
   // 2.44.1 (owner): the project list closes with a tap anywhere else
   if (ui.projPop && !e.target.closest('.proj-pop') && !(el && el.dataset.act === 'projPop')) { ui.projPop = false; draw(); if (!el) return; }
   if (!el || el.disabled) return;

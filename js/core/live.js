@@ -7,6 +7,8 @@
 export const FIREBASE = '10.12.2';
 const CONFIG = { apiKey: 'AIzaSyCnm4E4PubEs6pqC30AWYDFi55s-qX-y5w', authDomain: 'amistad-ops.firebaseapp.com', projectId: 'amistad-ops' };
 const ROUTE_URL = `https://firestore.googleapis.com/v1/projects/${CONFIG.projectId}/databases/(default)/documents/public/fieldRoute?key=${CONFIG.apiKey}`;
+import { progressRows } from '../model/pdfplan.js';   // 2.96.0 (R7)
+
 const DAYS = 21;   // the reports listened to: the last three weeks
 
 /**
@@ -24,6 +26,7 @@ export function reportFull(r, project = {}, profile = {}, signedAt = '') {
     r: clean(JSON.parse(JSON.stringify(r))),
     project: { code: project.code || '', name: project.name || '', client: project.client || '', pn: project.pn || '', cc: project.cc || '' },
     profile: { name: profile.name || '', position: profile.position || '' }, sig, signedAt: String(signedAt || ''),
+    progress: progressRows(project.setup, r.items),   // 2.96.0 (R7): the chart as the phone drew it, so Central Hub draws the same
   };
   return JSON.stringify(full).length < 700000 ? full : null;
 }
@@ -123,7 +126,7 @@ export async function stop() {
  * Listens to the reports of the project `code` for the signed-in email. onKnown(entries) gets [[name, known], ...]
  * whenever Central Hub changes one. Returns the state: 'on', 'signin' (Firebase sign-in needed), 'none' or 'error'.
  */
-export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onChat = () => {}, onChatOff = () => {}, onDirect = () => {}, onSeen = () => {}, onPeople = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
+export async function listen({ code, email, onKnown, onChange = () => {}, onPing = () => {}, onPingTrades = () => {}, onTeam = () => {}, onPhotos = () => {}, onRequests = () => {}, onDay = () => {}, onFixes = () => {}, onDays = () => {}, onReqAll = () => {}, onUrgent = () => {}, onPenalties = () => {}, onStore = () => {}, onPOs = () => {}, onShots = () => {}, onSpots = null, onChat = () => {}, onChatOff = () => {}, onDirect = () => {}, onSeen = () => {}, onPeople = () => {}, onFeatures = () => {}, all = false, day = '', today = new Date() }) {
   stops.forEach(f => f()); stops = [];
   const mine = ++gen;
   try {
@@ -179,6 +182,9 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'storeMoves'), snap => onStore(snap.docs.map(x => x.data())), () => {}));
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'poOpen'), snap => onPOs(snap.docs.map(x => x.data())), () => {}));   // 2.62.0 (R6)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'workShots'), snap => onShots(snap.docs.map(x => x.data())), () => {}));   // 2.66.0
+    // 2.92.0 (owner, 12 Nov): Spotlight notes and visitors the moment a phone sends them; the Admin and the GM only (the rules)
+    if (onSpots) stops.push(F.onSnapshot(all ? F.query(F.collection(db, 'siteSpots'), F.where('pid', 'in', [...new Set(Object.values(codesMap))].slice(0, 30).concat(pid ? [] : ['-']))) : F.query(F.collection(db, 'siteSpots'), F.where('pid', '==', pid)),
+      snap => onSpots(snap.docs.map(x => x.data())), () => onSpots(null)));
     stops.push(F.onSnapshot(F.doc(db, 'public', 'fieldFeatures'), d => onFeatures((d.data() || {}).off || []), () => {}));   // 2.74.0: features switched off
     // 2.73.0 (owner, R4): Discuss: the project's channel and this person's one-to-one chats, as on Central Hub
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => onChatOff()));   // 2.86.0: Discuss knows its own link
@@ -370,6 +376,28 @@ export async function putSeen(writes) {
 export async function chatEdit(sec, id, patch) {
   if (!signedIn()) return false;
   await fb.F.updateDoc(fb.F.doc(fb.db, 'company', 'main', sec, id), patch);
+  return true;
+}
+
+/**
+ * 2.92.0 (owner, 12 Nov: "sync spotlight photos and notes to the GM dashboards and review pages at the moment they are
+ * logged and posted"): after the script keeps a Spotlight note (and its photos in Drive), the phone writes the same note
+ * to siteSpots/<id> for the live pages. Read by the Admin and the GM only (a note about a person is never seen by them).
+ */
+export async function saveSpot(e) {
+  if (!signedIn() || !e || !e.id) return false;
+  const { F, db, auth } = fb, email = auth.currentUser.email.toLowerCase(), p = codesMap[String(e.proj || '').toUpperCase()] || pid;
+  if (!p) return false;
+  const doc = { id: String(e.id), pid: p, proj: String(e.proj || ''), at: e.at || new Date().toISOString(), madeAt: e.madeAt || '', by: email, byName: e.byName || '',
+    about: e.about || '', tone: e.tone || '', cat: e.cat || '', note: e.note || '', media: (e.media || []).map(m => ({ n: m.n || 0, fileId: String(m.fileId || ''), type: String(m.type || '') })).filter(m => m.fileId) };
+  if (e.visit) doc.visit = e.visit;
+  await F.setDoc(F.doc(db, 'siteSpots', doc.id), doc);
+  return true;
+}
+/** 2.92.0: the time a visitor left, on the live copy too. */
+export async function spotVisitOut(id, visit) {
+  if (!signedIn()) return false;
+  await fb.F.updateDoc(fb.F.doc(fb.db, 'siteSpots', String(id)), { visit });
   return true;
 }
 

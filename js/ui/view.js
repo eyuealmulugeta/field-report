@@ -17,6 +17,33 @@ const sec = (title, inner) => html`<div class="k">${title}</div><div class="box 
 const none = text => html`<p class="small muted">${text}</p>`;
 const qty = x => (x.qty != null && x.qty !== '' ? `${x.qty} ${x.unit}` : '');
 
+/**
+ * 2.94.0 (owner, 12 Nov, R5): the final report, view only. The PDF pages are drawn on the screen (main.js renderFinal):
+ * no file, no share, no download, no print. DRAFT until the Project Engineer or the GM approves, then APPROVED.
+ * The Site Engineer may change one thing: the photo layout (photos in a row, their order), until it is approved.
+ */
+export function final(c) {
+  const r = c.report, p = c.project;
+  if (!r || !p) return { head: stepHead('Final report', '', 'send'), body: html`<div class="box pad muted small">No report today.</div>` };
+  const ok = ((c.s.known || {})[pdfName(p, r.date, r.no)] || {}).status === 'approved', cols = Number(r.photoCols) === 2 ? 2 : 3;
+  const n = r.photos.length;
+  const layout = ok ? html`<p class="soft small">Approved: the layout is final.</p>` : n ? html`<div class="k">Photo layout</div>
+    <div class="box pad"><div class="chips">${[[3, '3 in a row'], [2, '2 in a row, bigger']].map(([v, t]) => html`<button type="button" class="chip ${cols === v ? 'on' : ''}" data-act="photoCols" data-v="${v}">${t}</button>`)}</div>
+      <div class="fp-order">${r.photos.map((ph, i) => html`<div class="fp-ph">${thumb(ph.id, 'tile')}<span class="tiny">${i + 1}</span>
+        <button type="button" class="btn t slim" data-act="photoMove" data-v="${ph.id}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Move photo ${i + 1} earlier">◀</button>
+        <button type="button" class="btn t slim" data-act="photoMove" data-v="${ph.id}" data-dir="1" ${i < n - 1 ? '' : 'disabled'} aria-label="Move photo ${i + 1} later">▶</button></div>`)}</div>
+      ${r.sentAt ? html`<p class="tiny muted">A new layout changes the report: send it again from Review and send.</p>` : ''}</div>` : '';
+  return {
+    head: stepHead('Final report', `#${r.no} · ${dayLabel(r.date)}`, 'send'),
+    body: html`<p class="${ok ? 'soft' : 'callout warn'} small"><span class="pill ${ok ? 'ok' : 'warn'}">${ok ? 'APPROVED' : 'DRAFT'}</span> ${ok ? 'The Project Engineer or the GM approved this report.' : 'Until the Project Engineer or the GM approves it.'}</p>
+      <p class="tiny muted">View only: this report cannot be shared, downloaded or printed from this phone. The office sends it to the client.</p>
+      ${layout}
+      ${c.ui.finalErr ? html`<p class="callout warn small">The report could not be shown: ${c.ui.finalErr}</p>` : ''}
+      ${c.ui.finalBusy ? html`<p class="muted small">Drawing the report…</p>` : ''}
+      <div id="finalPages" class="fp" aria-label="The final report"></div>`,
+  };
+}
+
 export function view(c) {
   const r = c.s.drafts[c.ui.viewKey || ''] || c.report;
   if (!r) return { head: stepHead('Report', '', 'reports'), body: html`<div class="box pad muted small">This report is not on this phone.</div>` };

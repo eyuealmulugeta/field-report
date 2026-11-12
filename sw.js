@@ -2,9 +2,9 @@
 // (so a new upload is picked up at once) and the kept copy is used when there is no connection.
 // The PDF library from cdnjs is kept too. Google sign-in, the script and OneSignal always go to the network.
 
-const CACHE = 'fr2-v133';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
+const CACHE = 'fr2-v139';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/main.js', 'manifest.webmanifest', 'icon-192.png', 'img/watermark.webp'];
-const KEEP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/';
+const KEEP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/', KEEP_VIEW = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';   // 2.94.0: the final-report viewer, kept for offline
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -18,7 +18,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.href.startsWith(KEEP_CDN)) {
+  if (url.href.startsWith(KEEP_CDN) || url.href.startsWith(KEEP_VIEW)) {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })));
     return;
   }

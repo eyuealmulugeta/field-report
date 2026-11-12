@@ -141,6 +141,7 @@ export function send(c) {
         <b class="small">Tomorrow</b><p class="small">${plan.length ? plan.map(planLine).join('; ') : 'No plan given'}</p>
       </div>
       <button type="button" class="btn o" data-act="viewReport">${icon('doc')}View the report with photos</button>
+      ${canPdf(c) ? '' : html`<button type="button" class="btn t" data-act="seeFinal">${icon('doc')}See the final report (view only)</button>`}   <!-- 2.94.0 (R5) -->
       ${canPdf(c) ? html`<button type="button" class="btn t" data-act="openPdf" ${busy ? 'disabled' : ''}>${icon('doc')}${c.ui.pdfBusy ? 'Making the PDF…' : 'See the PDF'}</button>` : ''}
       <div class="k" id="sign">Signature</div>${signBox(c)}`,
     foot: r.sentAt && !changed

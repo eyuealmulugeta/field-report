@@ -37,8 +37,12 @@ export const dbBar = (ui, waiting = 0, why = '') => (ui.live === 'none' && ui.li
   ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Not connected to the database.</b> Tap to sign in again${waiting ? ` · ${waiting} report${waiting > 1 ? 's' : ''} waiting` : ''}</button>`
   : ui.liveRoute === 'read' && ui.live === 'signin' ? html`<button type="button" class="db-bar" data-act="liveConnect"><b>Live updates are off.</b> Tap to turn them on</button>` : '');
 
+/** 2.93.0 (owner, 12 Nov): the GM and the Project Engineer (or Manager) may add photos from the gallery. */
+export const mayGallery = c => isGM(c) || /project (engineer|manager)|\bpe\b|\bpm\b/i.test((c.s.profile || {}).position || '');
 export const isGM = c => (c.s.auth || {}).role === 'exec' || /\bgm\b|general manager/i.test((c.s.profile || {}).position || '');
 // 2.77.0 (owner, 8 Nov): only the Admin and the GM see the Dashboard, at the bottom of the main screen
+/** 2.95.0 (owner R6): the GM's Overview: the Admin and the GM, never the Executive (owner: "no"). */
+export const mayBoard = c => (c.s.auth || {}).role !== 'exec' && mayDash(c);
 export const mayDash = c => isGM(c) || (c.s.auth || {}).role === 'admin';
 export const dashBtn = c => (mayDash(c) ? html`<button type="button" class="btn o dash-btn" data-act="mediaOpen">${icon('cam')}Dashboard: photos and videos</button>` : '');
 export const TOP_PROJ = new Set(['today', 'att', 'reports', 'requests', 'penalties', 'store', 'review']);
@@ -49,7 +53,9 @@ export const projTop = (c, all = false) => html`<div class="proj-top"><select da
 // 2.55.0: Requests, Review and a report's review light the Review tab
 export const tabOf = on => (['requests', 'penalties', 'store', 'review', 'rev'].includes(on) ? 'reports' : on === 'shots' ? 'today' : on);
 /** 2.55.0 (owner): the two tabs inside Review. */
-export const reviewTabs = on => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button></div>`;   // 2.87.0 (owner, 9 Nov): Photos moved to the Dashboard (Work photos)   // Photos 2.66.0   // 2.57.0; Store 2.61.0
+/** 2.92.0: Spotlight live is for the Admin and the GM (the database lets no one else read it). */
+export const seesSpotLive = c => ['admin', 'exec'].includes(((c && c.s && c.s.auth) || {}).role) || (!!c && !!c.s && isGM(c));
+export const reviewTabs = (on, c = null) => html`<div class="seg wide att-tabs rev-tabs" role="group" aria-label="Review"><button type="button" class="${on === 'reports' ? 'on' : ''}" data-act="go" data-to="reports" aria-pressed="${on === 'reports'}">Reports</button><button type="button" class="${on === 'requests' ? 'on' : ''}" data-act="go" data-to="requests" aria-pressed="${on === 'requests'}">Requests</button><button type="button" class="${on === 'penalties' ? 'on' : ''}" data-act="go" data-to="penalties" aria-pressed="${on === 'penalties'}">Penalties</button><button type="button" class="${on === 'store' ? 'on' : ''}" data-act="go" data-to="store" aria-pressed="${on === 'store'}">Store</button>${seesSpotLive(c) ? html`<button type="button" class="${on === 'spotlive' ? 'on' : ''}" data-act="go" data-to="spotlive" aria-pressed="${on === 'spotlive'}">Spotlight</button>` : ''}</div>`;   // 2.87.0 (owner, 9 Nov): Photos moved to the Dashboard (Work photos)   // Photos 2.66.0   // 2.57.0; Store 2.61.0
 export const nav = (on, badges = {}, kind = 'reporter', rules = null) => html`<nav class="nav">${tabsFor(kind, rules).map(t => html`
   <button type="button" class="${t.id === tabOf(on) ? 'on' : ''} ${screenOffOnly(rules, t.id) ? 'off' : ''}" data-act="go" data-to="${t.id}">${icon(t.icon)}<span>${t.title}${screenOffOnly(rules, t.id) ? html`<i class="offt">Off</i>` : badges[t.id] ? html`<i class="badge">${badges[t.id]}</i>` : ''}</span></button>`)}
 </nav>`;

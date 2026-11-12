@@ -57,7 +57,7 @@ export function store(c) {
   return {
     tab: 'store',
     head: head('Store', `${rows.length} items · keeper ${keeper && (keeper.keeperName || keeper.keeper) || 'not set'}`, waiting ? `${waiting} waiting` : ''),
-    body: html`${reviewTabs('store')}
+    body: html`${reviewTabs('store', c)}
       ${c.ui.live !== 'on' && !c.demo ? html`<p class="callout warn small">The store needs the connection to Central Hub. Check the internet, then open this page again.</p>` : ''}
       ${due.due ? html`<p class="callout warn small">Weekly stock count due${due.last ? ` (last ${due.last})` : ''}.</p>` : ''}
       ${low.length ? html`<p class="callout warn small">Low: ${low.map(e => `${e.item} ${n(e.qty)} ${e.unit}`).join(', ')}. <button type="button" class="btn t slim" data-act="go" data-to="requests">Make a material request</button></p>` : ''}

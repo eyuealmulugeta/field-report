@@ -120,7 +120,8 @@ export async function demoServer(action, body) {
     case 'myProjects': { const pm = new URLSearchParams(location.search).has('pm');   // 2.6.0: a reviewer sees the crew waiting with their wages
       return { ok: true, projects: [{ proj: 'MJO', cc: 'ETH', name: project.name, location: project.location, staff, ...(pm ? { crewApprove: true, hoursEdit: true, tradeWages: { Mason: 450 }, crewWait: CREW_WAIT.filter(x => !x.ok) } : {}) }] }; }
     case 'spotMedia': return { ok: true, fileId: 'demo' };
-    case 'spotPut': return { ok: true, note: { id: body.id } };
+    case 'galleryAsk': return { ok: true, sent: 2, push: true };   // 2.93.0
+    case 'spotPut': return { ok: true, note: { id: body.id, proj: body.proj, at: new Date().toISOString(), madeAt: body.madeAt || '', by: 'demo@amistad.test', byName: 'Demo Engineer', about: body.about || 'The project', tone: body.tone || '', cat: body.visit ? 'Visit' : body.cat || 'Other', note: body.note || '', media: [], ...(body.visit ? { visit: body.visit } : {}) } };   // 2.92.0: as the script answers
     case 'hoursPut': Object.assign(project, { defStart: body.defStart, defEnd: body.defEnd, remindAt: body.remindAt, nwDow: body.nwDow }); return { ok: true, project: { code: body.proj } };
     case 'crewOk': { let n = 0; for (const x of CREW_WAIT) if (body.wages[x.id]) { x.ok = true; x.wage = body.wages[x.id]; n++; } return { ok: true, approved: n, crewWait: CREW_WAIT.filter(x => !x.ok), tradeWages: { Mason: 450 } }; }
     case 'list': return { ok: true, reports: REVIEW, events: [] };

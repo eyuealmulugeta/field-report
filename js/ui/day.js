@@ -4,7 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { plural } from '../core/util.js';
 import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipmentChoices, materialChoices, photoNeedsCaption } from '../model/day.js';
-import { stepHead, chips, stepper, isGM } from './parts.js';
+import { stepHead, chips, stepper, mayGallery } from './parts.js';
 import { thumb } from './work.js';
 import { fitLine } from '../pdf.js';
 import { videosOf, VIDEO_KEEP_DAYS } from '../model/video.js';
@@ -116,6 +116,13 @@ function videoList(c) {
     <p class="muted tiny">A video is at most 60 seconds. Videos go to Central Hub only, never into the client's report, and are deleted after ${VIDEO_KEEP_DAYS} days. Photos and videos are taken live with the camera; nothing comes from the gallery.</p>`;
 }
 
+/** 2.93.0 (owner, 12 Nov): a Site Engineer who is not on site asks the Project Engineer and the GM for gallery photos. */
+function galAskLine(c) {
+  const at = c.project ? (c.ui.galAsked || {})[`${c.project.code}|${c.realToday}`] : '';
+  return at ? html`<p class="callout small">Asked at ${at}: the Project Engineer or the GM will add today's photos from the gallery.</p>`
+    : html`<button type="button" class="btn t" data-act="galAsk">Not on site? Ask the PE or GM to add photos from the gallery</button>`;
+}
+
 export function photos(c) {
   const r = c.report, list = [...r.photos].reverse();
   const missing = r.photos.filter(photoNeedsCaption).length;
@@ -128,7 +135,8 @@ export function photos(c) {
         ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
         <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button>
         <button type="button" class="ptile add" data-act="logVideo" ${c.ui.vidWork ? 'disabled' : ''}>${icon('cam')}<span><b>Record a video</b></span></button>
-        ${isGM(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>
+        ${mayGallery(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>
+      ${mayGallery(c) ? html`<p class="muted tiny">Gallery photos are marked "From Gallery" on the office copy only; the client copy does not say it.</p>` : galAskLine(c)}
       ${videoList(c)}`,
     foot: doneBtn(r, 'photos', r.photos.length ? `Done · ${plural(r.photos.length, 'photo')}` : 'No photos today'),
   };

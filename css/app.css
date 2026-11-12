@@ -717,3 +717,45 @@ body.lc-open { overflow: hidden; }
 .lc-info b { color: #fff; }
 .lc-info div { padding: 3px 0; }
 .lc-fn { font-size: 11px; color: #a1a1aa; text-align: center; margin: 12px 16px 16px; }
+
+/* 2.92.0: Spotlight live (Review and Dashboard), for the Admin and the GM */
+.sl-card { background: var(--card, #fff); border: 1px solid var(--line, #e3e6ea); border-radius: 12px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 6px; }
+.sl-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sl-top b { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.sl-note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sl-media { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.sl-tile { position: relative; display: block; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #eef1f4; min-height: 44px; }
+.sl-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sl-vid i { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-style: normal; font-size: 26px; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+
+/* 2.94.0 (owner R5): the final report, view only: the PDF pages drawn on the screen, never saved */
+.fp { display: grid; gap: 12px; margin-top: 8px; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.fp-page { width: 100%; height: auto; display: block; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.18); pointer-events: none; }
+.fp-order { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.fp-ph { display: grid; grid-template-columns: auto auto; gap: 4px; align-items: center; justify-items: center; width: 96px; }
+.fp-ph img { grid-column: 1 / -1; width: 96px; height: 72px; object-fit: cover; border-radius: 6px; }
+.fp-ph .tiny { grid-column: 1 / -1; }
+.fp-ph .btn { min-height: 44px; min-width: 44px; }
+
+/* 2.95.0 (owner R6): the GM's Overview: cards that flow from 2 in a row on a phone to 3 or more on a computer */
+.gm { display: grid; gap: 14px; }
+.gm-live { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.gm-live i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.gm-live.on i { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.gm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.gm-kpi { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card, #fff); min-width: 0; }
+.gm-kpi b { font-size: 24px; line-height: 1.1; }
+.gm-kpi span { font-size: 13px; color: var(--muted); }
+.gm-kpi small { font-size: 12px; color: var(--muted); }
+.gm-kpi.warn { border-color: var(--warn); } .gm-kpi.bad { border-color: var(--bad); }
+.gm-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.gm-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card, #fff); min-width: 0; }
+.gm-box h3 { margin: 0 0 8px; font-size: 15px; }
+.gm-need { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; text-align: left; }
+.gm-need .grow { flex: 1; }
+.gm-n { min-width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.gm-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.gm-day { display: grid; justify-items: center; gap: 4px; font-size: 12px; text-align: center; }
+.gm-day i { width: 100%; height: 10px; border-radius: 5px; background: var(--line); }
+.gm-day.ok i { background: var(--ok); } .gm-day.bad i { background: var(--bad); } .gm-day.warn i { background: var(--warn); } .gm-day.info i { background: var(--info, #2f6fd6); }
+.gm-day small { color: var(--muted); font-size: 10px; line-height: 1.2; }

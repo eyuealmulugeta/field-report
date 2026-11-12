@@ -4,7 +4,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel } from '../core/util.js';
 import { stepHead } from './parts.js';
 import { thumb } from './work.js';
-import { SPOT_TONES, SPOT_MAX, aboutList, catsFor, PROJECT_ABOUT, VIDEO_SECONDS } from '../model/spot.js';
+import { newSpot, SPOT_TONES, SPOT_MAX, aboutList, catsFor, PROJECT_ABOUT, VIDEO_SECONDS } from '../model/spot.js';
 import { VISIT_TYPES, PURPOSES, VISIT_PHOTOS, visitsOf, visitCounts } from '../model/visit.js';
 
 // 2.49.0 (owner, R3): Spotlight has two tabs, Notes and Visitors
@@ -47,7 +47,7 @@ function visitList(c) {
 }
 
 export function spot(c) {
-  const s = c.ui.spot, mine = (c.s.spots || []).filter(x => x.proj === c.project.code && !x.visit).slice(0, 15);
+  const s = c.ui.spot || newSpot(), mine = (c.s.spots || []).filter(x => x.proj === c.project.code && !x.visit).slice(0, 15);
   const tab = c.ui.spotTab === 'visits' ? 'visits' : 'notes';
   if (tab === 'visits') return { head: stepHead('Spotlight', `${c.project.name} · for Central Hub only`, 'today'), body: html`${tabs(tab)}${c.ui.visit ? visitForm(c) : visitList(c)}` };
   const back = 'today';

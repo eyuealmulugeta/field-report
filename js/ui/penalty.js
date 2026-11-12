@@ -24,7 +24,7 @@ export function penalties(c) {
   return {
     tab: 'penalties',
     head: head('Penalties', `${list.length} on this project`, waiting ? `${waiting} waiting` : ''),
-    body: html`${reviewTabs('penalties')}
+    body: html`${reviewTabs('penalties', c)}
       ${c.ui.live !== 'on' && !c.demo ? html`<p class="callout warn small">Penalties need the connection to Central Hub. Check the internet, then open this page again.</p>` : ''}
       ${mayGive(role) && !c.ui.penOpen ? html`<button type="button" class="btn o wide" data-act="penOpen">${icon('plus')}Give a penalty</button>` : ''}
       ${form}
