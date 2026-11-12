@@ -183,8 +183,15 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'poOpen'), snap => onPOs(snap.docs.map(x => x.data())), () => {}));   // 2.62.0 (R6)
     stops.push(F.onSnapshot(F.collection(db, 'projects', pid, 'workShots'), snap => onShots(snap.docs.map(x => x.data())), () => {}));   // 2.66.0
     // 2.92.0 (owner, 12 Nov): Spotlight notes and visitors the moment a phone sends them; the Admin and the GM only (the rules)
-    if (onSpots) stops.push(F.onSnapshot(all ? F.query(F.collection(db, 'siteSpots'), F.where('pid', 'in', [...new Set(Object.values(codesMap))].slice(0, 30).concat(pid ? [] : ['-']))) : F.query(F.collection(db, 'siteSpots'), F.where('pid', '==', pid)),
-      snap => onSpots(snap.docs.map(x => x.data())), () => onSpots(null)));
+    // 2.97.0 (owner, 12 Nov: "spotlight is not loading"): the project list for All projects is never empty (an empty
+    // "in" made the query throw and stopped the listeners after it); a failure says so instead of waiting for ever
+    if (onSpots) {
+      try {
+        const pids = [...new Set([...Object.values(codesMap), pid].filter(Boolean))].slice(0, 30);
+        stops.push(F.onSnapshot(all && pids.length > 1 ? F.query(F.collection(db, 'siteSpots'), F.where('pid', 'in', pids)) : F.query(F.collection(db, 'siteSpots'), F.where('pid', '==', pid || pids[0] || '-')),
+          snap => onSpots(snap.docs.map(x => x.data())), () => onSpots(null)));
+      } catch { onSpots(null); }
+    }
     stops.push(F.onSnapshot(F.doc(db, 'public', 'fieldFeatures'), d => onFeatures((d.data() || {}).off || []), () => {}));   // 2.74.0: features switched off
     // 2.73.0 (owner, R4): Discuss: the project's channel and this person's one-to-one chats, as on Central Hub
     stops.push(F.onSnapshot(F.query(F.collection(db, 'company', 'main', 'messages'), F.where('channel', '==', pid)), snap => onChat(snap.docs.map(x => x.data())), () => onChatOff()));   // 2.86.0: Discuss knows its own link

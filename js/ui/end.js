@@ -146,7 +146,7 @@ export function send(c) {
       <div class="k" id="sign">Signature</div>${signBox(c)}`,
     foot: r.sentAt && !changed
       ? html`<div class="two">${canPdf(c) ? html`<button type="button" class="btn o" data-act="sharePdf">${icon('send')}Share the PDF</button>` : html`<button type="button" class="btn o" data-act="viewReport">${icon('doc')}View the report</button>`}<button type="button" class="btn p" data-act="go" data-to="today">${icon('check')}Back to Today</button></div>`
-      : html`<button type="button" class="btn p" data-act="sendReport" ${ok && !busy ? '' : 'disabled'}>${icon('send')}${busy ? c.ui.sending : !ok ? 'Sign to send' : changed ? 'Send the new version' : warns ? 'Send anyway' : 'Send the report'}</button>
+      : html`<button type="button" class="btn p" data-act="checkReport" ${ok && !busy ? '' : 'disabled'}>${icon('doc')}${busy ? c.ui.sending : !ok ? 'Sign to continue' : 'Check the report'}</button>   <!-- 3.0.0 (owner): Sign, Check the report, Submit -->
         <div class="center muted tiny">${isDemo() ? 'Demo: nothing leaves this browser.' : 'Goes to the office with the photos. Saved on the phone if there is no connection.'}</div>`,
   };
 }

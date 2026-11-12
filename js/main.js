@@ -12,7 +12,7 @@ import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWai
 import { mergeStaff, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
-import { putPhoto, getPhoto, deletePhoto, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
+import { putPhoto, getPhoto, deletePhoto, photoKeys, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
 import { listen } from './core/voice.js';
 import * as S from './ui/screens.js';
 import * as W from './ui/work.js';
@@ -22,11 +22,11 @@ import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { buildPdf, loadPdfLib, loadPdfView, photoCaption, weatherFile } from './pdf.js';
-import { progressRows } from './model/pdfplan.js';   // 2.96.0 (R7)
+import { progressRows, CLIENT_PHOTOS, spreadIds } from './model/pdfplan.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
-import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos } from './model/follow.js';
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
@@ -87,6 +87,7 @@ const SCREENS = {
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests', c)}${v.body}` }; },
   view: V.view,
   final: V.final,   // 2.94.0 (owner R5)
+  check: V.check,   // 3.0.0 (owner, 12 Nov): Sign, then Check the report, then Submit
   review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
   // 2.87.0 (owner, 9 Nov): Attention is the third tab of Spotlight
   spot: c => { if (!ui.spot) { ui.spot = newSpot(); c = { ...c, ui }; }   // 2.92.0: opened from an address, the form is made here
@@ -95,7 +96,7 @@ const SCREENS = {
   media: MD.media,                                     // 2.54.0: the GM's Dashboard
   chat: CHAT.chat,                                     // 2.73.0 (owner, R4): Discuss
 };
-const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send', 'final']);
+const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send', 'final', 'check']);
 
 /* ---------- state helpers ---------- */
 
@@ -136,7 +137,10 @@ function edit(fn, quiet) {
     if (!confirm(`This is the site's report of ${r.date} for ${r.proj}, not sent yet. Change it?`)) { draw(); return; }
     ui.gmOk = { ...(ui.gmOk || {}), [k]: true };
   }
+  const wasSigned = r.signed;
   fn(r);
+  // 3.0.0 (owner, 12 Nov): a change after signing needs the signature again (and Check the report again)
+  if (wasSigned && r.signed === wasSigned) { delete r.signed; if (route() !== 'send') toast('Changed after signing: sign again on Review and send.'); }
   r.updated = Date.now();
   // 2.4.0: one report per project and day, shared: who worked on it, in turn
   const me = store.get().profile.name || (store.get().auth || {}).name || '';
@@ -347,7 +351,7 @@ async function goLive(at = '') {
     onStore: list => { ui.smList = list; draw(); },   // 2.61.0 (R5)
     onPOs: list => { ui.poList = list; draw(); },   // 2.62.0 (R6)
     onShots: list => { ui.shList = list; draw(); },   // 2.66.0
-    onSpots: seesSpots() ? list => { ui.spotLive = list; draw(); } : null,   // 2.92.0: the Admin and the GM
+    onSpots: seesSpots() ? list => { ui.spotLive = list; draw(); spotVids(); } : null,   // 2.92.0: the Admin and the GM
     onFeatures: list => {   // 2.74.0 (owner): Central Hub switched features on or off
       const k = JSON.stringify(list || []);
       try { if (localStorage.getItem('fr2_off') === k) return; localStorage.setItem('fr2_off', k); } catch { /* private mode */ }
@@ -657,13 +661,37 @@ async function pullDraft() {
     if (how === 'load') { useRemote(res.draft); toast(`Report carried on from ${res.draft.by || 'your other phone'} (saved ${new Date(res.draft.at).toTimeString().slice(0, 5)}).${res.draft.photoCount ? ' Photos it has not sent stay on that phone.' : ''}`); }
     if (how === 'ask') { ui.remote = res.draft; ui.sheet = 'draft'; draw(); }
   } catch { /* offline: try next time */ }
+  restorePhotos();   // 2.97.0
 }
 function useRemote(d) {
   const mine = report(), r = { ...d.s.report };
-  // photos taken on the other phone are not here: keep the ones this phone has and the ones already in Drive (2.1.0)
-  const here = new Set((mine && mine.photos || []).map(x => x.id));
-  r.photos = (r.photos || []).filter(x => here.has(x.id) || x.drive);
+  // photos taken on the other phone are not here: keep the ones this phone has and the ones already in Drive (2.1.0);
+  // 2.97.0 (owner, 12 Nov): never drop a photo of this phone that the other copy does not name
+  r.photos = keepMine(r, mine);
   store.set({ drafts: { ...store.get().drafts, [key()]: r } });
+}
+
+/**
+ * 2.97.0 (owner, 12 Nov: "the images of today's log disappeared"): today's camera photos still on this phone that the
+ * open report no longer lists are put back on it (Photos step), with a note. A sent report is left alone.
+ */
+async function restorePhotos() {
+  const r = report();
+  if (demo || ui.date || !r || !r.start || (r.sentAt && !(r.updated > r.sentAt + 1000))) return;
+  try {
+    const ids = orphanPhotos(await photoKeys(), JSON.stringify(store.get()), realToday());
+    if (!ids.length) return;
+    const back = [];
+    for (const id of ids) {
+      const b = await getPhoto(id).catch(() => null);
+      if (!b || !/^image\//.test(b.type || 'image/')) continue;
+      const t = new Date(parseInt(id.slice(0, -5), 36));
+      back.push({ id, o: await orientOfBlob(b), at: `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, zone: '', captionKind: 'Progress', caption: '', itemId: '' });
+    }
+    if (!back.length) return;
+    edit(x => { const have = new Set(x.photos.map(p => p.id)); for (const ph of back) if (!have.has(ph.id)) x.photos.push(ph); });
+    toast(`${back.length} photo${back.length > 1 ? 's' : ''} of today brought back to the report. Check them on the Photos step.`);
+  } catch { /* nothing to bring back */ }
 }
 
 /** The OneSignal app id, asked once and kept (2.0.1: the switch no longer waits for the script every time). */
@@ -752,6 +780,19 @@ async function pdfDoc(r, p, view = null) {
  * pages drawn on the screen, with no file, no share and no download. DRAFT until the PE or the GM approves, then APPROVED.
  */
 const finalStamp = (r, p) => ((store.get().known || {})[pdfName(p, r.date, r.no)] || {}).status === 'approved' ? 'APPROVED' : 'DRAFT';
+/** 3.0.0: Submit shows once the last page of the report has been seen (for this signature and this version). */
+const checkKey = () => { const r = report(); return r ? `${key()}|${r.updated}|${r.signed || ''}` : ''; };
+const checkedNow = () => !!ui.checked && ui.checked === checkKey();
+function checkSeen() {
+  if (route() !== 'check' || !ui.finalPages || ui.finalBusy || checkedNow()) return;
+  const pages = root.querySelectorAll('#finalPages canvas'), last = pages[pages.length - 1];
+  const sc = last && last.closest('.bd'), limit = sc ? Math.min(innerHeight, sc.getBoundingClientRect().bottom) : innerHeight;
+  if (last && last.getBoundingClientRect().bottom <= limit + 24) { ui.checked = ui.checkKey = checkKey(); draw(); }
+}
+// the page scrolls inside its panel (.bd), so the scroll is caught on its way down
+document.addEventListener('scroll', () => { if (route() === 'check') checkSeen(); }, { passive: true, capture: true });
+setInterval(() => { if (!document.hidden && store.get().auth && route() === 'check') checkSeen(); }, 500);   // and when a scroll ends without its last event
+
 async function renderFinal() {
   const r = report(), p = project();
   if (!r || !p) return;
@@ -773,6 +814,7 @@ async function renderFinal() {
     if (ui.finalFor === k) { ui.finalPages = pages; logAct({ action: 'view', channel: 'Final report (view only)', doc: pdfName(p, r.date, r.no), no: r.no ? `#${r.no}` : '' }); }
   } catch (e) { if (ui.finalFor === k) { ui.finalErr = e.message; ui.finalFor = ''; } }
   ui.finalBusy = false; draw();
+  checkSeen();   // 3.0.0: a one-page report is seen at once
 }
 
 /** 2.11.0: how many photos fill the last photo page: the PDF laid out without the pictures, when jsPDF is at hand. */
@@ -1023,6 +1065,42 @@ async function mediaLoad(again = false) {
       if (out && out.data) { const b = await fetch(`data:${out.type || 'video/mp4'};base64,${out.data}`).then(r => r.blob()); ui.mVurl[v.id] = URL.createObjectURL(b); if (route() === 'media') draw(); }
     } catch { /* stays on its cover picture; a tap opens it in Drive */ }
   }
+}
+
+/**
+ * 2.98.0 (owner, 12 Nov: "open videos in dashboard with built in media players"): the app's own full-screen player,
+ * with sound, seek and full screen. It lives outside the page, so a live update does not restart it.
+ */
+function playVideo(url, title = '') {
+  closeVideo();
+  const d = document.createElement('div');
+  d.id = 'vp'; d.className = 'vp'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Video');
+  d.innerHTML = `<div class="vp-top"><b>${escText(title || 'Video')}</b><button type="button" class="vp-x" aria-label="Close the video">✕</button></div><video controls autoplay playsinline src="${url}"></video>`;
+  d.querySelector('.vp-x').onclick = closeVideo;
+  document.body.appendChild(d);
+}
+function closeVideo() { const d = document.getElementById('vp'); if (d) { const v = d.querySelector('video'); if (v) v.pause(); d.remove(); } }
+addEventListener('keydown', e => { if (e.key === 'Escape') closeVideo(); });
+const vidBlobUrl = out => (out && out.data ? fetch(`data:${out.type || 'video/mp4'};base64,${out.data}`).then(r => r.blob()).then(b => URL.createObjectURL(b)) : Promise.resolve(''));
+/** A Dashboard or Spotlight video as a playable address ('' when it cannot come: Drive's own player then). */
+async function videoUrl(k, d) {
+  if (k === 'spot') return (ui.slVurl ||= {})[d.f] ||= await vidBlobUrl(await call('spotVideo', { proj: d.p, id: d.n, fileId: d.f }).catch(() => null));
+  return (ui.mVurl ||= {})[d.v] ||= await vidBlobUrl(await call('videoGet', { proj: (project() || {}).code, id: d.v }).catch(() => null));
+}
+/** 2.98.0: the Spotlight videos of the last 7 days play in their cards: fetched one at a time, newest first, at most 6. */
+let spotVidBusy = false;
+async function spotVids() {
+  if (spotVidBusy || demo || !Array.isArray(ui.spotLive)) return;
+  spotVidBusy = true;
+  try {
+    const since = new Date(Date.now() - 7 * 864e5).toISOString();
+    const todo = [...ui.spotLive].filter(x => String(x.at) >= since).sort((a, b) => String(b.at).localeCompare(String(a.at)))
+      .flatMap(x => (x.media || []).filter(m => /^video/.test(m.type) && m.fileId).map(m => ({ p: x.proj, n: x.id, f: m.fileId }))).slice(0, 6);
+    for (const d of todo) {
+      if ((ui.slVurl || {})[d.f]) continue;
+      if (await videoUrl('spot', d)) draw();
+    }
+  } finally { spotVidBusy = false; }
 }
 
 /** The thumbnail of a photo that left this phone: from Drive, through the report that holds it. */
@@ -1716,7 +1794,14 @@ const ACTS = {
   mediaOpen() { if (!P.mayDash({ s: store.get() })) return; ui.mDay = ''; ui.mBig = ''; ui.mTab = P.mayBoard({ s: store.get() }) ? 'board' : ''; go('media'); mediaLoad(); },   // 2.95.0: the GM opens on Overview
   // 2.95.0 (R6): a line of Needs you opens its own page
   gmGo(d) { const to = d.to || ''; if (to === 'media:work') { ui.mTab = 'work'; draw(); } else if (to === 'rev') { go('rev'); ACTS.revLoad(); } else if (SCREENS[to]) go(to); },
-  mediaTab(d) { ui.mTab = d.v; ui.mBig = ''; draw(); },   // 2.87.0
+  mediaTab(d) { ui.mTab = d.v; ui.mBig = ''; draw(); if (d.v === 'spot') spotVids(); },
+  /** 2.98.0 (owner): a Dashboard or Spotlight video opens in the app's own player. */
+  async vidPlay(d) {
+    let url = d.k === 'spot' ? (ui.slVurl || {})[d.f] : (ui.mVurl || {})[d.v];
+    if (!url) { toast('Getting the video…'); url = await videoUrl(d.k, d); }
+    if (url) playVideo(url, d.t);
+    else if (d.f) { toast('This video is too big for the app player: it opens in Drive.'); window.open(`https://drive.google.com/file/d/${d.f}/view`, '_blank', 'noopener'); }
+  },   // 2.87.0
   slFilter(d) { ui.slF = d.v || ''; draw(); },   // 2.92.0
   mediaDay(d) { ui.mDay = d.v; ui.mBig = ''; draw(); mediaLoad(); },
   mediaBig(d) {
@@ -2013,6 +2098,18 @@ const ACTS = {
   },
   backToToday() { ui.date = ''; go('today'); draw(); },
   seeFinal() { ui.sheet = ''; go('final'); renderFinal(); },   // 2.94.0 (R5)
+  /** 3.0.0 (owner, 12 Nov: "after signing ... check the report, then a submit option"): the report as the office gets it */
+  checkReport() {
+    const r = report();
+    if (!r || !r.signed) return toast('Sign first.');
+    ui.sheet = ''; ui.checkKey = checkKey(); go('check'); renderFinal(); scrollTo(0, 0); setTimeout(checkSeen, 400);
+  },
+  async submitReport() {
+    if (!checkedNow()) return toast('Scroll to the last page first.');
+    await ACTS.sendReport();
+    if (report() && report().sentAt && !(report().updated > report().sentAt + 1000)) go('send');
+  },
+  backToEdit() { go('send'); },
   // 2.94.0: the photo layout is the one thing the Site Engineer changes here (not after approval)
   photoCols(d) { if (!finalLocked()) { edit(r => { r.photoCols = Number(d.v) === 2 ? 2 : 3; }); renderFinal(); } },
   photoMove(d) {
@@ -2272,6 +2369,15 @@ const ACTS = {
   },
 
   /* slice 3: equipment, materials, safety and delays, photos */
+  /** 2.99.0 (owner): tick a photo "For client"; 12 at most */
+  pickPhoto(d) {
+    const r = report(), p = r && r.photos.find(x => x.id === d.v);
+    if (!p) return;
+    if (!p.client && r.photos.filter(x => x.client).length >= CLIENT_PHOTOS) return toast(`${CLIENT_PHOTOS} are chosen. Untick one first.`);
+    edit(x => { const q = x.photos.find(y => y.id === d.v); if (q) q.client = !q.client; });
+  },
+  pickAuto() { edit(r => { const ids = spreadIds(r.photos.map(p => p.id)); r.photos.forEach(p => { p.client = ids.includes(p.id); }); }); toast(`${CLIENT_PHOTOS} photos chosen over the day. Change any you like.`); },
+  pickNone() { edit(r => { r.photos.forEach(p => { delete p.client; }); }); },
   dayDone(d) {
     edit(r => { r.done[d.v] = !r.done[d.v]; if (d.v === 'safety') r.safety.done = r.done.safety; });
     if (report().done[d.v]) go('today');
@@ -2609,7 +2715,7 @@ function draw() {
   hideOff(root, c.s.rules);   // 2.60.0 (owner, G6): what the rules hide is not on the page by any means
   if (ui.cur != null) root.querySelector(`[data-row="${ui.cur}"]`)?.scrollIntoView({ block: 'nearest' });
   root.querySelectorAll('img[data-photo]').forEach(img => { if (img.getAttribute('src') === 'data:,') photoUrl(img.dataset.photo).then(u => u || driveUrl(img.dataset.photo)).then(u => { if (u) img.src = u; }); });
-  if (r === 'final') { const box = root.querySelector('#finalPages'); if (box && ui.finalPages && !ui.finalBusy) box.replaceChildren(...ui.finalPages); }   // 2.94.0: the drawn pages survive a redraw
+  if (r === 'final' || r === 'check') { const box = root.querySelector('#finalPages'); if (box && ui.finalPages && !ui.finalBusy) box.replaceChildren(...ui.finalPages); }   // 2.94.0: the drawn pages survive a redraw
   bindSig();
   empFrame();   // 2.16.0
   if (focus) { const el = root.querySelector(`[data-ui="${focus}"]`); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* a time field has no caret */ } } }
@@ -2812,7 +2918,7 @@ if (location.hash.startsWith('#go=')) setTimeout(() => { if (!openLink(location.
 draw();
 const back = signInReturn();
 if (back) signedIn(back);
-else if (store.get().auth) { flush(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); goLive(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
+else if (store.get().auth) { flush(); restorePhotos(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); goLive(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
 oldAppClear();
 cleanPhotos();
 if (route() === 'me') pushPreload();

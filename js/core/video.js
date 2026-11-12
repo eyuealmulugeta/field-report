@@ -6,7 +6,7 @@
 export function targetBitrate(sec, maxBytes) {
   if (!(sec > 0)) return 0;
   const bps = Math.floor((maxBytes * 8 * 0.85) / sec) - 96000;   // room for the sound and the file's own bytes
-  return bps < 150000 ? 0 : Math.min(bps, 1500000);
+  return bps < 150000 ? 0 : Math.min(bps, 3000000);   // 2.98.0: up to 3 Mbps (1080p)
 }
 
 /** The recording type this phone can make (MP4 first, else WEBM); '' when it cannot record. */

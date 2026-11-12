@@ -44,6 +44,27 @@ export function final(c) {
   };
 }
 
+/**
+ * 3.0.0 (owner, 12 Nov: "after signing at the last stage of report, next should be, check the report, then after checking
+ * ..., a submit option"): the pages of the report as the office gets them; Submit or Back to edit appear only after the
+ * last page has been scrolled to.
+ */
+export function check(c) {
+  const r = c.report, p = c.project;
+  if (!r || !p) return { head: stepHead('Check the report', '', 'send'), body: html`<div class="box pad muted small">No report today.</div>` };
+  const seen = !!c.ui.checked && c.ui.checked === c.ui.checkKey, busy = c.ui.sending;
+  return {
+    head: stepHead('Check the report', `#${r.no} · ${dayLabel(r.date)}`, 'send'),
+    body: html`<p class="callout small">Read every page. <b>Submit</b> appears when you reach the last page. To change anything, tap <b>Back to edit</b> (you then sign again).</p>
+      ${c.ui.finalErr ? html`<p class="callout warn small">The report could not be shown: ${c.ui.finalErr}</p>` : ''}
+      ${c.ui.finalBusy ? html`<p class="muted small">Drawing the report…</p>` : ''}
+      <div id="finalPages" class="fp" aria-label="The report to check"></div>`,
+    foot: !r.signed ? html`<button type="button" class="btn p" data-act="backToEdit">${icon('back')}Sign again on Review and send</button>`
+      : seen ? html`<div class="two"><button type="button" class="btn o" data-act="backToEdit" ${busy ? 'disabled' : ''}>Back to edit</button><button type="button" class="btn p" data-act="submitReport" ${busy ? 'disabled' : ''}>${icon('send')}${busy || 'Submit'}</button></div>`
+      : html`<button type="button" class="btn p" disabled>${c.ui.finalBusy ? 'Drawing the report…' : 'Scroll to the last page to submit'}</button>`,
+  };
+}
+
 export function view(c) {
   const r = c.s.drafts[c.ui.viewKey || ''] || c.report;
   if (!r) return { head: stepHead('Report', '', 'reports'), body: html`<div class="box pad muted small">This report is not on this phone.</div>` };

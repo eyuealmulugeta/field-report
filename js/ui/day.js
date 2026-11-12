@@ -7,6 +7,7 @@ import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipme
 import { stepHead, chips, stepper, mayGallery } from './parts.js';
 import { thumb } from './work.js';
 import { fitLine } from '../pdf.js';
+import { CLIENT_PHOTOS, clientLeft } from '../model/pdfplan.js';
 import { videosOf, VIDEO_KEEP_DAYS } from '../model/video.js';
 
 
@@ -123,16 +124,25 @@ function galAskLine(c) {
     : html`<button type="button" class="btn t" data-act="galAsk">Not on site? Ask the PE or GM to add photos from the gallery</button>`;
 }
 
+/** 2.99.0 (owner): with more than 12 photos, the Site Engineer ticks the 12 for the client; the rest go to the office and the Dashboard. */
+function pickLine(r) {
+  if (r.photos.length <= CLIENT_PHOTOS) return r.photos.length ? html`<p class="muted small">All ${plural(r.photos.length, 'photo')} go in the client's report (up to ${CLIENT_PHOTOS}).</p>` : '';
+  const left = clientLeft(r.photos), n = CLIENT_PHOTOS - left;
+  return html`<div class="callout ${left ? 'warn' : ''} small"><b>For the client: ${n} of ${CLIENT_PHOTOS} chosen.</b> ${left ? `Tick ${plural(left, 'more photo')} "For client".` : 'Done.'} The other photos go to the office and the Dashboard only.
+    <div class="row"><button type="button" class="btn t slim" data-act="pickAuto">Choose ${CLIENT_PHOTOS} for me</button>${n ? html`<button type="button" class="btn t slim" data-act="pickNone">Untick all</button>` : ''}</div></div>`;
+}
+
 export function photos(c) {
   const r = c.report, list = [...r.photos].reverse();
   const missing = r.photos.filter(photoNeedsCaption).length;
-  const work = id => r.items.find(i => i.id === id);
+  const work = id => r.items.find(i => i.id === id), pick = r.photos.length > CLIENT_PHOTOS;
   return {
     head: stepHead('Photos', `Step 7 of 9 · ${plural(r.photos.length, 'photo')} today`),
     body: html`${fitLine(c.ui.fit) ? html`<p class="soft small"><b>${fitLine(c.ui.fit)}</b></p>` : ''}
       ${missing ? html`<p class="callout warn">${plural(missing, 'photo')} without a caption or work item. Tap to add one, so the office knows what it shows.</p>` : ''}
-      <div class="ptiles">${list.map(p => html`<button type="button" class="ptile ${photoNeedsCaption(p) ? 'need' : ''}" data-act="openPhoto" data-v="${p.id}">
-        ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>`)}
+      ${pickLine(r)}
+      <div class="ptiles">${list.map(p => html`<div class="pwrap"><button type="button" class="ptile ${photoNeedsCaption(p) ? 'need' : ''} ${pick && p.client ? 'pick' : ''}" data-act="openPhoto" data-v="${p.id}">
+        ${thumb(p.id, 'tile')}<span><b>${p.at}${p.zone ? ` · ${p.zone}` : ''}</b>${p.caption || (work(p.itemId) ? `${p.captionKind}: ${work(p.itemId).text || work(p.itemId).task || 'work'}` : html`<em>Add a caption</em>`)}</span></button>${pick ? html`<button type="button" class="pick-t ${p.client ? 'on' : ''}" data-act="pickPhoto" data-v="${p.id}" aria-pressed="${p.client ? 'true' : 'false'}">${p.client ? '✓ For client' : '+ For client'}</button>` : ''}</div>`)}
         <button type="button" class="ptile add" data-act="logPhoto">${icon('cam')}<span><b>Take a photo</b></span></button>
         <button type="button" class="ptile add" data-act="logVideo" ${c.ui.vidWork ? 'disabled' : ''}>${icon('cam')}<span><b>Record a video</b></span></button>
         ${mayGallery(c) ? html`<button type="button" class="ptile add" data-act="galPhoto">${icon('doc')}<span><b>Gallery</b></span></button>` : ''}</div>

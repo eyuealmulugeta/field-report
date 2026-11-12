@@ -187,6 +187,27 @@ export function draftChoice(remote, local, { today, dev }) {
   return remote.at > (local.updated || 0) + 120e3 ? 'ask' : 'none';
 }
 
+/**
+ * 2.97.0 (owner, 12 Nov: "the images of today's log disappeared"): a camera photo of the report keeps its file on the
+ * phone (and its original as o_<id>) even when the report's list lost it. These are the ids taken on `day` (local
+ * date from the id's time) that nothing on the phone names any more. `named` = the phone's saved state as text.
+ */
+export function orphanPhotos(keys, named, day) {
+  const all = new Set(keys.map(String));
+  return [...all].filter(id => /^[0-9a-z]{6,10}[0-9a-z]{5}$/.test(id) && all.has(`o_${id}`) && !named.includes(id)).filter(id => {
+    const t = parseInt(id.slice(0, -5), 36), d = new Date(t);
+    return t > 1.7e12 && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === day;
+  }).sort();
+}
+
+/** 2.97.0: a draft from this person's other phone: its photo list, plus every photo this phone has that it does not name. */
+export function keepMine(remote, mine) {
+  const here = new Set(((mine && mine.photos) || []).map(x => x.id));
+  const theirs = ((remote && remote.photos) || []).filter(x => here.has(x.id) || x.drive);
+  const named = new Set(theirs.map(x => x.id));
+  return [...theirs, ...((mine && mine.photos) || []).filter(x => !named.has(x.id))];
+}
+
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
   ['doc', 'All projects shows every report (2.75.0)', 'With All projects chosen, Reports lists each project’s month like its own page: waiting, sent back, approved, missing and today, with their own filter starting on All.'],

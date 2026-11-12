@@ -5,7 +5,7 @@
 export const SPOT_CATS = ['Safety', 'Quality', 'Teamwork', 'Punctuality', 'Conduct', 'Other'];
 export const SPOT_TOPICS = ['The project', 'The crew', 'The company', 'The client', 'Other'];
 export const SPOT_TONES = [['pos', 'Positive'], ['neg', 'Negative']];
-export const SPOT_MAX = 10, VIDEO_MAX_MB = 20, VIDEO_SECONDS = 60;   // 2.21.0: live video up to 60 seconds
+export const SPOT_MAX = 10, VIDEO_MAX_MB = 25, VIDEO_SECONDS = 60;   // 2.98.0: 25 MB (1080p)   // 2.21.0: live video up to 60 seconds
 export const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp'];
 export const PROJECT_ABOUT = 'The project';
 
@@ -26,7 +26,7 @@ export function mediaKind(file) {
   return { kind: 'video', shrink: !VIDEO_TYPES.includes(file.type) || file.size > VIDEO_MAX_MB * 1024 * 1024 };
 }
 /** 2.7.1: the size a made-smaller video aims for (under the limit, with room to spare). */
-export const VIDEO_AIM = 15 * 1024 * 1024;
+export const VIDEO_AIM = 24 * 1024 * 1024;   // 2.98.0 (owner, 12 Nov: "fix the video quality"): room for 1080p, 60 s
 
 /** The chips of a note: the categories for a person, the topics for the project. */
 export const catsFor = about => (about === PROJECT_ABOUT ? SPOT_TOPICS : SPOT_CATS);

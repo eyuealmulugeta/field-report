@@ -28,6 +28,8 @@ const tx = async (mode, fn) => {
 export const putPhoto = (id, blob) => tx('readwrite', s => s.put(blob, id));
 export const getPhoto = id => tx('readonly', s => s.get(id));
 export const deletePhoto = id => tx('readwrite', s => s.delete(id));
+/** 2.97.0: every key kept on this phone (to find report photos the report lost). */
+export const photoKeys = () => tx('readonly', s => s.getAllKeys());
 
 /**
  * 2.51.0 (owner, 5 Nov): the camera original, full size and quality, for Drive. A JPEG from the camera is kept byte for

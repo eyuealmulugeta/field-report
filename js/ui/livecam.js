@@ -7,8 +7,8 @@ import { html } from '../core/dom.js';
 import { recType, targetBitrate } from '../core/video.js';
 
 export const LIVE_SECONDS = 60;
-/** 2.78.0: the video bitrate: 1 Mbps (720p), less only when the size limit asks for it. */
-export const VIDEO_BPS = 1000000;
+/** 2.78.0: the video bitrate; 2.98.0 (owner, 12 Nov: "fix the video quality"): 3 Mbps at 1080p, less only when the size limit asks for it. */
+export const VIDEO_BPS = 3000000;
 export const videoBps = maxBytes => Math.min(VIDEO_BPS, targetBitrate(LIVE_SECONDS, maxBytes) || VIDEO_BPS);
 const two = n => String(Math.floor(n)).padStart(2, '0');
 /** "00:12" for 12 seconds. */
@@ -85,7 +85,7 @@ export async function openLiveCam({ mode = 'photo', title = '', count = () => 0,
     try { st.mic = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { st.mic = null; }   // without sound when the microphone is not allowed
     // 2.78.0 (owner, 8 Nov: load quickly, same quality): videos at 720p, 30 frames, about 1 Mbps, so 60 s is about 8 MB
     const vt = st.stream.getVideoTracks()[0];
-    await vt?.applyConstraints?.({ width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }).catch(() => {});
+    await vt?.applyConstraints?.({ width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } }).catch(() => {});   // 2.98.0: 1080p
     const both = new MediaStream([...st.stream.getVideoTracks(), ...(st.mic ? st.mic.getAudioTracks() : [])]);
     st.rec = new MediaRecorder(both, { mimeType: type, videoBitsPerSecond: videoBps(maxBytes), audioBitsPerSecond: 64000 });
     st.parts = []; st.sec = 0;

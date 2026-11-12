@@ -39,9 +39,9 @@ export function media(c) {
     head: stepHead('Dashboard', `${c.project.name} · photos and videos from site`, 'today'),
     body: html`${top}${tabs}${big}
       ${photos === undefined ? html`<p class="muted">Getting the photos from the site…</p>` : ''}
-      ${vids.length ? html`<div class="k">Videos · ${vids.length}</div><div class="m-grid">${vids.map(v => html`<a class="m-tile m-vid" href="https://drive.google.com/file/d/${v.fileId}/view" target="_blank" rel="noopener" aria-label="Open the video">
+      ${vids.length ? html`<div class="k">Videos · ${vids.length}</div><div class="m-grid">${vids.map(v => html`<button type="button" class="m-tile m-vid" data-act="vidPlay" data-k="dash" data-v="${v.id}" data-f="${v.fileId}" data-t="${[v.time, v.byName].filter(Boolean).join(' · ') || 'Site video'}" aria-label="Play the video">
         <video muted autoplay loop playsinline preload="auto" poster="https://drive.google.com/thumbnail?id=${v.fileId}&sz=w600" ${(c.ui.mVurl || {})[v.id] ? html`src="${c.ui.mVurl[v.id]}"` : ''}></video>
-        <span class="tiny">${[v.time, v.gal ? 'Video from gallery' : 'Video', v.byName].filter(Boolean).join(' · ')}</span></a>`)}</div>` : ''}
+        <span class="tiny">${[v.time, v.gal ? 'Video from gallery' : 'Video', v.byName].filter(Boolean).join(' · ')}</span></button>`)}</div>` : ''}
       ${photos && photos.length ? html`<div class="k">Photos · ${photos.length}</div><div class="m-grid">${photos.map(p => html`<button type="button" class="m-tile" data-act="mediaBig" data-v="${p.id}">${urls[p.id] ? html`<img src="${urls[p.id]}" alt="${p.caption || 'Site photo'}">` : html`<span class="muted tiny">Loading…</span>`}<span class="tiny">${[p.time, p.zone || p.task, p.caption].filter(Boolean).join(' · ')}</span></button>`)}</div>` : ''}
       ${photos && !photos.length && !vids.length ? html`<p class="empty">No photos or videos from the site on this day.</p>` : ''}
       ${c.ui.mErr ? html`<p class="callout bad">${c.ui.mErr}</p>` : ''}
