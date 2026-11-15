@@ -62,7 +62,7 @@ export function rev(c) {
         ${offlineLine(x.pressedAt, x.uploadedAt) ? html`<p class="callout warn small">${offlineLine(x.pressedAt, x.uploadedAt)}</p>` : ''}
         <div class="two"><span>Crew · delays · requests</span><b>${x.crew || 0} · ${x.delayH || 0} h · ${x.requests || 0}</b></div>
         ${x.reviewedBy ? html`<div class="two"><span>Last answer</span><b>${x.reviewedBy} · ${when(x.reviewedAt)}</b></div>` : ''}
-        ${x.url ? html`<a class="btn o" href="${x.url}" target="_blank" rel="noopener">${icon('doc')}Open the report (PDF)</a>` : ''}</div>
+        ${x.url ? html`<a class="btn o" href="${x.url}" target="_blank" rel="noopener">${icon('doc')}View PDF</a>` : isGM(c) ? html`<button type="button" class="btn o" data-act="pdfOpen" data-n="${x.name}">${icon('doc')}View PDF</button>` : ''}</div>
       ${hist.length ? html`<div class="k">What happened</div><div class="box">${hist.map(h => html`<div class="li"><span class="ic ${h.kind === 'changes' ? 'bad' : h.kind === 'approve' ? 'ok' : ''}">${icon(h.kind === 'approve' ? 'check' : 'doc')}</span>
         <div class="n"><b>${h.text || h.kind}</b><span>${h.by || ''} · ${when(h.at)}</span></div></div>`)}</div>` : ''}
       ${may ? html`<div class="k">Your answer</div><div class="box pad">

@@ -2347,6 +2347,16 @@ const ACTS = {
   wipeSig() { ui.sig = []; draw(); },
   clearSig() { ACTS.sigFull({ v: report() && route() === 'send' ? 'report' : '' }); },
   toSign() { root.querySelector('#sign')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  /** 3.0.3 (owner, 15 Nov: "in review/reports add 'view pdf' option for gm to open the pdf"): the office's PDF in Drive. */
+  async pdfOpen(d) {
+    const w = window.open('', '_blank');   // opened at the tap, so the phone does not block it
+    try {
+      const res = await call('status', { name: d.n }), u = res.found && res.report && res.report.url;
+      if (u) { if (w) w.location.href = u; else window.open(u, '_blank'); logAct({ action: 'view', channel: 'PDF', doc: d.n }); return; }
+      if (w) w.close();
+      toast(res.found ? 'This account cannot open the PDF.' : 'The PDF is not in the office yet.');
+    } catch (e) { if (w) w.close(); toast(e.code === 'OFFLINE' ? 'No connection.' : `The PDF did not open: ${e.message}`); }
+  },
   async openPdf() {
     if (!adminRole()) return pdfRefused();
     ui.pdfBusy = true; draw();

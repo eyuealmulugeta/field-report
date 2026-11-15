@@ -99,6 +99,7 @@ export function daySheet(c) {
     ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}
     <div class="day-acts">
       ${x.report && x.report.start ? html`<button type="button" class="btn o slim" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View</button>` : ''}
+      ${x.name && isGM(c) ? html`<button type="button" class="btn o slim" data-act="pdfOpen" data-n="${x.name}">${icon('doc')}View PDF</button>` : ''}   <!-- 3.0.3 (owner): the GM opens the PDF -->
       ${x.report && x.report.start && canPdf(c) ? html`<button type="button" class="btn o slim" data-act="dayPdf" data-v="${x.date}">${icon('send')}Share</button>` : ''}
       ${x.date === c.realToday ? html`<button type="button" class="btn o slim" data-act="go" data-to="today">${icon('doc')}Edit</button>`
         : canWrite ? html`<button type="button" class="btn o slim" data-act="openPast" data-v="${x.date}">${icon('doc')}${x.report && x.report.start ? 'Edit' : 'Write'}</button>` : ''}
