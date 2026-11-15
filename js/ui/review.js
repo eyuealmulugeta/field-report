@@ -2,11 +2,13 @@
 // answers; Crew: the people the site sent, with their wages, to approve.
 
 import { html, icon } from '../core/dom.js';
-import { dayLabel } from '../core/util.js';
+import { dayLabel, localDay } from '../core/util.js';
 import { head, stepHead, isGM } from './parts.js';
 import { STATUS, offlineLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
+import { engageChecks } from '../model/rating.js';
+import { thumb } from './work.js';
 
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -25,14 +27,15 @@ function hoursBox(c) {
     ${may ? html`<button type="button" class="btn p" data-act="hoursSend" ${c.ui.busy ? 'disabled' : ''}>Save the working hours</button>` : html`<p class="muted small">Setting the working hours is not yours to do.</p>`}</div>`;
 }
 
-const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(d.toISOString().slice(0, 10))} ${d.toTimeString().slice(0, 5)}`; };
+// 3.1.0 (owner, 15 Nov): the day in local time, not UTC (a report sent after 21:00 showed the next day)
+const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(localDay(d))} ${d.toTimeString().slice(0, 5)}`; };
 const pill = st => { const s = STATUS[st] || STATUS.submitted; return html`<span class="pill ${s.cls}">${s.label}</span>`; };
 
 export function review(c) {
   // 2.17.0: the GM's All projects; each line with when it was sent and the last answer
   const all = !!c.ui.allProj && isGM(c);
   // 2.37.0 (owner): the list opens on All
-  const rv = c.ui.rv || {}, f = rv.f ?? '', list = reviewRows(rv.list, all ? '' : c.project.code, f);
+  const rv = c.ui.rv || {}, f = rv.f ?? '', list = reviewRows(rv.list, all ? '' : c.project.code, f, { day: c.ui.revDay || '', q: c.ui.revQ || '' });
   const projOf = x => (c.s.projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).name || '';
   return {
     tab: c.kind === 'viewer' ? 'review' : 'me',
@@ -40,7 +43,8 @@ export function review(c) {
     body: html`<div class="k">Reports of ${all ? 'all projects' : c.project.name}</div><div class="row2">
         <button type="button" class="btn o" data-act="revLoad" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Refreshing…' : rv.list ? 'Refresh' : 'Show the reports'}</button>
         ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}</div>
-      <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}</button>`)}</div>
+      <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}${rv.list ? ` · ${reviewRows(rv.list, all ? '' : c.project.code, k).length}` : ''}</button>`)}</div>
+      <div class="row2"><input class="fld" type="date" data-ui="revDay" value="${c.ui.revDay || ''}" aria-label="Day"><input class="fld" type="search" data-ui="revQ" value="${c.ui.revQ || ''}" placeholder="Search: number, name, date" aria-label="Search the reports"></div>   <!-- 3.4.0 -->
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
           <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
@@ -48,11 +52,16 @@ export function review(c) {
   };
 }
 
+/** The project code in a report's file name (YYYY-MM-DD_CC_PROJ_NNN.pdf). */
+const projCode = (c, x) => ((c.s.projects || []).find(p => String(x.name || '').includes(`_${p.code}_`)) || c.project || {}).code || '';
+
 export function rev(c) {
   const rv = c.ui.rv || {}, x = rv.open;
   if (!x) return review(c);
   const may = c.kind === 'reviewer', st = x.status || 'submitted';
-  const hist = (x.history || []).slice(-8).reverse();
+  const hist = (x.history || []).slice().reverse();   // 3.4.0 (owner): the full event log
+  const full = (c.ui.remoteRep || {})[`${projCode(c, x)}|${x.date}`], photos = (full && full.photos) || [];
+  const score = full ? engageChecks(full) : [], comments = x.comments || [];
   const to = x.preparedBy || x.uploadedBy || 'the sender';
   return {
     head: stepHead(`No. ${x.no} · ${dayLabel(x.date)}`, `${x.preparedBy || x.uploadedBy || 'Site'} · version ${x.version || 1}`, 'reports'),   // 2.68.0: back to Reports
@@ -62,8 +71,12 @@ export function rev(c) {
         ${offlineLine(x.pressedAt, x.uploadedAt) ? html`<p class="callout warn small">${offlineLine(x.pressedAt, x.uploadedAt)}</p>` : ''}
         <div class="two"><span>Crew · delays · requests</span><b>${x.crew || 0} · ${x.delayH || 0} h · ${x.requests || 0}</b></div>
         ${x.reviewedBy ? html`<div class="two"><span>Last answer</span><b>${x.reviewedBy} · ${when(x.reviewedAt)}</b></div>` : ''}
+        <button type="button" class="btn p" data-act="viewReport" data-v="${x.date}" data-p="${projCode(c, x)}" data-back="rev">${icon('doc')}Open the report and its photos</button>   <!-- 3.1.0 (owner): Review opens the report -->
         ${x.url ? html`<a class="btn o" href="${x.url}" target="_blank" rel="noopener">${icon('doc')}View PDF</a>` : isGM(c) ? html`<button type="button" class="btn o" data-act="pdfOpen" data-n="${x.name}">${icon('doc')}View PDF</button>` : ''}</div>
-      ${hist.length ? html`<div class="k">What happened</div><div class="box">${hist.map(h => html`<div class="li"><span class="ic ${h.kind === 'changes' ? 'bad' : h.kind === 'approve' ? 'ok' : ''}">${icon(h.kind === 'approve' ? 'check' : 'doc')}</span>
+      ${photos.length ? html`<div class="k">Photos · ${photos.length}</div><div class="box pad"><div class="thumbs">${photos.map(p => thumb(p.id))}</div></div>` : rv.fullBusy ? html`<p class="muted small">Reading the photos…</p>` : ''}
+      ${score.length ? html`<div class="k">Scorecard</div><div class="box">${score.map(s => html`<div class="li"><span class="ic ${s.v >= 1 ? 'ok' : s.v > 0 ? '' : 'bad'}">${icon(s.v >= 1 ? 'check' : 'doc')}</span><div class="n"><b>${s.label}</b><span>${s.why}</span></div></div>`)}</div>` : ''}
+      ${comments.length ? html`<div class="k">Comments · ${x.commentCount || comments.length}</div><div class="box">${comments.map(m => html`<div class="li"><div class="n"><b>${m.text || ''}</b><span>${m.by || ''} · ${when(m.at)}</span></div></div>`)}</div>` : ''}
+      ${hist.length ? html`<div class="k">Event log</div><div class="box">${hist.map(h => html`<div class="li"><span class="ic ${h.kind === 'changes' ? 'bad' : h.kind === 'approve' ? 'ok' : ''}">${icon(h.kind === 'approve' ? 'check' : 'doc')}</span>
         <div class="n"><b>${h.text || h.kind}</b><span>${h.by || ''} · ${when(h.at)}</span></div></div>`)}</div>` : ''}
       ${may ? html`<div class="k">Your answer</div><div class="box pad">
         <textarea class="fld" rows="3" data-ui="revText" placeholder="Comment or what to change: it goes to ${to} only">${c.ui.revText || ''}</textarea>

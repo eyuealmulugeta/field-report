@@ -133,6 +133,7 @@ export async function demoServer(action, body) {
     case 'attendance': return { ok: true, proj: body.proj, date: body.date, rows: (body.rows || []).length, at: new Date().toISOString() };
     case 'nowork': return { ok: true, name: `${body.date}_ETH_MJO_CHB_NW.json` };
     case 'reportNo': return { ok: true, no: Number((/_(\d{3,4})(?:_[A-Z0-9]{2,4})?\.pdf$/.exec(body.name) || [])[1]) || 1, name: body.name };   // demo: the phone's own number
+    case 'numbers': return { ok: true, code: body.code, nos: {} };   // 3.3.0 demo: no server numbers
     case 'upload': {
       // demo only: ?demo&offline (or __demoOffline = true) shows the report waiting in the outbox
       if (globalThis.__demoOffline ?? new URLSearchParams(location.search).has('offline')) return { ok: false, code: 'OFFLINE', error: 'No connection. It is saved on this phone.' };

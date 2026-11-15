@@ -2,7 +2,7 @@
 // (so a new upload is picked up at once) and the kept copy is used when there is no connection.
 // The PDF library from cdnjs is kept too. Google sign-in, the script and OneSignal always go to the network.
 
-const CACHE = 'fr2-v146';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
+const CACHE = 'fr2-v151';   // 2.0.0: at the main address (Field Report 1 lives on at /v1/ with its own afr- cache)
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/main.js', 'manifest.webmanifest', 'icon-192.png', 'img/watermark.webp'];
 const KEEP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/', KEEP_VIEW = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';   // 2.94.0: the final-report viewer, kept for offline
 
@@ -22,8 +22,8 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })));
     return;
   }
-  // the old app at /v1/ has its own worker and cache
-  if (url.origin !== location.origin || url.pathname.includes('/push/') || url.pathname.includes('/v1/')) return;
+  // 3.5.0 (S6): Field Report 1 (/v1/) is removed; the push worker keeps its own path
+  if (url.origin !== location.origin || url.pathname.includes('/push/')) return;
   // 2.14.1: always asked of the server (a quick "not changed" when nothing is new), never the browser's own 10-minute copy
   e.respondWith(fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' })).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }

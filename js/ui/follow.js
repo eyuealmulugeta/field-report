@@ -2,15 +2,17 @@
 // "What's new" and the draft found on another phone. Screens return { head, body, foot, tab }.
 
 import { html, icon } from '../core/dom.js';
-import { dayLabel } from '../core/util.js';
+import { dayLabel, localDay } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog } from '../model/follow.js';
+import { STEPS } from '../model/report.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
 import { rateReport, rateLine, checkLines } from '../model/rating.js';
 
-const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(d.toISOString().slice(0, 10))} ${d.toTimeString().slice(0, 5)}`; };
+// 3.1.0 (owner, 15 Nov): the day in local time, not UTC (a report sent after 21:00 showed the next day)
+const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${dayLabel(localDay(d))} ${d.toTimeString().slice(0, 5)}`; };
 const pill = kind => html`<span class="pill ${STATUS[kind].cls}">${STATUS[kind].label}</span>`;
 
 const STEP_DONE = { submit: 'Sent', approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned', office: 'Corrected' };
@@ -75,6 +77,9 @@ export const officeLine = steps => {
   return o ? html`<p class="callout warn"><b>Corrected by the office (${o.by || 'Office'}, ${stampOf(o.at)}).</b> The office copy in Central Hub is the newest version${o.text ? `: ${o.text}` : '.'}</p>` : '';
 };
 
+/** 3.1.0: the rating of a day uses its send time, also when another phone sent it (this phone's copy is older). */
+const rated = x => (x.other ? { ...x.report, firstSentAt: Date.parse(x.at || '') || x.report.firstSentAt || 0, _sent: true } : x.report);
+
 export function daySheet(c) {
   // 2.80.0: a day of an earlier month (Reports by month) is found in that month's reports from Central Hub
   const dm = String(c.ui.daySel || '').slice(0, 7), old = dm && dm < c.realToday.slice(0, 7) && (c.ui.mRows || {})[`${c.project.code}|${dm}`];
@@ -89,16 +94,15 @@ export function daySheet(c) {
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Report of ${dayLabel(x.date)}">
     <div class="grab"></div><div class="spread"><b class="big-t">${dayLabel(x.date)}${x.no ? ` · #${x.no}` : ''}</b>${pill(x.kind)}</div>
     ${x.name ? html`<div class="muted tiny">${x.name}${x.version ? ` · version ${x.version}` : ''}</div>` : ''}
-    ${steps.length ? html`<div class="box">${steps.slice(0, 8).map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
-      <div class="n"><b>${m.text || STEP[m.kind] || m.kind}</b><span>${STEP[m.kind] && m.text ? `${STEP[m.kind]} · ` : ''}${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : ''}
-    ${x.report && x.report.start ? (rt => html`<div class="soft small"><b>${rateLine(rt)}</b><ul class="checks">${checkLines(rt).map(l => html`<li>${l}</li>`)}</ul></div>`)(rateReport(x.report)) : ''}
-    ${(x.report && x.report.edits || []).length ? html`<div class="k">Log · who entered and when</div><div class="box">${x.report.edits.slice().reverse().slice(0, 10).map(e => html`<div class="li"><span class="ic">${icon('doc')}</span><div class="n"><b>${e.by}</b><span>Entered · ${stampOf(new Date(e.at).toISOString())}</span></div></div>`)}</div>` : ''}
+    ${x.report && x.report.start ? (rt => html`<div class="soft small"><b>${rateLine(rt)}</b><ul class="checks">${checkLines(rt).map(l => html`<li>${l}</li>`)}</ul></div>`)(rateReport(rated(x))) : ''}
+    ${(log => log.length ? html`<div class="k">Event log</div><div class="box">${log.slice(0, 14).map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
+      <div class="n"><b>${m.text}</b><span>${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : '')(eventLog(x.other ? null : x.report, steps, { by: x.by, at: x.at || (x.last && x.last.kind === 'submit' ? x.last.at : '') }, id => (STEPS.find(t => t.id === id) || {}).title || id))}
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
     ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}
     <div class="day-acts">
-      ${x.report && x.report.start ? html`<button type="button" class="btn o slim" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View</button>` : ''}
+      ${(x.report && x.report.start) || x.name ? html`<button type="button" class="btn o slim" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View</button>` : ''}
       ${x.name && isGM(c) ? html`<button type="button" class="btn o slim" data-act="pdfOpen" data-n="${x.name}">${icon('doc')}View PDF</button>` : ''}   <!-- 3.0.3 (owner): the GM opens the PDF -->
       ${x.report && x.report.start && canPdf(c) ? html`<button type="button" class="btn o slim" data-act="dayPdf" data-v="${x.date}">${icon('send')}Share</button>` : ''}
       ${x.date === c.realToday ? html`<button type="button" class="btn o slim" data-act="go" data-to="today">${icon('doc')}Edit</button>`

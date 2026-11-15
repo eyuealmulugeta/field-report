@@ -218,6 +218,21 @@ export function dayOf(rec) {
 }
 const signedIn = () => fb && fb.auth.currentUser && pid;
 
+/**
+ * 3.1.0 (owner, 15 Nov: "approved report 113 shows 1 photo; the PDF and dashboard show 16"): the report as it was sent,
+ * from the database copy (full.r, with every photo), so another phone sees all of it, not its own older draft.
+ */
+export async function reportOf(code, date) {
+  const p2 = codesMap[String(code).toUpperCase()] || pid;
+  if (!fb || !fb.auth.currentUser || !p2 || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) return null;
+  const { F, db } = fb;
+  const snap = await F.getDocs(F.query(F.collection(db, 'projects', p2, 'reports'), F.where('date', '==', date)));
+  const rec = snap.docs.map(x => x.data()).find(x => x && x.full && x.full.r);
+  if (!rec) return null;
+  const r = rec.full.r, sent = r.firstSentAt || r.sentAt || Date.parse((rec.field || {}).receivedAt || '') || 0;
+  return { ...r, _by: (rec.full.profile || {}).name || rec.by || '', _pos: (rec.full.profile || {}).position || '', _remote: true, firstSentAt: r.firstSentAt || sent, sentAt: r.sentAt || sent };
+}
+
 /** 2.80.0 (owner, 9 Nov): one month's reports of a project from Central Hub, for Reports by month (null when not connected). */
 export async function monthReports(code, month) {
   const p2 = codesMap[String(code).toUpperCase()];

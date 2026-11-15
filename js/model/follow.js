@@ -69,7 +69,7 @@ export function monthDays(today, project, drafts, known = {}, others = [], real 
     if (o && ['today', 'draft', 'missing', 'off', 'queued'].includes(row.kind)) {
       // 2.12.2: a live answer from Central Hub (known) wins over the script's list of the project's reports
       const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
-      Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true });
+      Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true, at: o.at || '' });
       if (ko.comments && ko.comments.length) row.comment = ko.comments[ko.comments.length - 1];
       row.last = lastStep(ko.history || o.history) || (o.at ? { kind: 'submit', at: o.at, by: o.by } : null);   // 2.17.0
       row.late = lateTag(d, o.at || (row.last && row.last.kind === 'submit' ? row.last.at : ''), lateAfter(project));
@@ -106,7 +106,7 @@ export const lastStep = h => (Array.isArray(h) && h.length ? h.filter(x => x && 
 export function offlineLine(pressed, arrived) {
   const p = Number(pressed) || Date.parse(pressed), a = Number(arrived) || Date.parse(arrived);
   if (!p || !a || a - p < 2 * 60e3) return '';
-  const t = x => new Date(x).toTimeString().slice(0, 5), d = x => new Date(x).toISOString().slice(0, 10);
+  const t = x => new Date(x).toTimeString().slice(0, 5), d = x => { const y = new Date(x); return new Date(y.getTime() - y.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };   // 3.1.0: local day
   return `Sent offline at ${t(p)}${d(p) !== d(a) ? ` (${d(p)})` : ''} · reached the office at ${t(a)}${d(p) !== d(a) ? ` (${d(a)})` : ''}`;
 }
 const MON = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
@@ -210,6 +210,11 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Safer and lighter (3.5.0)', 'The app refuses scripts from unknown places and checks its PDF tools. Field Report 1 is gone. Sent reports older than 60 days leave the phone once their photos are in Drive; they stay in Central Hub and Drive.'],
+  ['check', 'One Review page (3.4.0)', 'Review has Pending, Approved, Rejected, Requests and All, with a day and a search. A report shows its photos, scorecard, comments and the full event log, and the list refreshes every minute.'],
+  ['doc', 'Report numbers count working days (3.3.0)', 'A report number now counts every working day, with or without a report; only the project days off are skipped. Past reports show their new numbers once the office renumbers them.'],
+  ['doc', 'One report for everyone (3.2.0)', 'The PDF is the same for the client and the office: page 2 has the 12 chosen photos, 3 across and 4 down, each with a thin grey border. Prepared by is on the left, Approved by on the right. Every other photo stays on the Dashboard and in Drive.'],
+  ['doc', 'Reports show everything (3.1.0)', 'View opens the report as it was sent, with every photo, also from Review. The day and time of a send are local. The scorecard counts a late send as sent and shows the attendance cutoff. The event log lists Submitted, each edit with the parts changed, and Approved. The notifications list closes when you tap elsewhere.'],
   ['doc', 'All projects shows every report (2.75.0)', 'With All projects chosen, Reports lists each project’s month like its own page: waiting, sent back, approved, missing and today, with their own filter starting on All.'],
   ['doc', 'Turned off (2.74.2)', 'A feature the Admin turns off in Central Hub now keeps its tab, marked Off, and opens on a Turned off notice instead of disappearing. Its buttons say Turned off when tapped.'],
   ['chat', 'A new Discuss page (2.74.1)', 'Conversations along the top with unread counts, messages by day, the writing box at the bottom. Tap your own message to Edit it (first minute) or Delete it. The Discuss tab shows how many messages are new. A phone signed in with another account no longer keeps the last person\'s name or signature.'],
@@ -260,3 +265,18 @@ export const WHATS_NEW = [
   ['send', 'Check, sign once, send', 'Warnings never block. No signal: it is sent by itself later.'],
   ['doc', 'Follow your reports', 'Reports shows Waiting, Sent back and Approved; Today shows what needs you.'],
 ];
+
+/**
+ * 3.1.0 (owner, 15 Nov: "the event log is missing Submitted, Edit (with the fields changed) and Approved"): every step of a
+ * report in one list, newest first: Submitted (and sent again), each edit with the parts changed, and the office's answers.
+ */
+export function eventLog(r, history = [], { by = '', at = '' } = {}, stepTitle = id => id) {
+  const out = [];
+  const sentFirst = (r && (r.firstSentAt || r.sentAt)) || Date.parse(at) || 0;
+  if (sentFirst) out.push({ kind: 'submit', text: 'Submitted', by: (r && r._by) || by || ((r && r.edits || [])[0] || {}).by || '', at: new Date(sentFirst).toISOString() });
+  if (r && r.sentAt && r.firstSentAt && r.sentAt - r.firstSentAt > 60e3) out.push({ kind: 'submit', text: 'Sent again', by: (r.edits || []).filter(e => e.after).map(e => e.by).at(-1) || by, at: new Date(r.sentAt).toISOString() });
+  for (const e of (r && r.edits) || []) if (e && e.at > 1e12) out.push({ kind: 'edit', text: `${e.after ? 'Edited after sending' : 'Edited'}${(e.parts || []).length ? `: ${e.parts.map(stepTitle).join(', ')}` : ''}`, by: e.by, at: new Date(e.at).toISOString() });
+  const word = { approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned', office: 'Corrected by the office', submit: 'Submitted' };
+  for (const h of history || []) if (h && h.at && !(h.kind === 'submit' && sentFirst)) out.push({ kind: h.kind, text: h.text ? `${word[h.kind] || h.kind}: ${h.text}` : word[h.kind] || h.kind, by: h.by || 'Office', at: h.at });
+  return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}

@@ -66,9 +66,11 @@ export function check(c) {
 }
 
 export function view(c) {
-  const r = c.s.drafts[c.ui.viewKey || ''] || c.report;
-  if (!r) return { head: stepHead('Report', '', 'reports'), body: html`<div class="box pad muted small">This report is not on this phone.</div>` };
-  const p = c.project, st = r.start || {}, s = summary(r), t = totals(r.crew, st.start, st.end);
+  // 3.1.0 (owner, 15 Nov): the report as sent (database copy) when this phone's copy is missing or has fewer photos
+  const mine = c.s.drafts[c.ui.viewKey || ''], far = (c.ui.remoteRep || {})[c.ui.viewKey || ''];
+  const r = far && (!mine || (far.photos || []).length > (mine.photos || []).length || (mine.sentAt || 0) < (far.sentAt || 0)) ? far : mine || (c.ui.viewKey ? null : c.report);
+  if (!r) return { head: stepHead('Report', '', c.ui.viewBack || 'reports'), body: html`<div class="box pad muted small">Reading the report…</div>` };
+  const p = (r.proj && c.s.projects.find(x => x.code === r.proj)) || c.project, st = r.start || {}, s = summary(r), t = totals(r.crew, st.start, st.end);
   const back = c.ui.viewBack || 'send';
   const reqs = (r.requests || []).filter(requestReady), plan = (r.plan || []).filter(planReady), zones = byZone(r.items);
   return {
@@ -77,7 +79,7 @@ export function view(c) {
       <div class="kpis">${kpi(s.present, 'Present')}${kpi(s.manHours, 'Man-hours')}${kpi(s.items, 'Work items')}${kpi(s.photos, 'Photos')}</div>
       ${sec('Information', html`<p class="small">${pdfName(p, r.date, r.no)}</p>
         <p class="small">${st.start || ''}–${st.end || ''} · ${[st.cond, st.tempC !== '' && st.tempC != null ? `${st.tempC} °C` : '', st.wind, st.ground].filter(Boolean).join(', ') || 'No weather'} · ${st.location || ''}</p>
-        <p class="small muted">Prepared by ${[c.s.profile.name, c.s.profile.position].filter(Boolean).join(', ')}</p>`)}
+        <p class="small muted">Prepared by ${(r._remote ? [r._by, r._pos] : [c.s.profile.name, c.s.profile.position]).filter(Boolean).join(', ')}</p>`)}
       ${sec('Work done by zone', zones.length ? zones.map(z => html`<div class="small"><b>${z.zone}</b><ul>${z.lines.map(l => html`<li>${l}</li>`)}</ul></div>`) : none('No work logged.'))}
       ${sec('Manpower and equipment', html`<p class="small">${t.byTrade.map(x => `${x.qty} ${x.trade} (${x.hrs} h)`).join(', ') || 'No crew'} · ${t.present} present, ${t.manHours} man-hours</p>
         <p class="small">${r.equipment.length ? r.equipment.map(e => `${e.qty} × ${e.name}, ${e.hrs} h${e.status !== 'Active' ? ` (${e.status.toLowerCase()})` : ''}`).join('; ') : 'No equipment'}</p>`)}

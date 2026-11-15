@@ -28,8 +28,8 @@ export const inboxItems = c => { const seen = c.s.inboxSeen || '', read = new Se
 /** 2.37.0 (owner): a circle with the count, only when there are notifications; it opens the list. Clear empties it and the circle goes. */
 export function inboxFab(c) {
   const n = inboxItems(c).length;
-  if (!n) return '';
-  return html`<button type="button" class="inbox-fab" data-act="inboxToggle" aria-label="Notifications: ${n}">${icon('bell')}<i>${n}</i></button>${c.ui.inboxOpen ? html`<div class="inbox-pop">${inboxBox(c)}</div>` : ''}`;
+  if (!n) return '';   // 3.1.0 (owner, 15 Nov): no empty bell box: nothing at all when there is nothing to show
+  return html`<button type="button" class="inbox-fab" data-act="inboxToggle" aria-label="Notifications: ${n}">${icon('bell')}<i>${n}</i></button>${c.ui.inboxOpen && n ? html`<div class="inbox-pop">${inboxBox(c)}</div>` : ''}`;
 }
 export function inboxBox(c) {
   const items = inboxItems(c);

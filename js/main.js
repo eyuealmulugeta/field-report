@@ -22,7 +22,8 @@ import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { buildPdf, loadPdfLib, loadPdfView, photoCaption, weatherFile } from './pdf.js';
-import { progressRows, CLIENT_PHOTOS, spreadIds } from './model/pdfplan.js';   // 2.96.0 (R7)
+import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds } from './model/pdfplan.js';
+import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbers.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
@@ -128,7 +129,8 @@ function lastReport(code, before) {
 function nextNo(p) {
   const used = store.get().lastNo[p.code] || 0;
   const last = lastReport(p.code, today());
-  return Math.max((Number(p.day) || 0) + 1, used + 1, last ? last.no + 1 : 1);
+  // 3.3.0 (owner, 15 Nov): every working day since the last report counts, with or without a report
+  return Math.max((Number(p.day) || 0) + 1, used + 1, last ? last.no + workDaysAfter(p, last.date, today()) : 1);
 }
 
 /** Saves the report (after a change made with fn). quiet = do not redraw, for typing. */
@@ -149,7 +151,10 @@ function edit(fn, quiet) {
   // 2.27.0 (owner, 2 Nov): each step keeps who changed it last and when, and when it was first changed
   const step = stepOfScreen(location.hash.slice(1) || '');
   if (step) { const was = (r.stamps || {})[step]; r.stamps = { ...(r.stamps || {}), [step]: { by: me, at: r.updated, first: (was && was.first) || r.updated } }; }
-  if (me) { const last = (r.edits || []).at(-1); if (last && last.by === me) last.at = r.updated; else r.edits = [...(r.edits || []), { by: me, at: r.updated }].slice(-50); }
+  // 3.1.0 (owner, 15 Nov): the log shows each edit with the parts changed, and whether it came after sending
+  if (me) { const part = step || '', after = !!r.sentAt, last = (r.edits || []).at(-1);
+    if (last && last.by === me && !!last.after === after) { last.at = r.updated; if (part && !(last.parts || []).includes(part)) last.parts = [...(last.parts || []), part]; }
+    else r.edits = [...(r.edits || []), { by: me, at: r.updated, ...(part ? { parts: [part] } : {}), ...(after ? { after: true } : {}) }].slice(-50); }
   if (r.date === today()) { const pt = partOf(now()); if (pt && !(r.seen || {})[pt]) r.seen = { ...(r.seen || {}), [pt]: r.updated }; const sl = slotOf(now()); if (sl != null && !(r.slots || []).includes(sl)) r.slots = [...(r.slots || []), sl]; }   // 2.18.0, 2.19.3 half hours
   const drafts = { ...store.get().drafts, [k]: r };
   if (quiet) store.quiet({ drafts }); else store.set({ drafts });
@@ -234,6 +239,19 @@ async function loadProjects() {
   }
   if (changed) store.set({ drafts });
   await loadSetup();
+  loadNumbers().catch(() => {});
+}
+
+/** 3.3.0 (owner, 15 Nov): the numbers the server keeps for the project in use, so renumbered reports show their new number. */
+async function loadNumbers() {
+  const p = project();
+  if (!p) return;
+  const q = await call('numbers', { code: p.code });
+  const nos = (q && q.nos) || {}, d = renumbered(store.get().drafts, p.code, nos);
+  const top = Math.max(0, ...Object.values(nos).map(Number).filter(Boolean));
+  store.set({ ...(d ? { drafts: d } : {}), ...(top ? { lastNo: { ...store.get().lastNo, [p.code]: top } } : {}) });
+  ui.nos = { ...(ui.nos || {}), [p.code]: nos };
+  if (d) draw();
 }
 
 /** The office's lists for the project in use: tasks, milestones, work types, zones. Kept on the phone for offline days. */
@@ -764,8 +782,10 @@ async function makePdf(r, p, step = () => {}) {
 async function pdfDoc(r, p, view = null) {
   const JsPDF = await loadPdfLib();
   const photos = [];
-  for (const ph of r.photos) {
-    const b = await getPhoto(ph.id).catch(() => null) || (ph.drive ? await drivePhoto(pdfName(p, r.date, r.no), ph.id) : null);
+  // 3.2.0 (owner, 15 Nov: one report for everyone): the 12 chosen photos at full resolution; the rest stay on the Dashboard and in Drive
+  const twelve = clientIds(r.photos || [], null);
+  for (const ph of r.photos.filter(x => twelve.includes(x.id))) {
+    const b = await original(ph.id).catch(() => null) || await getPhoto(ph.id).catch(() => null) || (ph.drive ? await drivePhoto(pdfName(p, r.date, r.no), ph.id) : null);
     if (!b) continue;
     const bmp = await createImageBitmap(b).catch(() => null);
     photos.push({ data: await toDataUrl(b), w: bmp ? bmp.width : 4, h: bmp ? bmp.height : 3, at: ph.at || '', cap: photoCaption(ph, r.items), gal: !!ph.gallery });
@@ -794,7 +814,11 @@ function checkSeen() {
 }
 // the page scrolls inside its panel (.bd), so the scroll is caught on its way down
 document.addEventListener('scroll', () => { if (route() === 'check') checkSeen(); }, { passive: true, capture: true });
-setInterval(() => { if (!document.hidden && store.get().auth && route() === 'check') checkSeen(); }, 500);   // and when a scroll ends without its last event
+// 3.4.0 (P4): no longer every half second: when a scroll ends, and every 3 seconds as a fallback
+document.addEventListener('scrollend', () => { if (route() === 'check') checkSeen(); }, { passive: true, capture: true });
+setInterval(() => { if (!document.hidden && store.get().auth && route() === 'check') checkSeen(); }, 3000);
+// 3.4.0 (owner, 15 Nov: live with Central Hub): the Review list is read again every minute while it is on the screen
+setInterval(() => { if (document.visibilityState === 'visible' && store.get().auth && route() === 'review' && ui.rv && ui.rv.list && !ui.rv.busy) ACTS.revLoad(); }, 60e3);
 
 async function renderFinal() {
   const r = report(), p = project();
@@ -896,11 +920,25 @@ function logAct(e) {
   } catch { /* the record never stops the work */ }
 }
 
+/** 3.5.0 (P3): sent reports older than 60 days leave this phone (with their photos), when every photo is in Drive.
+ *  They stay in Central Hub and Drive, and View reads them from there. */
+async function keepDays() {
+  if (demo) return;
+  const d = store.get().drafts, gone = staleDrafts(d, realToday(), KEEP_DAYS);
+  if (!gone.length) return;
+  const left = { ...d };
+  for (const k of gone) {
+    for (const ph of (d[k].photos || [])) { deletePhoto(ph.id).catch(() => {}); deletePhoto(ORIG(ph.id)).catch(() => {}); }
+    delete left[k];
+  }
+  store.set({ drafts: left });
+}
+
 /** 2.0.1: the old app (at /v1/) is for the Admin only. On everyone else's phone its saved data goes: its settings, sign-in,
  *  drafts and unsent reports (localStorage "afr_…" and IndexedDB "afr"). The device id (afr_devid) stays: it is shared with this app. */
 function oldAppClear() {
   const role = (store.get().auth || {}).role;
-  if (demo || !role || role === 'admin') return;
+  if (demo || !role) return;   // 3.5.0 (S6): Field Report 1 is removed, for the Admin too
   try { Object.keys(localStorage).filter(k => k.startsWith('afr') && k !== 'afr_devid').forEach(k => localStorage.removeItem(k)); } catch { /* no storage */ }
   try { indexedDB.deleteDatabase('afr'); } catch { /* no IndexedDB */ }
 }
@@ -1110,6 +1148,13 @@ async function spotVids() {
 /** The thumbnail of a photo that left this phone: from Drive, through the report that holds it. */
 async function driveUrl(id) {
   const d = store.get().drafts;
+  // 3.1.0: a report read from the database (another phone's) has every photo in Drive
+  for (const r of Object.values(ui.remoteRep || {})) {
+    const p = (r.photos || []).some(x => x.id === id) && store.get().projects.find(x => x.code === r.proj);
+    if (!p) continue;
+    const b = await drivePhoto(pdfName(p, r.date, r.no), id);
+    return b ? URL.createObjectURL(b) : '';
+  }
   for (const r of Object.values(d)) {
     const ph = (r.photos || []).find(x => x.id === id);
     const p = ph && ph.drive && store.get().projects.find(x => x.code === r.proj);
@@ -1724,6 +1769,13 @@ const ACTS = {
     rv.open = (rv.list || []).find(x => x.name === d.v) || null; ui.revText = '';
     go('rev');
     try { const res = await call('status', { name: d.v }); if (res.found && rv.open && rv.open.name === d.v) { rv.open = { ...rv.open, ...res.report }; draw(); } } catch { /* the list's line is enough */ }
+    // 3.4.0 (owner, 15 Nov): the report page shows its photos and scorecard, from the report as sent
+    const x = rv.open, code = x && ((store.get().projects.find(p => String(x.name || '').includes(`_${p.code}_`)) || {}).code);
+    if (!x || !code || !L.liveOn()) return;
+    rv.fullBusy = true; draw();
+    try { const r = await L.reportOf(code, x.date); if (r) ui.remoteRep = { ...(ui.remoteRep || {}), [draftKey(code, x.date)]: { ...r, proj: r.proj || code } }; }
+    catch { /* the Open the report button still works */ }
+    rv.fullBusy = false; if (route() === 'rev') draw();
   },
   /** Approve, send back, reopen or comment: it goes to the person who sent the report, and Central Hub sees it. */
   async revDo(d) {
@@ -2122,9 +2174,13 @@ const ACTS = {
     renderFinal();
   },
   viewReport(d) {
-    ui.viewKey = d.v ? draftKey(store.get().proj, d.v) : key();
+    const code = d.p || store.get().proj;
+    ui.viewKey = d.v ? draftKey(code, d.v) : key();
     ui.viewBack = d.back || route();
     ui.sheet = ''; go('view');
+    // 3.1.0 (owner, 15 Nov): the full report from the database copy (every photo), also for a report another phone sent
+    const k = ui.viewKey, date = d.v || (report() || {}).date;
+    if (date && L.liveOn()) L.reportOf(code, date).then(r => { if (r) { const n = Number(((ui.nos || {})[code] || {})[date]); ui.remoteRep = { ...(ui.remoteRep || {}), [k]: { ...r, proj: r.proj || code, ...(n ? { no: n } : {}) } }; if (route() === 'view') draw(); } }).catch(() => {});
   },
   devices: () => devCheck(true),
   async devDecide(d) {
@@ -2753,6 +2809,8 @@ root.addEventListener('pointerup', e => {
 root.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (el && el.dataset.act === 'inboxToggle' && Date.now() - bellUp < 800) return;   // 2.91.0: already opened on pointerup
+  // 3.1.0 (owner, 15 Nov): the notifications list closes with a tap anywhere else
+  if (ui.inboxOpen && !e.target.closest('.inbox-pop') && !e.target.closest('.inbox-fab')) { ui.inboxOpen = false; draw(); if (!el) return; }
   // 2.44.1 (owner): the project list closes with a tap anywhere else
   if (ui.projPop && !e.target.closest('.proj-pop') && !(el && el.dataset.act === 'projPop')) { ui.projPop = false; draw(); if (!el) return; }
   if (!el || el.disabled) return;
@@ -2781,6 +2839,8 @@ document.getElementById('smCam').addEventListener('change', async e => {
   try { ui.sm.photo = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
 });
 root.addEventListener('change', e => {
+  // 3.4.0 (owner, 15 Nov): Review by day and by search
+  if (e.target.dataset.ui === 'revDay' || e.target.dataset.ui === 'revQ') { ui[e.target.dataset.ui] = e.target.value; draw(); return; }
   // 2.85.0 (D4): New chat by project, position and name
   if (e.target.dataset.ui === 'chatFP') { ui.chatFP = e.target.value; ui.chatFT = ''; draw(); return; }
   if (e.target.dataset.ui === 'chatFT') { ui.chatFT = e.target.value; draw(); return; }
@@ -2934,6 +2994,7 @@ const back = signInReturn();
 if (back) signedIn(back);
 else if (store.get().auth) { flush(); restorePhotos(); if (!demo) loadProjects().then(() => { checkStatus(); pullDraft(); goLive(); }).catch(() => {}); else checkStatus(); devCheck(); inboxCheck(); }
 oldAppClear();
+keepDays().catch(() => {});   // 3.5.0 (P3)
 cleanPhotos();
 if (route() === 'me') pushPreload();
 remindTick();
