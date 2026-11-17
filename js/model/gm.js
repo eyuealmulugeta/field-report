@@ -16,7 +16,7 @@ export function board({ rows = [], marks = {}, team = [], reqs = [], sm = [], po
   const day = days.find(r => r.date === today) || { date: today, kind: 'today' };
   const count = (list, k) => list.filter(r => r.kind === k).length;
   const sentDays = last7.filter(r => ['approved', 'changes', 'submitted'].includes(r.kind)).length;
-  const workDays = last7.filter(r => !['off', 'nowork'].includes(r.kind) && !(r.date === today && r.kind === 'today')).length;
+  const workDays = last7.filter(r => !['off', 'dayoff', 'nowork'].includes(r.kind) && !(r.date === today && r.kind === 'today')).length;
 
   const people = (team || []).filter(m => m && m.active !== false);
   const st = Object.values(marks || {}).map(m => (m && m.state) || '');

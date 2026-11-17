@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS } from '../model/follow.js';
 import { STEPS } from '../model/report.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -58,8 +58,8 @@ export function reports(c) {
       ${monthBar(c, [c.project.code])}<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
-        <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
-          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') :x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>
+        <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'dayoff' ? `Day off · ${x.off.k}` : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
+          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') : x.kind === 'dayoff' ? `Marked by ${x.off.by}${x.off.note ? `: ${x.off.note}` : ''}` : x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>
         ${x.late ? html`<span class="pill warn">${x.late}</span>` : ''}${pill(x.kind)}</button>`)}</div>`
         : html`<div class="box pad muted small">Nothing here.</div>`}
       <p class="muted tiny center">The office's answers are checked when the app opens and every 10 minutes${c.s.knownAt ? ` · last ${new Date(c.s.knownAt).toTimeString().slice(0, 5)}` : ''}.</p>`,
@@ -100,6 +100,11 @@ export function daySheet(c) {
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
+    ${x.kind === 'missing' && may ? html`<div class="k">Mark as day-off</div><div class="chips">${DAYOFF_KINDS.map(k => html`<button type="button" class="chip ${(c.ui.offK || 'Holiday') === k ? 'on' : ''}" data-act="pick" data-f="ui.offK" data-v="${k}">${k}</button>`)}</div>
+      <input class="fld" maxlength="80" data-ui="offNote" placeholder="Note (optional)" value="${c.ui.offNote || ''}">
+      <button type="button" class="btn o" data-act="dayOff" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Mark as day-off</button>` : ''}   <!-- 3.6.0 (owner, 17 Nov): the GM and the PE -->
+    ${x.kind === 'dayoff' ? html`<p class="callout">Day off · <b>${x.off.k}</b>${x.off.note ? ` · ${x.off.note}` : ''} · marked by ${x.off.by}${x.off.at ? `, ${stampOf(x.off.at)}` : ''}. No report is needed.</p>
+      ${may ? html`<button type="button" class="btn t slim bad-t" data-act="dayOffUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Change back to Missing</button>` : ''}` : ''}
     ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}
     <div class="day-acts">
       ${(x.report && x.report.start) || x.name ? html`<button type="button" class="btn o slim" data-act="viewReport" data-v="${x.date}" data-back="reports">${icon('doc')}View</button>` : ''}

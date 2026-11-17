@@ -27,7 +27,7 @@ import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbe
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
-import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries } from './model/follow.js';
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
@@ -284,10 +284,23 @@ async function flush() {
 
 /** Asks the office (script `status`) about the reports sent and not approved yet. force = all of them now. */
 /** 2.9.0: the reports of the project sent from any phone, so this one shows "Submitted" for them too. */
+async function dayOffSend(date, undo) {
+  const p = project();
+  if (!p || ui.busy) return;
+  ui.busy = true; draw();
+  try {
+    const res = await call('dayOff', { proj: p.code, date, undo, k: ui.offK || 'Holiday', note: String(ui.offNote || '').trim() });
+    const keep = ((store.get().others || {})[p.code] || []).filter(o => !o.off);
+    store.set({ others: { ...(store.get().others || {}), [p.code]: [...keep, ...offEntries(res.dayOff)] } });
+    ui.offNote = ''; ui.sheet = '';
+    toast(undo ? 'Changed back to Missing.' : 'Marked as day-off. Central Hub is told.');
+  } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was changed.' : `Not changed: ${e.message}`); }
+  finally { ui.busy = false; draw(); }
+}
 async function teamDays(p) {
   try {
     const res = await call('projectDays', { proj: p.code });
-    store.set({ others: { ...(store.get().others || {}), [p.code]: res.days || [] } });
+    store.set({ others: { ...(store.get().others || {}), [p.code]: [...(res.days || []), ...offEntries(res.dayOff)] } });   // 3.6.0: + the days marked off
   } catch { /* an older script or offline: this phone's own reports only */ }
 }
 async function checkStatus(force) {
@@ -1663,6 +1676,9 @@ const ACTS = {
     ui.sheet = ''; toast('Removed from this phone.'); draw();
   },
   projPop: () => { ui.projPop = !ui.projPop; draw(); },
+  // 3.6.0 (owner, 17 Nov): the GM or the PE marks a missing day as a day off, with the reason; or changes it back
+  dayOff(d) { return dayOffSend(d.v, false); },
+  dayOffUndo(d) { if (confirm(`Change ${d.v} back to Missing?`)) return dayOffSend(d.v, true); },
   projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },
@@ -2644,7 +2660,7 @@ function context() {
   const s = store.get(), p = project();
   const r = report(), t = now();
   const needs = p ? needsYou(monthDays(realToday(), p, s.drafts, s.known).filter(x => !x.other), s.known) : [];
-  const sentToday = p ? ((s.others || {})[p.code] || []).filter(x => x.date === realToday()).sort((a, b) => Number(b.no) - Number(a.no))[0] || null : null;   // 2.9.0
+  const sentToday = p ? ((s.others || {})[p.code] || []).filter(x => x.date === realToday() && !x.off).sort((a, b) => Number(b.no) - Number(a.no))[0] || null : null;   // 2.9.0
   return {
     s, ui, kind: kind(), devId: devId(), wide: layout !== 'phone', now: t, today: today(), realToday: realToday(), past: !!ui.date, project: p, report: r, nextNo: p ? nextNo(p) : 1,
     dayOff: p ? (p.nwDow || [0]).includes(weekday(today())) : false, needs, sentToday,

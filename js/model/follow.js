@@ -14,9 +14,14 @@ export const STATUS = {
   draft: { label: 'Not sent', cls: 'warn' },
   missing: { label: 'Missing', cls: 'bad' },
   off: { label: 'Off', cls: 'muted' },
+  dayoff: { label: 'Day off', cls: 'muted' },   // 3.6.0: marked by the GM or the PE
   nowork: { label: 'No work', cls: 'muted' },
   today: { label: 'Today', cls: 'info' },
 };
+/** 3.6.0: the reasons for a day marked off (the script's DOFF_KINDS). */
+export const DAYOFF_KINDS = ['Holiday', 'Weather', 'Client stop', 'Other'];
+/** 3.6.0: the script's dayOff map as entries of the project's "others" list. */
+export const offEntries = m => Object.entries(m || {}).map(([date, off]) => ({ date, off }));
 export const FILTERS = [['', 'All'], ['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['missing', 'Missing']];
 
 const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
@@ -41,7 +46,9 @@ export function monthRows(month, real, project, drafts, known = {}, others = [])
 }
 export function monthDays(today, project, drafts, known = {}, others = [], real = today, whole = false) {
   const sent = new Map();
-  for (const o of others || []) if (o && o.date && (!sent.has(o.date) || Number(o.no) > Number(sent.get(o.date).no))) sent.set(o.date, o);
+  const marked = new Map();   // 3.6.0 (owner, 17 Nov): days the GM or the PE marked as day-off ({ date, off })
+  for (const o of others || []) if (o && o.date && o.off) marked.set(o.date, o.off);
+  else if (o && o.date && (!sent.has(o.date) || Number(o.no) > Number(sent.get(o.date).no))) sent.set(o.date, o);
   const first = today.slice(0, 8) + '01';
   // days before the first report on this phone are left out: their reports may have come from the old app
   const mine = Object.keys(drafts).filter(k => k.startsWith(project.code + '|')).map(k => k.split('|')[1]).sort()[0] || today;
@@ -63,10 +70,11 @@ export function monthDays(today, project, drafts, known = {}, others = [], real 
       row.late = lateTag(d, r.firstSentAt || r.sentAt, lateAfter(project));   // 2.47.0: a re-send after a send-back keeps the first send's tag
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === real ? 'today' : 'draft';
-    else row.kind = d === real ? 'today' : isOff(project, d) ? 'off' : 'missing';
+    else row.kind = d === real && !marked.has(d) ? 'today' : isOff(project, d) ? 'off' : marked.has(d) ? 'dayoff' : 'missing';
+    if (marked.has(d)) row.off = marked.get(d);
     const o = sent.get(d);
     // 2.41.0: 'queued' too: a report this phone kept but the Admin or another phone sent is sent, not "Not sent yet"
-    if (o && ['today', 'draft', 'missing', 'off', 'queued'].includes(row.kind)) {
+    if (o && ['today', 'draft', 'missing', 'off', 'dayoff', 'queued'].includes(row.kind)) {
       // 2.12.2: a live answer from Central Hub (known) wins over the script's list of the project's reports
       const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
       Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true, at: o.at || '' });
@@ -210,6 +218,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Mark as day-off (3.6.0)', 'On Reports, the GM and the project engineer open a Missing day and mark it as a day off with the reason (holiday, weather, client stop or other). It is then not missing: no alert, the report numbers skip it, and Central Hub adds it to the project calendar.'],
   ['check', 'Safer and lighter (3.5.0)', 'The app refuses scripts from unknown places and checks its PDF tools. Field Report 1 is gone. Sent reports older than 60 days leave the phone once their photos are in Drive; they stay in Central Hub and Drive.'],
   ['check', 'One Review page (3.4.0)', 'Review has Pending, Approved, Rejected, Requests and All, with a day and a search. A report shows its photos, scorecard, comments and the full event log, and the list refreshes every minute.'],
   ['doc', 'Report numbers count working days (3.3.0)', 'A report number now counts every working day, with or without a report; only the project days off are skipped. Past reports show their new numbers once the office renumbers them.'],
