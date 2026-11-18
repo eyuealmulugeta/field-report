@@ -422,6 +422,17 @@ function crewTables(c, list) {
   <p class="muted tiny">Keyboard: ↑ ↓ move · P A S L mark · + − overtime · Ctrl S done</p>`;
 }
 
+/** 3.7.0 (owner, 18 Nov): Send with fewer than 12 photos asks why (at least 10 characters); the office sees the reason, the PDF never. */
+export function fewSheet(c) {
+  const n = ((c.report || {}).photos || []).length;
+  return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Fewer than 12 photos">
+    <div class="grab"></div><b class="big-t">Only ${n} of 12 photos. Submit report anyway?</b>
+    <textarea class="fld" rows="3" maxlength="300" data-ui="fewWhy" placeholder="Why fewer photos? (at least 10 characters)" aria-label="Reason for fewer photos">${c.ui.fewWhy || ''}</textarea>
+    <p class="muted small">Only the office sees the reason. It is not on the PDF.</p>
+    <div class="two"><button type="button" class="btn o" data-act="fewAdd">Add photos</button>
+    <button type="button" class="btn p" data-act="fewSubmit" ${c.ui.sending ? 'disabled' : ''}>Submit anyway</button></div></div>`;
+}
+
 export function noWorkSheet(c) {
   const reasons = ['Rain', 'Holiday', 'No materials', 'Client stopped work', 'Other'];
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="No work today">

@@ -4,7 +4,7 @@
 import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, stepHead, isGM } from './parts.js';
-import { STATUS, offlineLine } from '../model/follow.js';
+import { STATUS, offlineLine, fewOf, fewLine } from '../model/follow.js';
 import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
 import { engageChecks } from '../model/rating.js';
@@ -59,8 +59,9 @@ export function rev(c) {
   const rv = c.ui.rv || {}, x = rv.open;
   if (!x) return review(c);
   const may = c.kind === 'reviewer', st = x.status || 'submitted';
-  const hist = (x.history || []).slice().reverse();   // 3.4.0 (owner): the full event log
   const full = (c.ui.remoteRep || {})[`${projCode(c, x)}|${x.date}`], photos = (full && full.photos) || [];
+  const few = fewOf(full);   // 3.7.0 (owner): the office sees why the report has fewer than 12 photos
+  const hist = [...(x.history || []).map(h => (few && h.kind === 'submit' && !h.text ? { ...h, text: fewLine(few) } : h))].reverse();   // 3.4.0 (owner): the full event log
   const score = full ? engageChecks(full) : [], comments = x.comments || [];
   const to = x.preparedBy || x.uploadedBy || 'the sender';
   return {
@@ -69,6 +70,7 @@ export function rev(c) {
         <div class="two"><span>Sent by</span><b>${x.preparedBy || x.uploadedBy || '—'}</b></div>
         <div class="two"><span>Sent</span><b>${when(x.uploadedAt)}</b></div>
         ${offlineLine(x.pressedAt, x.uploadedAt) ? html`<p class="callout warn small">${offlineLine(x.pressedAt, x.uploadedAt)}</p>` : ''}
+        ${few ? html`<p class="callout warn small"><b>Only ${few.n} of 12 photos.</b> Reason: ${few.why}</p>` : ''}
         <div class="two"><span>Crew · delays · requests</span><b>${x.crew || 0} · ${x.delayH || 0} h · ${x.requests || 0}</b></div>
         ${x.reviewedBy ? html`<div class="two"><span>Last answer</span><b>${x.reviewedBy} · ${when(x.reviewedAt)}</b></div>` : ''}
         <button type="button" class="btn p" data-act="viewReport" data-v="${x.date}" data-p="${projCode(c, x)}" data-back="rev">${icon('doc')}Open the report and its photos</button>   <!-- 3.1.0 (owner): Review opens the report -->

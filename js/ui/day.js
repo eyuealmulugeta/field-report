@@ -128,7 +128,8 @@ function galAskLine(c) {
 function pickLine(r) {
   // 3.0.2 (owner): exactly 12, no more, no less; the report cannot be sent otherwise
   const n = r.photos.filter(p => p.client).length, why = clientProblem(r.photos), x = clientNeed(r.photos);
-  return html`<div class="callout ${why ? 'warn' : ''} small"><b>For the client: ${n} of ${CLIENT_PHOTOS} chosen.</b> ${why ? `${why}.` : 'Exactly 12: ready.'} The other photos go to the office and the Dashboard only.
+  // 3.7.0 (owner): fewer than 12 may be sent; Send asks why
+  return html`<div class="callout ${why || x.take ? 'warn' : ''} small"><b>For the client: ${x.take ? r.photos.length : n} of ${CLIENT_PHOTOS}${x.take ? '' : ' chosen'}.</b> ${why ? `${why}.` : x.take ? `You can send with fewer: Send asks why.` : 'Exactly 12: ready.'} The other photos go to the office and the Dashboard only.
     ${x.take ? '' : html`<div class="row"><button type="button" class="btn t slim" data-act="pickAuto">Choose ${CLIENT_PHOTOS} for me</button>${n ? html`<button type="button" class="btn t slim" data-act="pickNone">Untick all</button>` : ''}</div>`}</div>`;
 }
 

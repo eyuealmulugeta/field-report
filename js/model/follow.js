@@ -22,6 +22,10 @@ export const STATUS = {
 export const DAYOFF_KINDS = ['Holiday', 'Weather', 'Client stop', 'Other'];
 /** 3.6.0: the script's dayOff map as entries of the project's "others" list. */
 export const offEntries = m => Object.entries(m || {}).map(([date, off]) => ({ date, off }));
+/** 3.7.0: the office's line for a report sent with fewer than 12 photos. */
+export const fewLine = f => `Submitted with ${f.n} photo${f.n === 1 ? '' : 's'} – ${f.why}`;
+/** 3.7.0: { n, why } of a report sent with fewer than 12 photos and a reason, else null. */
+export const fewOf = r => (r && Array.isArray(r.photos) && r.photos.length < 12 && String(r.fewWhy || '').trim() ? { n: r.photos.length, why: String(r.fewWhy).trim() } : null);
 export const FILTERS = [['', 'All'], ['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['missing', 'Missing']];
 
 const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
@@ -218,6 +222,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Fewer than 12 photos (3.7.0)', 'A report can be sent with fewer than 12 photos: Send asks why (at least 10 characters). Only the office sees the reason; the PDF shows the photos from the top left. The app now updates by itself when it opens.'],
   ['check', 'Mark as day-off (3.6.0)', 'On Reports, the GM and the project engineer open a Missing day and mark it as a day off with the reason (holiday, weather, client stop or other). It is then not missing: no alert, the report numbers skip it, and Central Hub adds it to the project calendar.'],
   ['check', 'Safer and lighter (3.5.0)', 'The app refuses scripts from unknown places and checks its PDF tools. Field Report 1 is gone. Sent reports older than 60 days leave the phone once their photos are in Drive; they stay in Central Hub and Drive.'],
   ['check', 'One Review page (3.4.0)', 'Review has Pending, Approved, Rejected, Requests and All, with a day and a search. A report shows its photos, scorecard, comments and the full event log, and the list refreshes every minute.'],
@@ -279,10 +284,11 @@ export const WHATS_NEW = [
  * 3.1.0 (owner, 15 Nov: "the event log is missing Submitted, Edit (with the fields changed) and Approved"): every step of a
  * report in one list, newest first: Submitted (and sent again), each edit with the parts changed, and the office's answers.
  */
-export function eventLog(r, history = [], { by = '', at = '' } = {}, stepTitle = id => id) {
+export function eventLog(r, history = [], { by = '', at = '', few = null } = {}, stepTitle = id => id) {
   const out = [];
   const sentFirst = (r && (r.firstSentAt || r.sentAt)) || Date.parse(at) || 0;
-  if (sentFirst) out.push({ kind: 'submit', text: 'Submitted', by: (r && r._by) || by || ((r && r.edits || [])[0] || {}).by || '', at: new Date(sentFirst).toISOString() });
+  // 3.7.0 (owner, 18 Nov): `few` ({ n, why }) only for the office: "Submitted with 5 photos – reason"
+  if (sentFirst) out.push({ kind: 'submit', text: few ? fewLine(few) : 'Submitted', by: (r && r._by) || by || ((r && r.edits || [])[0] || {}).by || '', at: new Date(sentFirst).toISOString() });
   if (r && r.sentAt && r.firstSentAt && r.sentAt - r.firstSentAt > 60e3) out.push({ kind: 'submit', text: 'Sent again', by: (r.edits || []).filter(e => e.after).map(e => e.by).at(-1) || by, at: new Date(r.sentAt).toISOString() });
   for (const e of (r && r.edits) || []) if (e && e.at > 1e12) out.push({ kind: 'edit', text: `${e.after ? 'Edited after sending' : 'Edited'}${(e.parts || []).length ? `: ${e.parts.map(stepTitle).join(', ')}` : ''}`, by: e.by, at: new Date(e.at).toISOString() });
   const word = { approve: 'Approved', changes: 'Sent back', reopen: 'Reopened', comment: 'Comment', reply: 'Reply', return: 'Returned', office: 'Corrected by the office', submit: 'Submitted' };

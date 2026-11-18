@@ -22,7 +22,7 @@ import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { buildPdf, loadPdfLib, loadPdfView, photoCaption, weatherFile } from './pdf.js';
-import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds } from './model/pdfplan.js';
+import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds, fewOk, FEW_MIN } from './model/pdfplan.js';
 import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbers.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
@@ -660,7 +660,7 @@ async function freshFiles() {
 }
 
 /** 2.14.2: a newer version is out: a red tag at the top; tapping it updates. Nothing is blocked. */
-async function updateCheck() {
+async function updateCheck(onOpen = false) {
   if (demo || !navigator.onLine) return;
   let v = '';
   try { v = (await (await fetch(`version.json?x=${Date.now()}`, { cache: 'no-store' })).json()).v || ''; } catch { return; }
@@ -670,6 +670,11 @@ async function updateCheck() {
   tag.title = 'Field Report ' + APP_VERSION + ' is out of date. Tap to update; nothing you saved is lost.';
   tag.onclick = async () => { tag.textContent = 'Updating…'; await freshFiles(); location.reload(); };
   document.body.append(tag);
+  // 3.7.0 (owner, 18 Nov): on opening the app the update installs by itself: the red tag says "Updating…", then the app
+  // reloads. Once per version and session, so a site still serving the old files leaves the tap-to-update tag instead.
+  let tried = '';
+  try { tried = sessionStorage.getItem('fr2_upd') || ''; } catch { /* no storage: tap only */ tried = v; }
+  if (onOpen && tried !== v) { try { sessionStorage.setItem('fr2_upd', v); } catch { /* tap only next time */ } tag.onclick(); }
 }
 
 const devId = () => deviceId();   // trial.2: the same id the script's device check knows
@@ -2446,6 +2451,7 @@ const ACTS = {
   },
   async sendReport() {
     if (ui.sending) return;
+    if (report() && !report().nowork && !fewOk(report())) { ui.fewWhy = report().fewWhy || ''; ui.sheet = 'few'; draw(); return; }   // 3.7.0
     ui.sending = 'Making the PDF…'; draw();
     try {
       const how = await sendReport(key(), m => { ui.sending = m; draw(); });
@@ -2453,6 +2459,15 @@ const ACTS = {
     } catch (e) { toast(`Not sent: ${e.message}`); }
     ui.sending = ''; draw();
   },
+
+  // 3.7.0 (owner, 18 Nov): fewer than 12 photos: the reason, then Send; or back to Photos
+  fewSubmit() {
+    const why = String(ui.fewWhy || '').trim();
+    if (why.length < FEW_MIN) return toast(`Write the reason (at least ${FEW_MIN} characters).`);
+    editKey(key(), r => { r.fewWhy = why.slice(0, 300); });   // not edit(): the signature stays
+    ui.sheet = ''; return ACTS.sendReport();
+  },
+  fewAdd() { ui.sheet = ''; go('photos'); },
 
   /* slice 3: equipment, materials, safety and delays, photos */
   /** 2.99.0 (owner): tick a photo "For client"; 12 at most */
@@ -2787,7 +2802,7 @@ function draw() {
     + `${v.tab ? nav(v.tab, { chat: r === 'chat' ? 0 : chatUnread() }, c.kind, c.s.rules) : ''}`;   // 2.74.1: unread messages
   }
   if (!setup) root.insertAdjacentHTML('beforeend', S.inboxFab(c));   // 2.37.0: the floating notifications circle
-  const sheet = { nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
+  const sheet = { few: S.fewSheet, nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`
     + `${ui.toast ? `<div class="toast" role="status">${escText(ui.toast)}</div>` : ''}`
     + popHtml()   // 2.85.0 (D2)
@@ -2966,7 +2981,7 @@ setInterval(() => {
   if (L.liveOn() && !((project() || {}).crewWait || []).length) return;
   ui.attTried = Date.now(); ACTS.attRefresh(true);
 }, 30e3);
-updateCheck();   // 2.12.3
+updateCheck(true);   // 2.12.3; 3.7.0: installs by itself on opening
 setInterval(updateCheck, 30 * 60e3);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updateCheck(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS, fewOf } from '../model/follow.js';
 import { STEPS } from '../model/report.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -96,7 +96,7 @@ export function daySheet(c) {
     ${x.name ? html`<div class="muted tiny">${x.name}${x.version ? ` · version ${x.version}` : ''}</div>` : ''}
     ${x.report && x.report.start ? (rt => html`<div class="soft small"><b>${rateLine(rt)}</b><ul class="checks">${checkLines(rt).map(l => html`<li>${l}</li>`)}</ul></div>`)(rateReport(rated(x))) : ''}
     ${(log => log.length ? html`<div class="k">Event log</div><div class="box">${log.slice(0, 14).map(m => html`<div class="li"><span class="ic ${m.kind === 'changes' ? 'bad' : m.kind === 'approve' ? 'ok' : ''}">${icon(m.kind === 'approve' ? 'check' : 'doc')}</span>
-      <div class="n"><b>${m.text}</b><span>${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : '')(eventLog(x.other ? null : x.report, steps, { by: x.by, at: x.at || (x.last && x.last.kind === 'submit' ? x.last.at : '') }, id => (STEPS.find(t => t.id === id) || {}).title || id))}
+      <div class="n"><b>${m.text}</b><span>${m.by || 'Office'} · ${stampOf(m.at)}</span></div></div>`)}</div>` : '')(eventLog(x.other ? null : x.report, steps, { by: x.by, at: x.at || (x.last && x.last.kind === 'submit' ? x.last.at : ''), few: may || isGM(c) ? fewOf(x.report) : null }, id => (STEPS.find(t => t.id === id) || {}).title || id))}
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
