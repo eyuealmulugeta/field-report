@@ -26,6 +26,30 @@ export const offEntries = m => Object.entries(m || {}).map(([date, off]) => ({ d
 export const fewLine = f => `Submitted with ${f.n} photo${f.n === 1 ? '' : 's'} – ${f.why}`;
 /** 3.7.0: { n, why } of a report sent with fewer than 12 photos and a reason, else null. */
 export const fewOf = r => (r && Array.isArray(r.photos) && r.photos.length < 12 && String(r.fewWhy || '').trim() ? { n: r.photos.length, why: String(r.fewWhy).trim() } : null);
+/* 3.8.0 (owner, 18 Nov): "Request report" on a missing day (script 7.70.0). */
+export const REQ_GAP_H = 4;   // owner: one request per missing day every 4 hours
+const hm = at => { const d = new Date(at); return Number.isNaN(+d) ? '' : d.toTimeString().slice(0, 5); };
+/** The due time the form starts with: the end of today ("yyyy-mm-ddT23:59"). */
+export const dueDefault = today => `${today}T23:59`;
+/** Is a request open (not submitted, not cancelled)? */
+export const reqOpen = r => !!r && !r.sub && !r.cx;
+/** May another request go now? { ok, next: 'HH:MM' } (one every 4 hours while the day is missing). */
+export function reqGap(r, now = Date.now()) {
+  if (!r || r.sub || !r.at) return { ok: true, next: '' };
+  const t = Date.parse(r.at) + REQ_GAP_H * 3600e3;
+  return t <= now ? { ok: true, next: '' } : { ok: false, next: hm(new Date(t).toISOString()) };
+}
+/** The status line on a missing day: "Requested 10:20 to Abebe · Seen 11:05", "Submitted 14:02", "Request cancelled". */
+export function reqLine(r) {
+  if (!r || !r.at) return '';
+  if (r.sub) return `Requested ${hm(r.at)} · Submitted ${hm(r.sub)}`;
+  if (r.cx) return `Request cancelled ${hm(r.cx)}`;
+  return `Requested ${hm(r.at)}${r.toName ? ` to ${r.toName}` : ''} by ${r.by}${r.seen ? ` · Seen ${hm(r.seen)}` : ' · Not seen yet'} · due ${String(r.due || '').replace('T', ' ')}`;
+}
+/** The request's steps for the event log (Requested, Seen, Submitted, Cancelled), newest first. */
+export const reqLog = r => ((r && r.log) || []).map(x => ({ text: `Report ${x.e.toLowerCase()}${x.e === 'Requested' && x.to ? ` from ${x.to}` : ''}`, by: x.by, at: x.at })).reverse();
+/** The pop-up's requests: open, and not put off with Later during this opening. */
+export const popReqs = (list, later = []) => (list || []).filter(r => r && r.date && !later.includes(`${r.proj}|${r.date}`)).sort((a, b) => a.date.localeCompare(b.date));
 export const FILTERS = [['', 'All'], ['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['missing', 'Missing']];
 
 const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
@@ -222,6 +246,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['bell', 'Request report (3.8.0)', 'The GM and the project engineer press Request report on a missing day: the site engineer gets a notification and a pop-up each time the app opens, with Start report and Later, until the report is sent. The day shows Requested, Seen and Submitted.'],
   ['check', 'Fewer than 12 photos (3.7.0)', 'A report can be sent with fewer than 12 photos: Send asks why (at least 10 characters). Only the office sees the reason; the PDF shows the photos from the top left. The app now updates by itself when it opens.'],
   ['check', 'Mark as day-off (3.6.0)', 'On Reports, the GM and the project engineer open a Missing day and mark it as a day off with the reason (holiday, weather, client stop or other). It is then not missing: no alert, the report numbers skip it, and Central Hub adds it to the project calendar.'],
   ['check', 'Safer and lighter (3.5.0)', 'The app refuses scripts from unknown places and checks its PDF tools. Field Report 1 is gone. Sent reports older than 60 days leave the phone once their photos are in Drive; they stay in Central Hub and Drive.'],

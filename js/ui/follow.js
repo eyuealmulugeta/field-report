@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS, fewOf } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS, fewOf, reqLine, reqLog, reqOpen, reqGap, popReqs } from '../model/follow.js';
 import { STEPS } from '../model/report.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -100,6 +100,9 @@ export function daySheet(c) {
     ${officeLine(steps)}
     ${x.kind === 'changes' ? html`<p class="callout bad">The office sent this report back. Open it, fix what they asked, and send it again.</p>` : ''}
     ${x.kind === 'missing' ? html`<p class="small muted">No report on this phone for this day.</p>` : ''}
+    ${(r => r ? html`<div class="k">Report request</div><p class="callout ${reqOpen(r) ? 'warn' : ''} small">${reqLine(r)}${r.note ? html`<br>Note: ${r.note}` : ''}</p>
+      <div class="box">${reqLog(r).map(m => html`<div class="li"><span class="ic">${icon('bell')}</span><div class="n"><b>${m.text}</b><span>${m.by || ''} · ${stampOf(m.at)}</span></div></div>`)}</div>` : '')(reqOf(c, x.date))}   <!-- 3.8.0 -->
+    ${x.kind === 'missing' && may ? html`<button type="button" class="btn p" data-act="reqOpen" data-v="${x.date}" data-n="${x.no || ''}">${icon('bell')}Request report</button>` : ''}
     ${x.kind === 'missing' && may ? html`<div class="k">Mark as day-off</div><div class="chips">${DAYOFF_KINDS.map(k => html`<button type="button" class="chip ${(c.ui.offK || 'Holiday') === k ? 'on' : ''}" data-act="pick" data-f="ui.offK" data-v="${k}">${k}</button>`)}</div>
       <input class="fld" maxlength="80" data-ui="offNote" placeholder="Note (optional)" value="${c.ui.offNote || ''}">
       <button type="button" class="btn o" data-act="dayOff" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Mark as day-off</button>` : ''}   <!-- 3.6.0 (owner, 17 Nov): the GM and the PE -->
@@ -210,4 +213,48 @@ export function pastBand(c) {
   const m = k && k.comments && k.comments.length ? k.comments[k.comments.length - 1] : null;
   return html`<div class="past"><div class="spread"><b>${dayLabel(c.today)} · an earlier day</b><button type="button" class="btn t slim" data-act="backToToday">Back to today</button></div>
     ${m ? html`<p class="small"><b>${m.by || 'Office'}:</b> ${m.text}</p>` : ''}</div>`;
+}
+
+/* ---------- 3.8.0 (owner, 18 Nov): Request report ---------- */
+/** The request of a day of the open project (script REQ map, from projectDays or reqReport). */
+export const reqOf = (c, date, code = c.project.code) => (((c.s.reqs || {})[code]) || {})[date] || null;
+/** The missing days of the last 14 with their request and a Request report button (Review, the GM's Dashboard). PE and GM only. */
+export function missingList(c) {
+  if (c.kind !== 'reviewer') return '';
+  const rows = monthDays(c.realToday, c.project, c.s.drafts || {}, c.s.known || {}, (c.s.others || {})[c.project.code] || [])
+    .filter(x => x.kind === 'missing' && Date.parse(c.realToday) - Date.parse(x.date) <= 14 * 864e5).slice(0, 10);
+  if (!rows.length) return '';
+  return html`<div class="k">Missing reports · ${c.project.name}</div><div class="box">${rows.map(x => { const r = reqOf(c, x.date); return html`<div class="li">
+    <div class="n"><b>${dayLabel(x.date)}${x.no ? ` · #${x.no}` : ''}</b><span>${r ? reqLine(r) : 'No report, not requested'}</span></div>
+    <button type="button" class="btn o slim" data-act="reqOpen" data-v="${x.date}" data-n="${x.no || ''}">Request report</button></div>`; })}</div>`;
+}
+/** The sender's form: who, an optional note (200), the due time (end of today), Send; Cancel request while one is open. */
+export function reqSheet(c) {
+  const d = c.ui.reqDate, r = reqOf(c, d), gap = reqGap(r), eng = c.ui.reqEng || [];
+  return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Request report">
+    <div class="grab"></div><b class="big-t">Request report · ${dayLabel(d)}${c.ui.reqNo ? ` · #${c.ui.reqNo}` : ''}</b>
+    <div class="muted small">${c.project.name}</div>
+    ${r ? html`<p class="callout small ${reqOpen(r) ? 'warn' : ''}">${reqLine(r)}</p>` : ''}
+    <label class="k" for="reqTo">Send to</label>
+    ${eng.length ? html`<select class="fld" id="reqTo" data-ui="reqTo">${eng.map((e, i) => html`<option value="${e.id}" ${(c.ui.reqTo || eng[0].id) === e.id ? 'selected' : ''}>${e.name}${i === 0 && e.n ? ` (usually reports, ${e.n} in 30 days)` : e.n ? ` (${e.n} in 30 days)` : ''}</option>`)}</select>`
+      : html`<p class="muted small">${c.ui.reqEngBusy ? 'Finding the site engineers…' : 'The site engineer who usually reports.'}</p>`}
+    <textarea class="fld" rows="2" maxlength="200" data-ui="reqNote" placeholder="Note (optional, 200 characters)" aria-label="Note">${c.ui.reqNote || ''}</textarea>
+    <label class="k" for="reqDue">Due</label><input class="fld" id="reqDue" type="datetime-local" data-ui="reqDue" value="${c.ui.reqDue || ''}">
+    ${gap.ok ? '' : html`<p class="muted small">One request every 4 hours. You can ask again after ${gap.next}.</p>`}
+    <div class="two">${reqOpen(r) ? html`<button type="button" class="btn o bad-t" data-act="reqCancel" ${c.ui.busy ? 'disabled' : ''}>Cancel request</button>` : html`<button type="button" class="btn o" data-act="closeSheet">Close</button>`}
+    <button type="button" class="btn p" data-act="reqSend" ${c.ui.busy || !gap.ok ? 'disabled' : ''}>${icon('send')}${c.ui.busy ? 'Sending…' : 'Send request'}</button></div></div>`;
+}
+/** The site engineer's pop-up on opening: date, report #, project, sender, note, due; Start report and Later. */
+export function reqPopSheet(c) {
+  const r = popReqs(c.s.myReqs, c.ui.reqLater || [])[0];
+  if (!r) return '';
+  return html`<div class="dim"></div><div class="sheet" role="alertdialog" aria-label="Report requested">
+    <div class="grab"></div><b class="big-t">📝 Report requested</b>
+    <div class="box pad"><div class="two"><span>Day</span><b>${dayLabel(r.date)}${r.no ? ` · #${r.no}` : ''}</b></div>
+      <div class="two"><span>Project</span><b>${r.label || r.proj}</b></div>
+      <div class="two"><span>From</span><b>${r.by}</b></div>
+      <div class="two"><span>Due</span><b>${String(r.due || '').replace('T', ' ')}</b></div>
+      ${r.note ? html`<p class="small">${r.note}</p>` : ''}</div>
+    <div class="two"><button type="button" class="btn o" data-act="reqLaterBtn" data-v="${r.proj}|${r.date}">Later</button>
+    <button type="button" class="btn p" data-act="reqStart" data-v="${r.date}" data-p="${r.proj}">Start report</button></div></div>`;
 }

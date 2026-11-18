@@ -24,6 +24,9 @@ function simServer(action, body) {
     case 'list': return { ok: true, reports: S.review, events: [] };
     case 'projectDays': return { ok: true, days: S.review.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name, at: x.uploadedAt })) };
     case 'dayOff': return { ok: true, dayOff: body.undo ? {} : { [body.date]: { k: body.k || 'Holiday', note: body.note || '', by: 'Demo', at: new Date().toISOString() } } };   // 3.6.0
+    case 'reqList': return { ok: true, reqs: {}, engineers: [{ id: 'SE1', name: 'Demo engineer', n: 5 }] };   // 3.8.0
+    case 'reqReport': { const r = { to: 'SE1', toName: 'Demo engineer', by: 'Demo', no: body.no || 0, note: body.note || '', due: body.due || '', at: new Date().toISOString(), seen: '', sub: '', cx: body.cancel ? new Date().toISOString() : '', log: [{ e: body.cancel ? 'Cancelled' : 'Requested', at: new Date().toISOString(), by: 'Demo', to: 'Demo engineer' }] }; return { ok: true, req: r, reqs: { [body.date]: r } }; }
+    case 'reqSeen': return { ok: true };
     case 'status': { const a = answer(body.name); return a ? { ok: true, found: true, report: { name: body.name, ...a } } : { ok: true, found: false }; }
     case 'inbox': return { ok: true, items: S.inbox || [], me: null };
     case 'review': { const r = S.review.find(x => x.name === body.name); if (r) r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; return { ok: true, report: r || {} }; }
@@ -128,6 +131,9 @@ export async function demoServer(action, body) {
     case 'list': return { ok: true, reports: REVIEW, events: [] };
     case 'projectDays': return { ok: true, days: REVIEW.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name })) };
     case 'dayOff': return { ok: true, dayOff: body.undo ? {} : { [body.date]: { k: body.k || 'Holiday', note: body.note || '', by: 'Demo', at: new Date().toISOString() } } };   // 3.6.0
+    case 'reqList': return { ok: true, reqs: {}, engineers: [{ id: 'SE1', name: 'Demo engineer', n: 5 }] };   // 3.8.0
+    case 'reqReport': { const r = { to: 'SE1', toName: 'Demo engineer', by: 'Demo', no: body.no || 0, note: body.note || '', due: body.due || '', at: new Date().toISOString(), seen: '', sub: '', cx: body.cancel ? new Date().toISOString() : '', log: [{ e: body.cancel ? 'Cancelled' : 'Requested', at: new Date().toISOString(), by: 'Demo', to: 'Demo engineer' }] }; return { ok: true, req: r, reqs: { [body.date]: r } }; }
+    case 'reqSeen': return { ok: true };
     case 'review': { const r = REVIEW.find(x => x.name === body.name); if (r) { r.status = { approve: 'approved', changes: 'changes', reopen: 'changes' }[body.decision] || r.status; r.reviewedBy = 'Demo Project Engineer'; r.reviewedAt = new Date().toISOString(); } return { ok: true, report: r || {} }; }
     case 'getSetup': return { ok: true, proj: body.proj, setup };
     case 'sync': return { ok: true, t: Date.now(), build: 'demo' };

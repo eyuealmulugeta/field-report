@@ -9,6 +9,7 @@ import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
 import { engageChecks } from '../model/rating.js';
 import { thumb } from './work.js';
+import { missingList } from './follow.js';   // 3.8.0
 
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -45,6 +46,7 @@ export function review(c) {
         ${c.kind === 'reviewer' ? html`<button type="button" class="btn o" data-act="go" data-to="crewrev">${icon('users')}Crew & Hours${(c.project.crewWait || []).length ? ` · ${c.project.crewWait.length} waiting` : ''}</button>` : ''}</div>
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}${rv.list ? ` · ${reviewRows(rv.list, all ? '' : c.project.code, k).length}` : ''}</button>`)}</div>
       <div class="row2"><input class="fld" type="date" data-ui="revDay" value="${c.ui.revDay || ''}" aria-label="Day"><input class="fld" type="search" data-ui="revQ" value="${c.ui.revQ || ''}" placeholder="Search: number, name, date" aria-label="Search the reports"></div>   <!-- 3.4.0 -->
+      ${all ? '' : missingList(c)}
       ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
         : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
           <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`

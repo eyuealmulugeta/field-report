@@ -27,7 +27,7 @@ import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbe
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
-import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries, dueDefault } from './model/follow.js';
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
@@ -297,10 +297,29 @@ async function dayOffSend(date, undo) {
   } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was changed.' : `Not changed: ${e.message}`); }
   finally { ui.busy = false; draw(); }
 }
+/** 3.8.0 (owner, 18 Nov): the GM or the PE asks the site engineer for a missing day's report (script reqReport). */
+async function reqSend(cancel) {
+  const p = project();
+  if (!p || ui.busy) return;
+  if (cancel && !confirm('Cancel this report request? The pop-up stops on the site engineer\'s phone.')) return;
+  ui.busy = true; draw();
+  try {
+    const res = await call('reqReport', { proj: p.code, date: ui.reqDate, no: Number(ui.reqNo) || 0, cancel: !!cancel,
+      ...(cancel ? {} : { to: ui.reqTo || ((ui.reqEng || [])[0] || {}).id || '', note: String(ui.reqNote || '').trim().slice(0, 200), due: ui.reqDue || dueDefault(realToday()) }) });
+    store.set({ reqs: { ...(store.get().reqs || {}), [p.code]: res.reqs || {} } });
+    ui.sheet = '';
+    toast(cancel ? 'Request cancelled.' : `Requested from ${(res.req || {}).toName || 'the site engineer'}.`);
+  } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was sent.' : `Not sent: ${e.message}`); }
+  finally { ui.busy = false; draw(); }
+}
+/** 3.8.0: the site engineer saw the pop-up (logged once as Seen). */
+function reqSeenSend(list) { for (const r of list || []) if (!r.seen) call('reqSeen', { proj: r.proj, date: r.date }).catch(() => {}); }
+const REQ_LATER = 'fr2_reqLater';
+const laterList = () => { try { return JSON.parse(sessionStorage.getItem(REQ_LATER) || '[]'); } catch { return []; } };
 async function teamDays(p) {
   try {
     const res = await call('projectDays', { proj: p.code });
-    store.set({ others: { ...(store.get().others || {}), [p.code]: [...(res.days || []), ...offEntries(res.dayOff)] } });   // 3.6.0: + the days marked off
+    store.set({ others: { ...(store.get().others || {}), [p.code]: [...(res.days || []), ...offEntries(res.dayOff)] }, ...(res.reqs ? { reqs: { ...(store.get().reqs || {}), [p.code]: res.reqs } } : {}) });   // 3.6.0: + the days marked off; 3.8.0: + the report requests
   } catch { /* an older script or offline: this phone's own reports only */ }
 }
 async function checkStatus(force) {
@@ -989,6 +1008,12 @@ async function inboxCheck(force) {
     const r = await call('inbox', {});
     applyMe(r.me);
     if ('rules' in r) { const nr = cleanRules(r.rules); if (JSON.stringify(nr) !== JSON.stringify(store.get().rules || null)) store.set({ rules: nr }); }   // 2.60.0 (G6)
+    if (Array.isArray(r.reqs)) {   // 3.8.0: the open report requests to this person pop up on each opening until sent or cancelled
+      store.set({ myReqs: r.reqs });
+      ui.reqLater = laterList();
+      const pop = r.reqs.filter(x => !ui.reqLater.includes(`${x.proj}|${x.date}`));
+      if (pop.length && !ui.sheet) { ui.sheet = 'reqpop'; ui.sheetNew = true; draw(); reqSeenSend(pop); }
+    }
     const items = r.items || [], was = store.get().inbox || [];
     if (JSON.stringify(items) !== JSON.stringify(was)) store.set({ inbox: items });
   } catch (e) { if (force && e.code !== 'BAD_REQUEST') toast(e.message); }
@@ -1683,6 +1708,29 @@ const ACTS = {
   projPop: () => { ui.projPop = !ui.projPop; draw(); },
   // 3.6.0 (owner, 17 Nov): the GM or the PE marks a missing day as a day off, with the reason; or changes it back
   dayOff(d) { return dayOffSend(d.v, false); },
+  /* 3.8.0: Request report */
+  async reqOpen(d) {
+    const p = project();
+    Object.assign(ui, { reqDate: d.v, reqNo: d.n || '', reqNote: '', reqTo: '', reqDue: dueDefault(realToday()), reqEng: ui.reqEngOf === p.code ? ui.reqEng : [], sheet: 'req', sheetNew: true });
+    draw();
+    if (ui.reqEngOf === p.code) return;
+    ui.reqEngBusy = true;
+    try { const r = await call('reqList', { proj: p.code }); ui.reqEng = r.engineers || []; ui.reqEngOf = p.code; store.set({ reqs: { ...(store.get().reqs || {}), [p.code]: r.reqs || {} } }); }
+    catch { /* offline: the server picks the usual one */ } finally { ui.reqEngBusy = false; draw(); }
+  },
+  reqSend() { return reqSend(false); },
+  reqCancel() { return reqSend(true); },
+  reqLaterBtn(d) {
+    ui.reqLater = [...laterList(), d.v];
+    try { sessionStorage.setItem(REQ_LATER, JSON.stringify(ui.reqLater)); } catch { /* private mode: until the page closes */ }
+    const more = (store.get().myReqs || []).some(x => !ui.reqLater.includes(`${x.proj}|${x.date}`));
+    ui.sheet = more ? 'reqpop' : ''; draw();
+  },
+  reqStart(d) {
+    const s = store.get();
+    if (d.p && d.p !== s.proj && s.projects.some(p => p.code === d.p)) store.set({ proj: d.p });
+    ACTS.openPast({ v: d.v });
+  },
   dayOffUndo(d) { if (confirm(`Change ${d.v} back to Missing?`)) return dayOffSend(d.v, true); },
   projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
@@ -2715,6 +2763,7 @@ function openLink(h) {
     if (pcode && pcode !== s.proj && s.projects.some(p => p.code === pcode)) store.set({ proj: pcode });
     go('reports'); setTimeout(() => { ui.daySel = date; ui.sheet = 'day'; draw(); notifAct(how, date, pno); }, 60);
   }
+  else if (what === 'req') { go('today'); inboxCheck(true); }   // 3.8.0: the pop-up with Start report
   else if (what === 'gal') go('photos');   // 2.93.0: gallery photos asked by the Site Engineer
   else if (what === 'chat') { if (isOff('fr_chat')) return toast('Discuss is turned off by the Admin.'); go('chat'); ACTS.chatOpen({ v: d || '' }); }   // 2.85.0 (D2): Reply on a message notification
   else if (what === 'attention') ACTS.attOpen();   // 2.8.0: from the shortcut on the app icon
@@ -2802,7 +2851,7 @@ function draw() {
     + `${v.tab ? nav(v.tab, { chat: r === 'chat' ? 0 : chatUnread() }, c.kind, c.s.rules) : ''}`;   // 2.74.1: unread messages
   }
   if (!setup) root.insertAdjacentHTML('beforeend', S.inboxFab(c));   // 2.37.0: the floating notifications circle
-  const sheet = { few: S.fewSheet, nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
+  const sheet = { req: F.reqSheet, reqpop: F.reqPopSheet, few: S.fewSheet, nowork: S.noWorkSheet, log: S.logSheet, day: F.daySheet, new: F.whatsNewSheet, draft: F.draftSheet }[ui.sheet];
   root.innerHTML += `${sheet ? sheet(c) : ''}`
     + `${ui.toast ? `<div class="toast" role="status">${escText(ui.toast)}</div>` : ''}`
     + popHtml()   // 2.85.0 (D2)

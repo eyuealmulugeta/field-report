@@ -5,6 +5,7 @@ import { html } from '../core/dom.js';
 import { board } from '../model/gm.js';
 import { monthDays, STATUS } from '../model/follow.js';
 import { openPOs } from '../model/store.js';
+import { missingList } from './follow.js';   // 3.8.0
 
 const wd = d => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short' });
 const card = (v, label, sub = '', tone = '') => html`<div class="gm-kpi ${tone}"><b>${v}</b><span>${label}</span>${sub ? html`<small>${sub}</small>` : ''}</div>`;
@@ -35,6 +36,7 @@ export function boardBody(c) {
         <div class="gm-week">${b.week.map(r => { const x = STATUS[r.kind] || STATUS.today; return html`<div class="gm-day ${x.cls}" title="${r.date}: ${x.label}"><span>${wd(r.date)}</span><i></i><small>${r.date === today && r.kind === 'today' ? 'Today' : x.label}</small></div>`; })}</div>
       </section>
     </div>
+    ${missingList(c)}
     <p class="muted tiny">Figures for ${p.name}. Approving and deciding stay on their own pages; this page only shows.</p>
   </div>`;
 }
