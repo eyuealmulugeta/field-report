@@ -15,6 +15,7 @@ export const STATUS = {
   missing: { label: 'Missing', cls: 'bad' },
   off: { label: 'Off', cls: 'muted' },
   dayoff: { label: 'Day off', cls: 'muted' },   // 3.6.0: marked by the GM or the PE
+  noact: { label: 'No activity', cls: 'na' },   // 3.10.0: a working day with no site activity, marked with a reason
   nowork: { label: 'No work', cls: 'muted' },
   today: { label: 'Today', cls: 'info' },
 };
@@ -22,6 +23,12 @@ export const STATUS = {
 export const DAYOFF_KINDS = ['Holiday', 'Weather', 'Client stop', 'Other'];
 /** 3.6.0: the script's dayOff map as entries of the project's "others" list. */
 export const offEntries = m => Object.entries(m || {}).map(([date, off]) => ({ date, off }));
+/** 3.10.0 (owner, 19 Nov): the script's noAct map ({ date: { why, by, at, log } }) as entries of the "others" list. */
+export const naEntries = m => Object.entries(m || {}).map(([date, na]) => ({ date, na }));
+/** 3.10.0: the project's start date (Central Hub Project › Setup); no day or month before it is shown. */
+export const startOf = p => String(((p && p.setup) || {}).start || (p && p.start) || '').slice(0, 10);
+/** 3.10.0: the event lines of a No activity mark, newest first. */
+export const naLog = na => (na && na.log && na.log.length ? na.log : na ? [{ e: 'Marked', at: na.at, by: na.by, why: na.why }] : []).slice().reverse();
 /** 3.7.0: the office's line for a report sent with fewer than 12 photos. */
 export const fewLine = f => `Submitted with ${f.n} photo${f.n === 1 ? '' : 's'} – ${f.why}`;
 /** 3.7.0: { n, why } of a report sent with fewer than 12 photos and a reason, else null. */
@@ -50,7 +57,7 @@ export function reqLine(r) {
 export const reqLog = r => ((r && r.log) || []).map(x => ({ text: `Report ${x.e.toLowerCase()}${x.e === 'Requested' && x.to ? ` from ${x.to}` : ''}`, by: x.by, at: x.at })).reverse();
 /** The pop-up's requests: open, and not put off with Later during this opening. */
 export const popReqs = (list, later = []) => (list || []).filter(r => r && r.date && !later.includes(`${r.proj}|${r.date}`)).sort((a, b) => a.date.localeCompare(b.date));
-export const FILTERS = [['', 'All'], ['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['missing', 'Missing']];
+export const FILTERS = [['', 'All'], ['submitted', 'Waiting'], ['changes', 'Sent back'], ['approved', 'Approved'], ['missing', 'Missing'], ['noact', 'No activity']];
 
 const isOff = (p, d) => (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
 
@@ -75,14 +82,17 @@ export function monthRows(month, real, project, drafts, known = {}, others = [])
 export function monthDays(today, project, drafts, known = {}, others = [], real = today, whole = false) {
   const sent = new Map();
   const marked = new Map();   // 3.6.0 (owner, 17 Nov): days the GM or the PE marked as day-off ({ date, off })
+  const na = new Map();   // 3.10.0: days marked No activity ({ date, na })
   for (const o of others || []) if (o && o.date && o.off) marked.set(o.date, o.off);
+  else if (o && o.date && o.na) na.set(o.date, o.na);
   else if (o && o.date && (!sent.has(o.date) || Number(o.no) > Number(sent.get(o.date).no))) sent.set(o.date, o);
   const first = today.slice(0, 8) + '01';
   // days before the first report on this phone are left out: their reports may have come from the old app
   const mine = Object.keys(drafts).filter(k => k.startsWith(project.code + '|')).map(k => k.split('|')[1]).sort()[0] || today;
   // 2.17.0: with the project's reports from Central Hub, the whole month shows (not only from this phone's first)
   const start = Number(today.slice(8)) < 8 ? addDays(today, -31) : first;
-  const from = (others || []).length || whole ? start : [start, mine].sort()[1];   // 2.80.0: an earlier month shows all its days
+  const from0 = (others || []).length || whole ? start : [start, mine].sort()[1];   // 2.80.0: an earlier month shows all its days
+  const pst = startOf(project), from = pst && pst > from0 ? pst : from0;   // 3.10.0: nothing before the project start
   const out = [];
   for (let d = today; d >= from; d = addDays(d, -1)) {
     const r = drafts[`${project.code}|${d}`];
@@ -98,11 +108,12 @@ export function monthDays(today, project, drafts, known = {}, others = [], real 
       row.late = lateTag(d, r.firstSentAt || r.sentAt, lateAfter(project));   // 2.47.0: a re-send after a send-back keeps the first send's tag
     } else if (r && r.queuedAt) row.kind = 'queued';
     else if (r && r.start) row.kind = d === real ? 'today' : 'draft';
-    else row.kind = d === real && !marked.has(d) ? 'today' : isOff(project, d) ? 'off' : marked.has(d) ? 'dayoff' : 'missing';
+    else row.kind = d === real && !marked.has(d) && !na.has(d) ? 'today' : isOff(project, d) ? 'off' : marked.has(d) ? 'dayoff' : na.has(d) ? 'noact' : 'missing';
     if (marked.has(d)) row.off = marked.get(d);
+    if (na.has(d)) row.na = na.get(d);
     const o = sent.get(d);
     // 2.41.0: 'queued' too: a report this phone kept but the Admin or another phone sent is sent, not "Not sent yet"
-    if (o && ['today', 'draft', 'missing', 'off', 'dayoff', 'queued'].includes(row.kind)) {
+    if (o && ['today', 'draft', 'missing', 'off', 'dayoff', 'noact', 'queued'].includes(row.kind)) {
       // 2.12.2: a live answer from Central Hub (known) wins over the script's list of the project's reports
       const ko = (o.name && known[o.name]) || {}, st = ko.status || o.status;
       Object.assign(row, { kind: st === 'approved' || st === 'changes' ? st : 'submitted', no: Number(o.no) || o.no, name: o.name, version: ko.version || o.version || 1, by: o.by || '', other: true, at: o.at || '' });
@@ -246,6 +257,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'No activity and the project start (3.10.0)', 'The GM or the PE can mark a missing day as No activity, with a reason. It keeps its report number but is not missing and gets no Request report. Only the Admin changes or removes it. Reports and Review start at the project start date.'],
   ['doc', 'Review by month and week (3.9.0)', 'Review shows every past report grouped by month and week, with sent, approved and missing counts. Older months load as you scroll and stay on the phone for reading without signal. Find by activity or milestone lists the reports that name it, with the first and the last.'],
   ['bell', 'Request report (3.8.0)', 'The GM and the project engineer press Request report on a missing day: the site engineer gets a notification and a pop-up each time the app opens, with Start report and Later, until the report is sent. The day shows Requested, Seen and Submitted.'],
   ['check', 'Fewer than 12 photos (3.7.0)', 'A report can be sent with fewer than 12 photos: Send asks why (at least 10 characters). Only the office sees the reason; the PDF shows the photos from the top left. The app now updates by itself when it opens.'],

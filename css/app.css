@@ -329,6 +329,8 @@ kbd { font: 600 10px "Segoe UI", system-ui, sans-serif; border: 1px solid var(--
 .dnum { width: 40px; flex: none; text-align: center; font-size: 10.5px; color: var(--muted); text-transform: uppercase; line-height: 1.1; }
 .dnum b { display: block; font-size: 17px; color: var(--ink); }
 .pill.muted { background: var(--line-2); color: var(--muted); }
+/* 3.10.0: No activity, its own colour (violet) */
+.pill.na { background: #ede9fe; color: #6d28d9; } .na-t { color: #6d28d9; } .callout.na-c { border-left: 3px solid #7c3aed; }
 .late { color: var(--bad) !important; font-weight: 600; }
 .past { background: var(--warn-soft); color: var(--ink); border-radius: 11px; padding: 10px 12px; }
 .past p { margin: 6px 0 0; }

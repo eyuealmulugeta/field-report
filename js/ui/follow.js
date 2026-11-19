@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, isGM } from './parts.js';
 import * as L from '../core/live.js';   // 2.42.0: seenFrom
-import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS, fewOf, reqLine, reqLog, reqOpen, reqGap, popReqs } from '../model/follow.js';
+import { STATUS, FILTERS, monthDays, monthRows, monthName, allDays, counts, allRequests, lateRequest, WHATS_NEW, lastStep, unsharedRequests, eventLog, DAYOFF_KINDS, fewOf, reqLine, reqLog, reqOpen, reqGap, popReqs, startOf, naLog } from '../model/follow.js';
 import { STEPS } from '../model/report.js';
 import { requestLine } from '../model/end.js';
 import { canPdf } from './view.js';
@@ -21,10 +21,13 @@ const stepLine = s => (s && s.at ? `${STEP_DONE[s.kind] || 'Sent'}${s.by ? ` by 
 const allOn = c => !!c.ui.allProj && isGM(c);
 /** 2.80.0 (owner, 9 Nov): Reports by month: < November 2026 >; an earlier month's reports come from Central Hub. */
 const monthOf = c => c.ui.rMonth || c.realToday.slice(0, 7);
-const othersFor = (c, code) => { const m = monthOf(c), cur = m === c.realToday.slice(0, 7); return cur ? (c.s.others || {})[code] || [] : (c.ui.mRows || {})[`${code}|${m}`]; };
+// 3.10.0: an earlier month also keeps the days marked off or No activity (they come with the project's days)
+const marksOf = (c, code, m) => ((c.s.others || {})[code] || []).filter(o => (o.na || o.off) && String(o.date).startsWith(m));
+const othersFor = (c, code) => { const m = monthOf(c), cur = m === c.realToday.slice(0, 7), r = (c.ui.mRows || {})[`${code}|${m}`]; return cur ? (c.s.others || {})[code] || [] : r && [...r, ...marksOf(c, code, m)]; };
 export function monthBar(c, codes) {
   const m = monthOf(c), cur = m === c.realToday.slice(0, 7), missing = !cur && codes.some(k => !(c.ui.mRows || {})[`${k}|${m}`]);
-  return html`<div class="spread rmonth"><button type="button" class="btn t slim" data-act="repMonth" data-v="-1" aria-label="Month before">‹</button><b>${monthName(m)}</b><button type="button" class="btn t slim" data-act="repMonth" data-v="1" aria-label="Month after" ${cur ? 'disabled' : ''}>›</button></div>
+  const sm = allOn(c) ? '' : startOf(c.project).slice(0, 7);   // 3.10.0: no month before the project start
+  return html`<div class="spread rmonth"><button type="button" class="btn t slim" data-act="repMonth" data-v="-1" aria-label="Month before" ${sm && m <= sm ? 'disabled' : ''}>‹</button><b>${monthName(m)}</b><button type="button" class="btn t slim" data-act="repMonth" data-v="1" aria-label="Month after" ${cur ? 'disabled' : ''}>›</button></div>
     ${c.ui.mBusy ? html`<p class="muted small center">Reading ${monthName(m)} from Central Hub…</p>` : missing ? html`<button type="button" class="btn o" data-act="repMonth" data-v="0">Load ${monthName(m)}</button>` : ''}`;
 }
 
@@ -58,8 +61,8 @@ export function reports(c) {
       ${monthBar(c, [c.project.code])}<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
       ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
-        <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'dayoff' ? `Day off · ${x.off.k}` : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
-          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') : x.kind === 'dayoff' ? `Marked by ${x.off.by}${x.off.note ? `: ${x.off.note}` : ''}` : x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>
+        <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'dayoff' ? `Day off · ${x.off.k}` : x.kind === 'noact' ? 'No activity' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
+          <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') : x.kind === 'dayoff' ? `Marked by ${x.off.by}${x.off.note ? `: ${x.off.note}` : ''}` : x.kind === 'noact' ? html`<span title="${x.na.why}">${x.na.why} · ${x.na.by}</span>` : x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>
         ${x.late ? html`<span class="pill warn">${x.late}</span>` : ''}${pill(x.kind)}</button>`)}</div>`
         : html`<div class="box pad muted small">Nothing here.</div>`}
       <p class="muted tiny center">The office's answers are checked when the app opens and every 10 minutes${c.s.knownAt ? ` · last ${new Date(c.s.knownAt).toTimeString().slice(0, 5)}` : ''}.</p>`,
@@ -83,7 +86,7 @@ const rated = x => (x.other ? { ...x.report, firstSentAt: Date.parse(x.at || '')
 export function daySheet(c) {
   // 2.80.0: a day of an earlier month (Reports by month) is found in that month's reports from Central Hub
   const dm = String(c.ui.daySel || '').slice(0, 7), old = dm && dm < c.realToday.slice(0, 7) && (c.ui.mRows || {})[`${c.project.code}|${dm}`];
-  const x = (old ? monthRows(dm, c.realToday, c.project, c.s.drafts, c.s.known, old) : monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code])).find(y => y.date === c.ui.daySel);
+  const x = (old ? monthRows(dm, c.realToday, c.project, c.s.drafts, c.s.known, [...old, ...marksOf(c, c.project.code, dm)]) : monthDays(c.realToday, c.project, c.s.drafts, c.s.known, (c.s.others || {})[c.project.code])).find(y => y.date === c.ui.daySel);
   if (!x) return '';
   const k = (x.name && c.s.known[x.name]) || {};
   const comments = k.comments || [];
@@ -106,6 +109,14 @@ export function daySheet(c) {
     ${x.kind === 'missing' && may ? html`<div class="k">Mark as day-off</div><div class="chips">${DAYOFF_KINDS.map(k => html`<button type="button" class="chip ${(c.ui.offK || 'Holiday') === k ? 'on' : ''}" data-act="pick" data-f="ui.offK" data-v="${k}">${k}</button>`)}</div>
       <input class="fld" maxlength="80" data-ui="offNote" placeholder="Note (optional)" value="${c.ui.offNote || ''}">
       <button type="button" class="btn o" data-act="dayOff" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Mark as day-off</button>` : ''}   <!-- 3.6.0 (owner, 17 Nov): the GM and the PE -->
+    ${x.kind === 'missing' && may ? html`<div class="k">Mark as No activity</div><p class="muted tiny">A working day: it keeps its report number, is not missing and gets no Request report.</p>
+      <input class="fld" maxlength="120" data-ui="naWhy" placeholder="Reason (required)" value="${c.ui.naWhy || ''}">
+      <button type="button" class="btn o" data-act="noAct" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>${icon('pause')}Mark No activity</button>` : ''}   <!-- 3.10.0 (owner, 19 Nov) -->
+    ${x.kind === 'noact' ? html`<p class="callout na-c">${icon('pause')} No activity · <b>${x.na.why}</b> · marked by ${x.na.by}${x.na.at ? `, ${stampOf(x.na.at)}` : ''}. Not missing; it keeps report #${x.no || '–'}.</p>
+      <div class="box">${naLog(x.na).map(m => html`<div class="li"><span class="ic">${icon('pause')}</span><div class="n"><b>${m.e}: ${m.why}</b><span>${m.by || ''} · ${stampOf(m.at)}</span></div></div>`)}</div>
+      ${isGM(c) ? html`<input class="fld" maxlength="120" data-ui="naWhy" placeholder="New reason" value="${c.ui.naWhy || ''}">
+        <div class="day-acts"><button type="button" class="btn o slim" data-act="noAct" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Change reason</button>
+        <button type="button" class="btn t slim bad-t" data-act="noActUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Remove</button></div>` : html`<p class="muted tiny">Only the Admin changes or removes it.</p>`}` : ''}
     ${x.kind === 'dayoff' ? html`<p class="callout">Day off · <b>${x.off.k}</b>${x.off.note ? ` · ${x.off.note}` : ''} · marked by ${x.off.by}${x.off.at ? `, ${stampOf(x.off.at)}` : ''}. No report is needed.</p>
       ${may ? html`<button type="button" class="btn t slim bad-t" data-act="dayOffUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Change back to Missing</button>` : ''}` : ''}
     ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}

@@ -27,7 +27,7 @@ import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbe
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
-import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries, dueDefault } from './model/follow.js';
+import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries, dueDefault, naEntries, startOf } from './model/follow.js';
 import { monthShift, moreMonths } from './model/review.js';   // 3.9.0
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
@@ -285,6 +285,21 @@ async function flush() {
 
 /** Asks the office (script `status`) about the reports sent and not approved yet. force = all of them now. */
 /** 2.9.0: the reports of the project sent from any phone, so this one shows "Submitted" for them too. */
+/** 3.10.0 (owner, 19 Nov): No activity on a day, with a reason (GM or PE); change or remove: the Admin only (the script checks). */
+async function noActSend(date, undo) {
+  const p = project(), why = String(ui.naWhy || '').trim();
+  if (!p || ui.busy) return;
+  if (!undo && !why) { toast('Write the reason first.'); return; }
+  ui.busy = true; draw();
+  try {
+    const res = await call('noAct', { proj: p.code, date, undo, why });
+    const keep = ((store.get().others || {})[p.code] || []).filter(o => !o.na);
+    store.set({ others: { ...(store.get().others || {}), [p.code]: [...keep, ...naEntries(res.noAct)] } });
+    ui.naWhy = ''; ui.sheet = '';
+    toast(undo ? 'Removed. The day is missing again.' : 'Marked No activity. Central Hub is told.');
+  } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was changed.' : `Not changed: ${e.message}`); }
+  finally { ui.busy = false; draw(); }
+}
 async function dayOffSend(date, undo) {
   const p = project();
   if (!p || ui.busy) return;
@@ -343,7 +358,7 @@ const laterList = () => { try { return JSON.parse(sessionStorage.getItem(REQ_LAT
 async function teamDays(p) {
   try {
     const res = await call('projectDays', { proj: p.code });
-    store.set({ others: { ...(store.get().others || {}), [p.code]: [...(res.days || []), ...offEntries(res.dayOff)] }, ...(res.reqs ? { reqs: { ...(store.get().reqs || {}), [p.code]: res.reqs } } : {}) });   // 3.6.0: + the days marked off; 3.8.0: + the report requests
+    store.set({ others: { ...(store.get().others || {}), [p.code]: [...(res.days || []), ...offEntries(res.dayOff), ...naEntries(res.noAct)] }, ...(res.reqs ? { reqs: { ...(store.get().reqs || {}), [p.code]: res.reqs } } : {}) });   // 3.6.0: + the days marked off; 3.8.0: + the report requests
   } catch { /* an older script or offline: this phone's own reports only */ }
 }
 async function checkStatus(force) {
@@ -1698,6 +1713,7 @@ const ACTS = {
     const cur = realToday().slice(0, 7);
     let m = FM.shiftMonth(ui.rMonth || cur, Number(d.v) || 0);
     if (m > cur) m = cur;
+    const sm = startOf(project()).slice(0, 7); if (sm && m < sm && !ui.allProj) m = sm;   // 3.10.0: not before the project start
     ui.rMonth = m === cur ? '' : m;
     if (ui.rMonth) monthLoad(m); else draw();
   },
@@ -1758,6 +1774,8 @@ const ACTS = {
     ACTS.openPast({ v: d.v });
   },
   dayOffUndo(d) { if (confirm(`Change ${d.v} back to Missing?`)) return dayOffSend(d.v, true); },
+  noAct(d) { return noActSend(d.v, false); },   // 3.10.0
+  noActUndo(d) { if (confirm(`Remove No activity from ${d.v}? The day is missing again.`)) return noActSend(d.v, true); },
   projPopPick: d => { ui.projPop = false; ACTS.projHere(d); },   // 2.39.0
   projHere: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } draw(); },
   revProj: d => { if (d.v !== store.get().proj) { store.set({ proj: d.v }); loadSetup(); } ui.rv = { f: (ui.rv || {}).f }; ACTS.revLoad(); },

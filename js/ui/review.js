@@ -53,19 +53,21 @@ export function review(c) {
 }
 
 /* 3.9.0 (owner, 18 Nov): every past report by Month › Week, one month loaded at a time as the list scrolls */
-const counts = n => html`<span class="muted small">${n.sent} sent · ${n.approved} approved${n.missing == null ? '' : html` · <b class="${n.missing ? 'bad-t' : ''}">${n.missing} missing</b>`}</span>`;
+const counts = n => html`<span class="muted small">${n.sent} sent · ${n.approved} approved${n.missing == null ? '' : html` · <b class="${n.missing ? 'bad-t' : ''}">${n.missing} missing</b>`}${n.noact ? html` · <span class="na-t">${n.noact} no activity</span>` : ''}</span>`;
 const rowOf = (c, x, all, projOf) => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
   <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`;
 function grouped(c, all, f, projOf) {
   const rv = c.ui.rv || {}, months = rv.months || {}, keys = Object.keys(months).sort().reverse(), shut = c.ui.rvShut || {}, code = all ? '' : c.project.code;
   if (!keys.length) return html`<p class="muted">${rv.busy ? 'Getting this month’s reports…' : `Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.`}</p>`;
   const mine = (rv.list || []).filter(x => !code || String(x.name || '').includes(`_${code}_`));
-  const start = mine.reduce((a, x) => (!a || x.date < a ? x.date : a), '');
+  const pst = all ? '' : startOf(c.project);   // 3.10.0: the project start, else the first report
+  const start = pst || mine.reduce((a, x) => (!a || x.date < a ? x.date : a), '');
+  const noact = all ? [] : (((c.s.others || {})[c.project.code]) || []).filter(o => o.na).map(o => o.date);
   const off = [...(c.project.nonWorking || []), ...(((c.s.others || {})[c.project.code]) || []).filter(o => o.off).map(o => o.date)];
   const out = keys.map(m => {
     const allM = reviewRows(months[m], code, ''), rows = reviewRows(months[m], code, f, { day: c.ui.revDay || '', q: c.ui.revQ || '' });
     const nowork = ((rv.nowork || {})[m] || []).filter(k => !code || k.startsWith(`${code}|`)).map(k => k.split('|')[1]);
-    const weeks = monthWeeks(m, rows, allM, all ? { today: c.realToday, start: '9999' } : { today: c.realToday, nwDow: c.project.nwDow || [0], off, nowork, start });
+    const weeks = monthWeeks(m, rows, allM, all ? { today: c.realToday, start: '9999' } : { today: c.realToday, nwDow: c.project.nwDow || [0], off, nowork, noact, start });
     const n = monthCounts(weeks); if (all) n.missing = null;
     const open = !shut[m];
     return html`<div class="rv-m"><button type="button" class="li rv-h" data-act="revShut" data-v="${m}" aria-expanded="${open}"><div class="n"><b>${open ? '▾' : '▸'} ${monthTitle(m)}</b>${counts(n)}</div></button>
@@ -73,7 +75,7 @@ function grouped(c, all, f, projOf) {
         ${wo ? (w.rows.length ? html`<div class="box">${w.rows.map(x => rowOf(c, x, all, projOf))}</div>` : html`<p class="muted small">No report${f || c.ui.revDay || c.ui.revQ ? ' matches' : ''} this week.</p>`) : ''}</div>`; }) : ''}</div>`;
   });
   const prev = monthShift(keys[keys.length - 1], -1);
-  return html`${out}${moreMonths(months) ? html`<button type="button" class="btn o" id="revMore" data-act="revMore" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Getting the reports…' : `Show ${monthTitle(prev)}`}</button>` : html`<p class="muted small">That is every report.</p>`}`;
+  return html`${out}${moreMonths(months) && !(pst && prev < pst.slice(0, 7)) ? html`<button type="button" class="btn o" id="revMore" data-act="revMore" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Getting the reports…' : `Show ${monthTitle(prev)}`}</button>` : html`<p class="muted small">That is every report.</p>`}`;
 }
 /* 3.9.0: search by an activity or milestone of the schedule (option B): the reports that name it, the first and the last */
 function findBox(c, all) {
