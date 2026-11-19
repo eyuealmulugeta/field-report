@@ -56,11 +56,18 @@ export async function routeOf(get = fetch) {
  * What a Central Hub report record says for the phone's `known` list, keyed by the report file name.
  * An approval made in Central Hub and not yet passed to the script (review done, status still submitted) shows as approved.
  */
+/** 3.12.0: who approved a report in Central Hub (or in Field Report, as Central Hub keeps it): { name, position, at, sig }. */
+export function approverOf(rec) {
+  const a = rec?.approval || {}, c = rec?.field?.checked || {};
+  const name = a.by || rec?.approvedBy || c.by || '';
+  return name ? { name, position: a.title || c.pos || '', at: a.at || rec?.approvedAt || c.at || '', sig: a.sig || c.sig || '' } : null;
+}
+
 export function knownOf(rec, now = Date.now()) {
   const f = rec?.field;
   if (!f || !f.pdf || rec.source !== 'field') return null;
   const status = rec.review === 'done' && (!f.status || f.status === 'submitted') ? 'approved' : f.status || 'submitted';
-  return [f.pdf, { status, version: f.version || 1, comments: Array.isArray(f.comments) ? f.comments : [], history: Array.isArray(f.history) ? f.history : [], checked: now, live: true }];
+  return [f.pdf, { status, version: f.version || 1, comments: Array.isArray(f.comments) ? f.comments : [], history: Array.isArray(f.history) ? f.history : [], checked: now, live: true, ...(status === 'approved' ? { approver: approverOf(rec) } : {}) }];
 }
 
 let fb = null;          // { auth, db, F } once loaded

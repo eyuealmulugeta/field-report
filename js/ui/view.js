@@ -6,7 +6,7 @@ import { dayLabel } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { totals } from '../model/crew.js';
 import { summary, byZone, requestReady, planReady, planLine } from '../model/end.js';
-import { photoCaption } from '../pdf.js';
+import { photoCaption, approvedWhen } from '../pdf.js';
 import { stepHead, kpi } from './parts.js';
 import { thumb } from './work.js';
 
@@ -25,7 +25,8 @@ const qty = x => (x.qty != null && x.qty !== '' ? `${x.qty} ${x.unit}` : '');
 export function final(c) {
   const r = c.report, p = c.project;
   if (!r || !p) return { head: stepHead('Final report', '', 'send'), body: html`<div class="box pad muted small">No report today.</div>` };
-  const ok = ((c.s.known || {})[pdfName(p, r.date, r.no)] || {}).status === 'approved', cols = Number(r.photoCols) === 2 ? 2 : 3;
+  const kn = (c.s.known || {})[pdfName(p, r.date, r.no)] || {}, ok = kn.status === 'approved', cols = Number(r.photoCols) === 2 ? 2 : 3;
+  const ap = ok ? kn.approver || null : null;   // 3.12.0
   const n = r.photos.length;
   const layout = ok ? html`<p class="soft small">Approved: the layout is final.</p>` : n ? html`<div class="k">Photo layout</div>
     <div class="box pad"><div class="chips">${[[3, '3 in a row'], [2, '2 in a row, bigger']].map(([v, t]) => html`<button type="button" class="chip ${cols === v ? 'on' : ''}" data-act="photoCols" data-v="${v}">${t}</button>`)}</div>
@@ -36,6 +37,7 @@ export function final(c) {
   return {
     head: stepHead('Final report', `#${r.no} · ${dayLabel(r.date)}`, 'send'),
     body: html`<p class="${ok ? 'soft' : 'callout warn'} small"><span class="pill ${ok ? 'ok' : 'warn'}">${ok ? 'APPROVED' : 'DRAFT'}</span> ${ok ? 'The Project Engineer or the GM approved this report.' : 'Until the Project Engineer or the GM approves it.'}</p>
+      <div class="box pad small approved-by"><div class="k">Approved by</div>${ap ? html`<b>${ap.name}</b>${ap.position ? html` · ${ap.position}` : ''}<br><span class="muted">${approvedWhen(ap.at)}</span>${(c.ui.apSig || {})[pdfName(p, r.date, r.no)] ? html`<br><img class="ap-sig" src="${c.ui.apSig[pdfName(p, r.date, r.no)]}" alt="Signature of ${ap.name}">` : ''}` : html`<span class="muted">${ok ? 'Approved' : 'Not approved yet'}</span>`}</div>
       <p class="tiny muted">View only: this report cannot be shared, downloaded or printed from this phone. The office sends it to the client.</p>
       ${layout}
       ${c.ui.finalErr ? html`<p class="callout warn small">The report could not be shown: ${c.ui.finalErr}</p>` : ''}

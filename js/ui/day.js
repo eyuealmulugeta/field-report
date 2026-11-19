@@ -53,7 +53,8 @@ export function delivery(c) {
   const names = materialChoices(c.project.setup, seen).slice(0, 14);
   return {
     head: stepHead('Delivery', `${editing ? 'Edit' : 'New'} · ${x.at}`, 'materials'),
-    body: html`<div class="lab">Photo of the delivery <span class="muted thin">· its time is the delivery time</span></div>
+    body: html`<div class="lab">Photo of the delivery <span class="muted thin">· optional · its time is the delivery time</span></div>
+      ${x.photos.length ? '' : html`<button type="button" class="callout small left recv-ask" data-act="recvPhoto">${icon('cam')} Add a photo of this delivery or its delivery note? <span class="muted">Optional: you can save without it.</span></button>`}
       <div class="thumbs big">${x.photos.map(p => thumb(p))}${camTile('recvPhoto')}</div>
       <div class="lab">Material</div>
       ${names.length ? chips('recv.name', names, x.name) : ''}

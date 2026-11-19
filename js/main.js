@@ -373,7 +373,8 @@ async function checkStatus(force) {
   for (const x of list) {
     try {
       const res = await call('status', { name: x.name });
-      known[x.name] = res.found ? { status: res.report.status, version: res.report.version, comments: res.report.comments || [], history: res.report.history || [], checked: Date.now() } : { status: 'submitted', comments: [], checked: Date.now() };
+      known[x.name] = res.found ? { status: res.report.status, version: res.report.version, comments: res.report.comments || [], history: res.report.history || [], checked: Date.now(), ...(res.report.approver ? { approver: { ...res.report.approver, sig: '' } } : {}) } : { status: 'submitted', comments: [], checked: Date.now() };
+      if (res.found && res.report.approver && res.report.approver.sig) (ui.apSig = ui.apSig || {})[x.name] = res.report.approver.sig;   // 3.12.0: in memory only
     } catch (e) { if (e.code === 'OFFLINE') break; }
   }
   ui.checking = false;
@@ -416,6 +417,7 @@ async function goLive(at = '') {
   const st = await L.listen({
     code: p.code, email: a.email,
     onKnown: list => {
+      list.forEach(([n, k]) => { if (k.approver && k.approver.sig) { (ui.apSig = ui.apSig || {})[n] = k.approver.sig; k.approver = { ...k.approver, sig: '' }; } });   // 3.12.0
       store.set({ known: { ...store.get().known, ...Object.fromEntries(list) } });
       liveReview(list);   // 2.12.2: the reviewer's list too
       inboxCheck();
@@ -857,6 +859,22 @@ async function makePdf(r, p, step = () => {}) {
 }
 
 /** The report's PDF document (jsPDF); 2.94.0: also drawn in the app as the view-only final report (view.stamp). */
+/**
+ * 3.12.0 (owner, 19 Nov: "show the approver's full name, role, approval date and time, and signature"): the approver of
+ * an approved report, with the signature. Cause of the blank box: the phone built the PDF with no approver at all.
+ * The signature is asked from the script (status) and kept in memory only; offline, the name without it.
+ */
+async function approverFor(name) {
+  const k = (store.get().known || {})[name] || {}, mem = (ui.apSig || {})[name] || '';
+  if (k.approver && mem) return { ...k.approver, sig: mem };
+  try {
+    const res = await call('status', { name });
+    const a = res.found && res.report.approver;
+    if (a) { (ui.apSig = ui.apSig || {})[name] = a.sig || ''; return a; }
+  } catch { /* offline: what is known */ }
+  return k.approver ? { ...k.approver, sig: mem } : null;
+}
+
 async function pdfDoc(r, p, view = null) {
   const JsPDF = await loadPdfLib();
   const photos = [];
@@ -873,7 +891,8 @@ async function pdfDoc(r, p, view = null) {
   const pic = f => (f ? fetch(f).then(x => x.blob()).then(toDataUrl).catch(() => '') : '');
   const [logo, weather] = await Promise.all([pic('icon-192.png'), pic(weatherFile(weatherTerm(r.start.cond)) && `img/weather/${weatherFile(weatherTerm(r.start.cond))}.png`)]);
   if (!view) pdfSignedAt = now();   // 2.23.0: kept with the whole report, so Central Hub prints the same time
-  return buildPdf(JsPDF, { r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, progress: progressRows(p.setup, r.items), sig: r.signed ? prof.sig : '', signedAt: view ? pdfSignedAt || now() : pdfSignedAt, ...(view ? { stamp: view.stamp } : {}) });
+  const approver = view && view.stamp === 'APPROVED' ? await approverFor(pdfName(p, r.date, r.no)) : null;   // 3.12.0
+  return buildPdf(JsPDF, { ...(approver ? { approver } : {}), r, project: p, profile: prof, file: pdfName(p, r.date, r.no), logo, weather, photos, progress: progressRows(p.setup, r.items), sig: r.signed ? prof.sig : '', signedAt: view ? pdfSignedAt || now() : pdfSignedAt, ...(view ? { stamp: view.stamp } : {}) });
 }
 
 /**
@@ -2658,7 +2677,7 @@ const ACTS = {
   recvPhoto() { ui.camFor = 'recv'; camera(); },
   saveRecv(d) {
     const x = ui.recv;
-    if (!x.photos.length) return toast('Take the photo of the delivery first: its time is the delivery time.');
+    // 3.12.0 (owner, 19 Nov): the photo is asked for on every delivery but is optional; without one the delivery keeps the time it was opened
     if (!String(x.name || '').trim()) return toast('Write or pick the material first.');
     x.name = x.name.trim(); x.qty = num(x.qty);
     edit(r => { const i = r.received.findIndex(y => y.id === x.id); if (i >= 0) r.received[i] = x; else r.received.push(x); r.done.materials = false; });
