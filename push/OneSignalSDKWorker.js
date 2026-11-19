@@ -21,8 +21,20 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(caches.open('fr2-kit').then(c => c.match('kit.json')).then(r => (r ? r.json() : null)).then(k => {
     if (!k || !k.token) return showAgain(n, 'open Field Report once on this device');
     return fetch(k.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow',
-      body: JSON.stringify({ action: 'remindLater', date: m[1], proj: m[2], no: m[3], token: k.token, dev: k.dev, mode: k.mode, app: k.app }) })
+      body: JSON.stringify({ action: 'remindLater', date: m[1], proj: m[2], no: m[3], mins: 60, token: k.token, dev: k.dev, mode: k.mode, app: k.app }) })   // 3.11.0: 1 hour
       .then(res => res.json()).then(j => (j && j.ok ? null : showAgain(n, 'sign in again in Field Report')));
   }).catch(() => showAgain(n, 'no connection')));
+});
+// 3.11.0 (owner, 19 Nov: "Stop all reminders for that item once the task is done or dismissed"): a report notification
+// swiped away drops this person's reminder of it on the server, so no phone of theirs shows it again.
+const REP_RE = /#go=(?:review|later)\/(\d{4}-\d{2}-\d{2})\/([A-Z0-9]+)\/(\d+)/;
+self.addEventListener('notificationclose', e => {
+  const m = REP_RE.exec(JSON.stringify((e.notification && e.notification.data) || {}));
+  if (!m) return;
+  e.waitUntil(caches.open('fr2-kit').then(c => c.match('kit.json')).then(r => (r ? r.json() : null)).then(k => {
+    if (!k || !k.token) return null;
+    return fetch(k.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow',
+      body: JSON.stringify({ action: 'laterOff', date: m[1], proj: m[2], no: m[3], token: k.token, dev: k.dev, mode: k.mode, app: k.app }) });
+  }).catch(() => null));
 });
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");

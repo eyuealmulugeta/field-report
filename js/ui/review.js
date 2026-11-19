@@ -125,6 +125,7 @@ export function rev(c) {
       ${comments.length ? html`<div class="k">Comments · ${x.commentCount || comments.length}</div><div class="box">${comments.map(m => html`<div class="li"><div class="n"><b>${m.text || ''}</b><span>${m.by || ''} · ${when(m.at)}</span></div></div>`)}</div>` : ''}
       ${hist.length ? html`<div class="k">Event log</div><div class="box">${hist.map(h => html`<div class="li"><span class="ic ${h.kind === 'changes' ? 'bad' : h.kind === 'approve' ? 'ok' : ''}">${icon(h.kind === 'approve' ? 'check' : 'doc')}</span>
         <div class="n"><b>${h.text || h.kind}</b><span>${h.by || ''} · ${when(h.at)}</span></div></div>`)}</div>` : ''}
+      ${may && st === 'submitted' ? html`<div class="k">Remind me</div><div class="chips">${[['60', 'In 1 hour'], ['180', 'In 3 hours'], ['tomorrow', 'Tomorrow 08:00']].map(([v, t]) => html`<button type="button" class="chip" data-act="revLater" data-v="${v}">${t}</button>`)}</div>` : ''}
       ${may ? html`<div class="k">Your answer</div><div class="box pad">
         <textarea class="fld" rows="3" data-ui="revText" placeholder="Comment or what to change: it goes to ${to} only">${c.ui.revText || ''}</textarea>
         <div class="two">${st !== 'approved' ? html`<button type="button" class="btn o" data-act="revDo" data-v="changes" ${rv.busy ? 'disabled' : ''}>Send back</button><button type="button" class="btn p" data-act="revDo" data-v="approve" ${rv.busy ? 'disabled' : ''}>${icon('check')}Approve</button>`
@@ -132,6 +133,16 @@ export function rev(c) {
         <div class="two"><button type="button" class="btn o" data-act="revDo" data-v="comment" ${rv.busy ? 'disabled' : ''}>Comment</button><button type="button" class="btn t bad-t" data-act="revHide" ${rv.busy ? 'disabled' : ''}>Remove</button></div>
         <p class="muted small">Approving signs the report with your signature (set it under Me).</p></div>` : ''}`,
   };
+}
+
+/** 3.11.0 (owner, 19 Nov): Remove crew asked from site: Approve or Reject (with why) here too. */
+function removals(c) {
+  const list = (c.project.staff || []).filter(x => x.dropAsk);
+  if (!list.length) return '';
+  const may = c.kind === 'reviewer' || isGM(c);
+  return html`<div class="k">Removal requests · ${list.length}</div><div class="box">${list.map(x => { const a = x.dropAsk; return html`<div class="li"><div class="n"><b>${x.name}</b>
+    <span>${x.trade || ''} · ${[a.reason, a.note].filter(Boolean).join(': ') || 'no reason'}${a.lastDay ? ` · last day ${dayLabel(a.lastDay)}` : ''} · asked by ${a.byName || a.by}</span></div>
+    ${may && c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Approve</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}" data-n="${x.name}">Reject</button>` : html`<span class="pill warn">Pending</span>`}</div>`; })}</div>`;
 }
 
 export function crewrev(c) {
@@ -145,6 +156,7 @@ export function crewrev(c) {
           <input class="fld slim" inputmode="decimal" data-ui="cw_${x.id}" value="${wage ?? (x.wage || '')}" placeholder="${x.tradeWage || 'Daily wage'}" aria-label="Daily wage of ${x.name}" ${may ? '' : 'disabled'}></div>`; })}
         ${may ? html`<button type="button" class="btn p" data-act="crewOkSend" ${c.ui.busy ? 'disabled' : ''}>Approve the ticked people</button>` : html`<p class="muted small">Approving crew is not yours to do.</p>`}</div>`
       : html`<p class="muted">Nobody is waiting. When the site sends its crew list, the names appear here.</p>`}
+      ${removals(c)}
       ${hoursBox(c)}`,
   };
 }

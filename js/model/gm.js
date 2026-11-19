@@ -41,7 +41,7 @@ export function board({ rows = [], marks = {}, team = [], reqs = [], sm = [], po
     [req.waiting, 'request', 'requests waiting for approval', 'requests'],
     [k.store, 'store movement', 'store movements to approve', 'store'],
     [k.pens, 'penalty', 'penalties to decide', 'penalties'],
-    [k.shots, 'work photo', 'work photos to check', 'media:work'],
+    [k.shots, 'photo from crews', 'photos from crews to check', 'media:work'],
     [k.missing, 'missing report', 'missing reports in the last 14 days', 'reports'],
   ].filter(([n]) => n > 0).map(([n, one, many, to]) => ({ n, text: n === 1 ? `1 ${one}` : `${n} ${many}`, to }));
   return { day, week: last7.slice().reverse(), crew, req, spot, k, needs };

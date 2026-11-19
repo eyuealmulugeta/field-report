@@ -207,7 +207,7 @@ export async function listen({ code, email, onKnown, onChange = () => {}, onPing
 }
 
 /** 2.13.0: only what a phone needs of a team member (no wages or levels); 2.17.0 a delete asked. */
-const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite, dropAsk: m.dropAsk || null, dropOk: m.dropOk || null });
+const pick = m => ({ name: m.name || '', role: m.role || '', active: m.active !== false, fromSite: !!m.fromSite, dropAsk: m.dropAsk || null, dropOk: m.dropOk || null, dropNo: m.dropNo || null });   // 3.11.0: dropNo, a removal rejected
 
 /** 2.17.0: one report of the project for the Reports list, from Central Hub: the same status as Review, with its times. */
 export function dayOf(rec) {
@@ -272,7 +272,7 @@ export async function now(action, body = {}) {
   if (!signedIn()) return null;
   try { return (await fb.N.httpsCallable(fb.N.getFunctions(fb.app, 'europe-west1'), 'fieldNow')({ action, ...body })).data; }
   catch (e) {
-    if (['crewDrop', 'crewOff', 'crewPerson', 'crewSave'].includes(action)) throw e;
+    if (['crewDrop', 'crewOff', 'crewKeep', 'crewBack', 'crewPerson', 'crewSave'].includes(action)) throw e;
     if (action === 'report' && e && e.code && String(e.code).includes('permission-denied')) return { ok: false, refused: String(e.message || '') };   // 2.69.0
     // 2.82.0 (owner, 9 Nov: Kinshasa's 09/11 never reached the database, no reason anywhere): any other failure says why
     if (action === 'report') return { ok: false, failed: `Not sent: ${String((e && (e.message || e.code)) || 'no answer').replace(/^Firebase(Error)?:\s*/, '').slice(0, 120)}. It is sent again by itself.` };

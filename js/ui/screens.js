@@ -234,6 +234,7 @@ export function att(c) {
     tab: 'att',
     head: head('Attendance', sub),
     body: html`${attTabs(c)}${refreshRow(c)}
+      ${removeBox(c, staff)}
       ${staff.length ? html`<div class="k">Crew on this project · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>`
         : html`<p class="callout warn">Central Hub has no crew allocated to this project yet. Add people on site, or ask the office to allocate the crew.</p>`}
       ${crewAdmin(c, false)}`,
@@ -318,25 +319,43 @@ const av = (c, x) => { const src = x.id && (c.ui.photos || {})[x.id]; return src
 // 2.17.0: delete from the list: anyone of the site asks, the PE or the GM confirms
 const dropOk = c => c.kind === 'reviewer' || isGM(c);   // 2.41.0 (owner): the Project engineer or the GM, not the Site engineer
 /** 2.17.1: Office: the project's crew with Delete, and who was deleted, by whom and when (last 30 days). */
+/** 3.11.0 (owner, 19 Nov): Remove crew: tick people, the last working day and a reason (Other needs a note). */
+export const REMOVE_REASONS = ['Laid off', 'Resigned', 'Transferred', 'Other'];
+function removeBox(c, staff) {
+  const may = c.ui.live === 'on' && (crewBoss(c) || c.kind === 'reporter');
+  if (!may || !staff.length) return '';
+  if (!c.ui.rmOpen) return html`<button type="button" class="btn o" data-act="rmOpen">Remove crew</button>`;
+  const picks = c.ui.rmPick || {}, n = Object.values(picks).filter(Boolean).length, why = c.ui.rmWhy || '';
+  return html`<div class="k">Remove crew</div><div class="box pad">
+    <p class="muted small">${dropOk(c) ? 'You approve it now.' : 'The Project engineer or the GM approves it. Until then they stay on the list, marked pending.'} Past attendance and pay stay.</p>
+    ${staff.filter(x => x.id && !x.dropAsk && !x.lastDay).map(x => html`<label class="check"><input type="checkbox" data-act="rmPick" data-v="${x.id}" ${picks[x.id] ? 'checked' : ''}> <b>${x.name}</b> <span class="muted">${x.trade || ''}</span></label>`)}
+    <label class="small">Last working day<input class="fld" type="date" data-ui="rmDay" value="${c.ui.rmDay || c.realToday}"></label>
+    <div class="small">Reason</div><div class="chips">${REMOVE_REASONS.map(r => html`<button type="button" class="chip ${why === r ? 'on' : ''}" data-act="pick" data-f="ui.rmWhy" data-v="${r}">${r}</button>`)}</div>
+    <textarea class="fld" rows="2" data-ui="rmNote" placeholder="${why === 'Other' ? 'Note (needed for Other)' : 'Note (optional)'}">${c.ui.rmNote || ''}</textarea>
+    <div class="two"><button type="button" class="btn o" data-act="rmClose">Cancel</button><button type="button" class="btn p" data-act="rmSend" ${c.ui.busy ? 'disabled' : ''}>${dropOk(c) ? `Remove ${n || ''}`.trim() : `Ask to remove ${n || ''}`.trim()}</button></div></div>`;
+}
 function crewAdmin(c, started) {
   const staff = c.project.staff || [], since = Date.now() - 30 * 864e5;
   const gone = (c.ui.teamOf === c.project.code ? c.ui.team || [] : []).filter(m => m.active === false && m.dropOk && Date.parse(m.dropOk.at) > since && L.seenFrom(m.dropOk.at))   // 2.42.0: not before joining
     .sort((a, b) => String(b.dropOk.at).localeCompare(String(a.dropOk.at)));
   return html`${started && staff.length ? html`<div class="k">Crew on this project · ${staff.length}</div><div class="box">${staff.map(x => staffRow(c, x))}</div>` : ''}
-    ${gone.length ? html`<div class="k">Deleted from this project</div><div class="box">${gone.map(m => html`<div class="li"><div class="n"><b>${m.name}</b><span>${m.role || 'No trade'} · deleted by ${m.dropOk.byName || m.dropOk.by} · ${stampAt(m.dropOk.at)}${m.dropOk.asked ? ` · asked by ${m.dropOk.asked.byName || m.dropOk.asked.by}` : ''}</span></div></div>`)}</div>` : ''}`;
+    ${gone.length ? html`<div class="k">Deleted from this project</div><div class="box">${gone.map(m => html`<div class="li"><div class="n"><b>${m.name}</b><span>${m.role || 'No trade'} · deleted by ${m.dropOk.byName || m.dropOk.by} · ${stampAt(m.dropOk.at)}${m.dropOk.asked ? ` · asked by ${m.dropOk.asked.byName || m.dropOk.asked.by}` : ''}${m.dropOk.reason ? ` · ${[m.dropOk.reason, m.dropOk.note].filter(Boolean).join(': ')}` : ''}${m.dropOk.lastDay ? ` · last day ${dayLabel(m.dropOk.lastDay)}` : ''}</span></div>${dropOk(c) && c.ui.live === 'on' ? html`<button type="button" class="btn t slim" data-act="crewBack" data-v="${m.id}" data-n="${m.name}">Reinstate</button>` : ''}</div>`)}</div>` : ''}`;   // 3.11.0: Reinstate
 }
 function staffRow(c, x) {
   // 2.36.0 (owner): every crew member of the project, not only those added on site
   // 2.43.0 (owner): every Site engineer renames crew at once, no approval (Central Hub copies it to the directory)
   const may = !!x.id && (crewBoss(c) || c.kind === 'reporter'), mine = may && c.ui.live === 'on', del = c.ui.live === 'on' && crewBoss(c) && !!x.id;
-  const ask = x.dropAsk ? html`<div class="li drop-ask"><div class="n"><span class="bad">Delete ${x.name}: asked by ${x.dropAsk.byName || x.dropAsk.by} · ${stampAt(x.dropAsk.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Confirm delete</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}">Keep</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>` : '';
+  // 3.11.0 (owner, 19 Nov): Remove crew: pending until the PE or GM approves; reason and last working day shown; Reject asks why
+  const da = x.dropAsk, dn = x.dropNo && Date.parse(x.dropNo.at) > Date.now() - 14 * 864e5 ? x.dropNo : null;
+  const ask = da ? html`<div class="li drop-ask"><div class="n"><span class="bad">Pending removal: ${[da.reason, da.note].filter(Boolean).join(': ') || 'no reason'}${da.lastDay ? ` · last day ${dayLabel(da.lastDay)}` : ''} · asked by ${da.byName || da.by} · ${stampAt(da.at)}</span></div>${dropOk(c) ? html`<button type="button" class="btn t slim" data-act="crewDropOk" data-v="${x.id}" data-n="${x.name}">Approve</button><button type="button" class="btn t slim" data-act="crewDropNo" data-v="${x.id}" data-n="${x.name}">Reject</button>` : html`<span class="muted small">Waiting for the Project engineer or the GM</span>`}</div>`
+    : dn ? html`<div class="li"><div class="n"><span class="muted small">Removal rejected by ${dn.byName || dn.by} · ${stampAt(dn.at)}: ${dn.why}</span></div></div>` : '';
   if (c.ui.cd && c.ui.cd.id === x.id) return cdForm(c, x);
   if (mine && c.ui.crewEdit === x.id) return html`<div class="li">${av(c, x)}<div class="n"><input class="fld slim" data-ui="ceName" value="${c.ui.ceName ?? x.name}" aria-label="Name"><select class="fld slim" data-ui="ceTrade" aria-label="Trade">${tradesOf(c, x.trade).map(n => html`<option ${n === (c.ui.ceTrade ?? x.trade) ? 'selected' : ''}>${n}</option>`)}</select></div>
     <input class="fld slim" data-ui="cePhone" value="${c.ui.cePhone ?? (x.phone || '')}" placeholder="Phone" inputmode="tel" aria-label="Phone"><button type="button" class="btn t slim" data-act="crewSave" data-v="${x.id}">Save</button><button type="button" class="mini" data-act="crewEdit" data-v="${x.id}" aria-label="Cancel">✕</button></div>`;
   const info = c.ui.crewInfo && c.ui.crewInfo.code === c.project.code && c.ui.crewInfo.info[x.id];
   // 2.45.0 (owner): what Central Hub's employee record still misses, under the name
   const tag = info ? (info.missing.length ? html` <span class="pill warn">${info.missing.join(', ')} missing</span>` : html` <span class="pill ok">Complete</span>`) : '';
-  return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}${tag}</span></div>
+  return html`<div class="li">${av(c, x)}<div class="n"><b>${x.name}</b><span>${x.trade || 'No trade'}${x.fromSite ? ' · added on site' : ''}${tag}${x.dropAsk ? html` <span class="pill warn">Pending removal</span>` : ''}${x.lastDay ? html` <span class="pill warn">Last day ${dayLabel(x.lastDay)}</span>` : ''}</span></div>
     ${may ? html`<button type="button" class="btn t slim" data-act="${mine ? 'cdOpen' : c.ui.live === 'signin' || !c.ui.live ? 'liveConnect' : 'liveWhy'}" data-v="${x.id}">Edit</button>` : ''}${del && !x.dropAsk ? html`<button type="button" class="mini" data-act="crewOff" data-v="${x.id}" data-n="${x.name}" aria-label="Delete ${x.name}">✕</button>` : ''}</div>${ask}`;
 }
 /** 2.71.0 (owner, 8 Nov): every country in the world, Ethiopia first; an older value (e.g. "Ethiopian") is kept as it is. */

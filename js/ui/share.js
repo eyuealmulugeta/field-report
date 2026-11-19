@@ -34,13 +34,13 @@ export function share(c) {
 export function shotsBtn(c, dash) {
   if (dash || !mayReview((c.s.auth || {}).role || '')) return '';
   const waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
-  return html`<button type="button" class="btn o dash-btn" data-act="go" data-to="shots">${icon('cam')}Work photos${waiting ? ` · ${waiting} waiting` : ''}</button>`;
+  return html`<button type="button" class="btn o dash-btn" data-act="go" data-to="shots">${icon('cam')}Photos from crews${waiting ? ` · ${waiting} waiting` : ''}</button>`;
 }
 
 /** Work photos (2.87.0: a tab of the Dashboard, and its own page from Today; was Review > Photos). */
 export function shots(c) {
   const v = shotsBody(c), waiting = (c.ui.shList || []).filter(x => x.status === 'waiting').length;
-  return { head: stepHead('Work photos', `Shared by technicians${waiting ? ` · ${waiting} waiting` : ''}`, 'today'), body: v };
+  return { head: stepHead('Photos from crews', `Shared by technicians${waiting ? ` · ${waiting} waiting` : ''}`, 'today'), body: v };
 }
 export function shotsBody(c) {
   const role = (c.s.auth || {}).role || '', list = sortShots(c.ui.shList || []).slice(0, 60), may = mayReview(role);
@@ -51,5 +51,5 @@ export function shotsBody(c) {
           <select class="fld slim" data-ui="shWhy.${x.id}" aria-label="Reason">${REJECT_REASONS.map(([v, w]) => html`<option value="${v}">${w}</option>`)}</select>
           <button type="button" class="btn t slim bad-t" data-act="shNo" data-id="${x.id}">Reject</button></div>` : ''}
         ${x.status !== 'waiting' ? html`<div class="tiny muted">${x.status === 'rejected' ? `${reasonWord(x.reason)} · ` : ''}by ${x.decidedByName || ''}</div>` : ''}</div>`)
-        : html`<p class="muted small">No work photos yet. Technicians share them from their own account.</p>`}`;
+        : html`<p class="muted small">No photos from crews yet. Technicians share them from their own account.</p>`}`;
 }

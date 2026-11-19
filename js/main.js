@@ -107,7 +107,7 @@ const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'pho
 const project = () => {
   const p = store.get().projects.find(x => x.code === store.get().proj) || null;
   if (!p) return p;
-  if (ui.teamOf === p.code) return withTeam(p, ui.team);
+  if (ui.teamOf === p.code) return withTeam(p, ui.team, today());   // 3.11.0: someone leaving stays until their last working day
   const gone = (store.get().gone || {})[p.code] || [];
   return gone.length ? { ...p, staff: (p.staff || []).filter(s => !gone.includes(s.id)), gone } : p;
 };
@@ -726,7 +726,7 @@ async function updateCheck(onOpen = false) {
   try { v = (await (await fetch(`version.json?x=${Date.now()}`, { cache: 'no-store' })).json()).v || ''; } catch { return; }
   if (!v || v === APP_VERSION || document.querySelector('.upd-tag')) return;
   const tag = document.createElement('button');
-  tag.type = 'button'; tag.className = 'upd-tag'; tag.textContent = `Update to ${v}`;
+  tag.type = 'button'; tag.className = 'upd-tag'; tag.textContent = 'New version. Please update';
   tag.title = 'Field Report ' + APP_VERSION + ' is out of date. Tap to update; nothing you saved is lost.';
   tag.onclick = async () => { tag.textContent = 'Updating…'; await freshFiles(); location.reload(); };
   document.body.append(tag);
@@ -1227,6 +1227,14 @@ async function spotVids() {
       if (await videoUrl('spot', d)) draw();
     }
   } finally { spotVidBusy = false; }
+}
+
+/** 3.11.0: approve, reject or reinstate a crew removal (Central Hub's server decides, logs it and tells the phones). */
+async function crewDecideNow(p, action, d, extra, ok) {
+  ui.busy = true; draw();
+  try { await L.now(action, { proj: p.code, id: d.v, byName: myName(), ...extra }); logAct({ action: { crewOff: 'crew removed', crewKeep: 'crew removal rejected', crewBack: 'crew reinstated' }[action], channel: 'Attendance', doc: `${p.code} · ${d.n}` }); toast(ok); }
+  catch (e) { toast(`Not saved: ${e.message}`); }
+  finally { ui.busy = false; draw(); }
 }
 
 /** The thumbnail of a photo that left this phone: from Drive, through the report that holds it. */
@@ -1909,6 +1917,15 @@ const ACTS = {
     catch { /* the Open the report button still works */ }
     rv.fullBusy = false; if (route() === 'rev') draw();
   },
+  /** 3.11.0 (owner, 19 Nov): Remind me about this report in 1 h, 3 h or tomorrow 08:00: once, on this account's phones. */
+  async revLater(d) {
+    const x = (ui.rv || {}).open;
+    if (!x) return;
+    try {
+      const res = await call('remindLater', { date: x.date, proj: String(x.name || '').split('_')[2] || (project() || {}).code, no: x.no, ...(d.v === 'tomorrow' ? { when: 'tomorrow' } : { mins: Number(d.v) }) });
+      toast(`Reminder set for ${new Date(res.at).toTimeString().slice(0, 5)}${d.v === 'tomorrow' ? ' tomorrow' : ''}.`);
+    } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`); }
+  },
   /** Approve, send back, reopen or comment: it goes to the person who sent the report, and Central Hub sees it. */
   async revDo(d) {
     const rv = ui.rv || {}, x = rv.open, text = String(ui.revText || '').trim();
@@ -2200,23 +2217,49 @@ const ACTS = {
     draw();
   },
   // 2.17.0: delete from the crew list: the site asks, the PE or the GM confirms (the server takes them off in Central Hub too)
-  async crewOff(d) {
-    // 2.41.0 (owner, 3 Nov): the Project engineer and the GM delete at once (with who and when); the Site engineer and anyone else ask them
+  // 3.11.0 (owner, 19 Nov): Remove crew: people ticked, the last working day and a reason; Pending until the PE or the GM
+  // approves (here, in Review, or in Central Hub); Reject keeps them with the reason shown; Reinstate puts them back.
+  crewOff(d) { ui.rmOpen = true; ui.rmPick = { [d.v]: true }; ui.rmDay = ui.rmDay || realToday(); draw(); },
+  rmOpen() { ui.rmOpen = true; ui.rmPick = {}; ui.rmDay = realToday(); ui.rmWhy = ''; ui.rmNote = ''; draw(); },
+  rmClose() { ui.rmOpen = false; draw(); },
+  rmPick(d) { ui.rmPick = { ...(ui.rmPick || {}), [d.v]: !(ui.rmPick || {})[d.v] }; draw(); },
+  async rmSend() {
+    const p = project(), ids = Object.keys(ui.rmPick || {}).filter(k => ui.rmPick[k]), note = String(ui.rmNote || '').trim();
+    const ask = { reason: ui.rmWhy || '', note, lastDay: ui.rmDay || realToday() };
+    if (!p || !ids.length) return toast('Tick the people to remove.');
+    if (!S.REMOVE_REASONS.includes(ask.reason)) return toast('Choose a reason.');
+    if (ask.reason === 'Other' && !note) return toast('Write a note for Other.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ask.lastDay)) return toast('Choose the last working day.');
     const boss = kind() === 'reviewer' || P.isGM({ s: store.get() });
-    if (boss) return ACTS.crewDropOk(d);
-    if (!confirm(`Ask the Project engineer or the GM to delete ${d.n} from this project?`)) return;
-    try { await L.editTeam(d.v, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString() } }); toast(`Asked. ${d.n} stays until the Project engineer or the GM confirms.`); }
-    catch (e) { toast(`Not asked: ${e.message}`); }
+    ui.busy = true; draw();
+    let done = 0;
+    try {
+      for (const id of ids) {
+        if (boss) await L.now('crewOff', { proj: p.code, id, byName: myName(), ...ask });
+        else await L.editTeam(id, { dropAsk: { by: String((store.get().auth || {}).email || '').toLowerCase(), byName: myName(), at: new Date().toISOString(), ...ask } });
+        done++;
+      }
+      logAct({ action: boss ? 'crew removed' : 'crew removal asked', channel: 'Attendance', doc: `${p.code} · ${done} · ${ask.reason}` });
+      toast(boss ? `${done} taken off after ${ask.lastDay}.` : `Asked for ${done}. They stay, marked pending, until the Project engineer or the GM approves.`);
+      ui.rmOpen = false; ui.rmPick = {};
+    } catch (e) { toast(`${done ? `${done} done. ` : ''}Not sent: ${e.message}`); }
+    finally { ui.busy = false; draw(); }
   },
   async crewDropOk(d) {
     const p = project();
-    if (!p || !confirm(`Delete ${d.n} from ${p.name}? They leave the crew list here and in Central Hub; their record stays, with who deleted them and when.`)) return;
-    ui.busy = true; draw();
-    try { await L.now('crewOff', { proj: p.code, id: d.v, byName: myName() }); toast(`${d.n} is deleted from this project.`); }
-    catch (e) { toast(`Not deleted: ${e.message}`); }
-    finally { ui.busy = false; draw(); }
+    if (!p || !confirm(`Approve: take ${d.n} off ${p.name} after the last working day? Past attendance and pay stay.`)) return;
+    await crewDecideNow(p, 'crewOff', d, {}, `${d.n} is taken off this project.`);
   },
-  async crewDropNo(d) { try { await L.editTeam(d.v, { dropAsk: null }); toast('Kept on the list.'); } catch (e) { toast(`Not changed: ${e.message}`); } },
+  async crewDropNo(d) {
+    const p = project(), why = p && (prompt(`Why does ${d.n} stay on the crew? The site sees this.`) || '').trim();
+    if (!why) return;
+    await crewDecideNow(p, 'crewKeep', d, { why }, `${d.n} stays on the crew.`);
+  },
+  async crewBack(d) {
+    const p = project();
+    if (!p || !confirm(`Reinstate ${d.n} on ${p.name}?`)) return;
+    await crewDecideNow(p, 'crewBack', d, {}, `${d.n} is back on the crew.`);
+  },
   // 2.13.0: one of the waiting list taken back (Remove), or taken back into the form to correct and send again (Edit)
   async waitDrop(d) {
     const p = project(), x = (p.crewWait || []).find(y => y.id === d.v);
@@ -2817,7 +2860,10 @@ function openLink(h) {
   // 2.68.0 (owner): Remind later: the same notification again in 30 minutes
   else if (what === 'later' && /^\d{4}-\d{2}-\d{2}$/.test(d || '')) {
     // 2.80.0 (owner, 9 Nov): quiet: no page change, no message (the notification worker does it without opening the app)
-    call('remindLater', { date: d, proj: code, no }).catch(e => toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`));
+    // 3.11.0 (owner, 19 Nov): the link is cleared once used: it stayed in the address, so every opening or update of the app
+    // set the reminder again (the loop). The notification's button is 1 hour; 3 hours or tomorrow are on the report page.
+    history.replaceState(null, '', location.pathname + location.search + '#today'); draw();
+    call('remindLater', { date: d, proj: code, no, mins: 60 }).catch(e => toast(e.code === 'OFFLINE' ? 'No connection: no reminder set.' : `No reminder set: ${e.message}`));
   }
   // 2.54.0 (owner): Approve or Send back tapped on the phone notification: the report opens, Approve asks once, Send back waits for the reason
   else if (what === 'act') {
