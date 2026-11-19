@@ -2340,6 +2340,8 @@ const ACTS = {
 
   /* slice 5: reports, corrections, drafts, preferences */
   openDay: d => { ui.daySel = d.v; ui.sheet = 'day'; ui.sheetNew = true; draw(); },
+  // 3.13.0 (owner, 19 Nov: "this tab in todays page in fr should open the report page"): This week on Today opens Reports at the day
+  weekDay: d => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d.v || '')) return; go('reports'); setTimeout(() => { ui.daySel = d.v; ui.sheet = 'day'; ui.sheetNew = true; draw(); }, 60); },
   openPast(d) {
     ui.sheet = '';
     ui.date = d.v === realToday() ? '' : d.v;

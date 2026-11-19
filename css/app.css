@@ -789,3 +789,6 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 2px; 
 /* 3.12.0: the optional delivery photo prompt; the Approved by block of the final report */
 .recv-ask { display: block; width: 100%; border: 1px dashed var(--line, #c9d3d6); background: var(--soft, #f3f7f8); text-align: left; cursor: pointer; margin: 4px 0 8px; }
 .approved-by .ap-sig { max-width: 160px; max-height: 48px; margin-top: 6px; background: #fff; border-radius: 6px; }
+/* 3.13.0: This week on Today: each day is a button that opens Reports */
+.weekrow .wk-day { background: none; border: 0; padding: 4px 0; font: inherit; color: inherit; cursor: pointer; border-radius: 8px; }
+.weekrow .wk-day:active { background: var(--soft, #eef3f4); }

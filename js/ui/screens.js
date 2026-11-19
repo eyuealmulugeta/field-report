@@ -93,7 +93,8 @@ export function weekStrip(c) {
     const off = (p.nwDow || [0]).includes(weekday(d)) || (p.nonWorking || []).includes(d);
     const cls = r && r.sentAt ? 'ok' : r && r.nowork ? 'no' : d === t ? 'half' : off ? 'no' : d < t ? 'warn' : 'no';
     const mark = r && r.sentAt ? icon('check') : r && r.nowork ? '–' : d === t ? '•' : off ? '–' : d < t ? '!' : '';
-    return html`<div title="${dayLabel(d)}">${dayLetter(d)}<span class="dot ${cls}">${mark}</span></div>`;
+    // 3.13.0 (owner, 19 Nov): each day opens Reports at that day
+    return html`<button type="button" class="wk-day" data-act="weekDay" data-v="${d}" title="${dayLabel(d)}" aria-label="Open the report of ${dayLabel(d)}">${dayLetter(d)}<span class="dot ${cls}">${mark}</span></button>`;
   })}</div>`;
 }
 
