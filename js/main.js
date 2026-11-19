@@ -28,6 +28,7 @@ import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
 import * as F from './ui/follow.js';
 import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, orphanPhotos, offEntries, dueDefault } from './model/follow.js';
+import { monthShift, moreMonths } from './model/review.js';   // 3.9.0
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
 import * as R from './ui/review.js';
@@ -297,6 +298,29 @@ async function dayOffSend(date, undo) {
   } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was changed.' : `Not changed: ${e.message}`); }
   finally { ui.busy = false; draw(); }
 }
+/* 3.9.0 (owner, 18 Nov): Review by month. The months loaded are kept on the phone (revCache) for reading without signal. */
+const REV_KEEP = 12;
+function revScope() {
+  const all = !!ui.allProj && P.isGM({ s: store.get() }), key = all ? 'ALL' : (project() || {}).code || '';
+  const rv = ui.rv || (ui.rv = {});
+  if (rv.scope !== key) {
+    Object.assign(rv, { scope: key, months: {}, nowork: {}, list: [] });
+    for (const [k, v] of Object.entries(store.get().revCache || {})) if (k.startsWith(`${key}|`)) { rv.months[k.split('|')[1]] = v.l || []; rv.nowork[k.split('|')[1]] = v.n || []; }
+    rv.list = Object.values(rv.months).flat();
+  }
+  return rv;
+}
+async function loadMonth(rv, m) {
+  const codes = rv.scope === 'ALL' ? store.get().projects.map(p => p.code) : [rv.scope];
+  const res = await Promise.all(codes.map(code => call('list', { proj: code, month: m, days: 45 }).catch(e => { if (codes.length === 1) throw e; return {}; })));
+  rv.months[m] = res.flatMap(r => (r.reports || []).filter(x => String(x.date || '').startsWith(m)));   // an older script sends 45 days: this month's only
+  rv.nowork[m] = res.flatMap(r => r.nowork || []);
+  rv.list = Object.values(rv.months).flat();
+  const cache = { ...(store.get().revCache || {}), [`${rv.scope}|${m}`]: { at: Date.now(), l: rv.months[m], n: rv.nowork[m] } };
+  const keep = Object.entries(cache).sort((a, b) => b[1].at - a[1].at).slice(0, REV_KEEP);
+  try { store.set({ revCache: Object.fromEntries(keep) }); } catch { /* the phone is full: this month stays until the app closes */ }
+}
+
 /** 3.8.0 (owner, 18 Nov): the GM or the PE asks the site engineer for a missing day's report (script reqReport). */
 async function reqSend(cancel) {
   const p = project();
@@ -479,6 +503,7 @@ function liveDays(code, days) {
     else rv.list.push({ name: d.name, date: d.date, no: d.no, preparedBy: d.by, uploadedAt: d.at, ...fresh });
   }
   rv.list.sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.no) - Number(a.no));
+  if (rv.months) for (const k of Object.keys(rv.months)) rv.months[k] = rv.list.filter(y => String(y.date || '').startsWith(k));   // 3.9.0: the months follow
   draw();
 }
 
@@ -659,6 +684,7 @@ function liveReview(list) {
   if (!rv || !rv.list) return;
   const upd = y => (m.has(y.name) ? { ...y, status: m.get(y.name).status, comments: m.get(y.name).comments } : y);
   rv.list = rv.list.map(upd);
+  if (rv.months) for (const k of Object.keys(rv.months)) rv.months[k] = rv.list.filter(y => String(y.date || '').startsWith(k));   // 3.9.0: the months follow
   if (rv.open) rv.open = upd(rv.open);
   draw();
 }
@@ -1748,20 +1774,39 @@ const ACTS = {
   startDay() { ensureReport(); go('start'); fetchWeather(); },
   /** 2.6.0: the reports of the open project, for a reviewer or viewer. */
   async revLoad() {
-    const rv = ui.rv || (ui.rv = {});
+    const rv = revScope();
     rv.busy = true; draw();
     try {
-      // 2.17.0: the GM's All projects: every project's list
-      if (ui.allProj && P.isGM({ s: store.get() })) rv.list = (await Promise.all(store.get().projects.map(p => call('list', { proj: p.code, days: 45 }).then(r => r.reports || []).catch(() => [])))).flat();
-      else { const res = await call('list', { proj: project().code, days: 45 }); rv.list = res.reports || []; }
-      // 2.7.0: opened from a notification: straight to that report
+      await loadMonth(rv, realToday().slice(0, 7));
+      // 2.7.0: opened from a notification: straight to that report (its month loaded first)
       const w = rv.want; rv.want = null;
+      if (w && w.d && !rv.months[w.d.slice(0, 7)]) await loadMonth(rv, w.d.slice(0, 7));
       const hit = w && rv.list.find(x => x.date === w.d && String(Number(x.no)) === String(Number(w.no)));
       if (hit) { rv.busy = false; return ACTS.revOpen({ v: hit.name }); }
     }
-    catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Try again when online.' : `Could not get the reports: ${e.message}`); }
+    catch (e) { toast(e.code === 'OFFLINE' ? 'No connection: showing the months kept on this phone.' : `Could not get the reports: ${e.message}`); }
     finally { rv.busy = false; draw(); }
   },
+  /** 3.9.0: the next older month, when the list is scrolled to its end or Show <month> is pressed. */
+  async revMore(d) {
+    const rv = revScope();
+    if (rv.busy || !moreMonths(rv.months)) return;
+    const keys = Object.keys(rv.months).sort(), m = keys.length ? monthShift(keys[0], -1) : realToday().slice(0, 7);
+    rv.busy = true; draw();
+    try { await loadMonth(rv, m); } catch (e) { if (!(d && d.quiet)) toast(e.code === 'OFFLINE' ? 'No connection: older months come when online.' : e.message); rv.stop = Date.now(); }
+    finally { rv.busy = false; draw(); }
+  },
+  revShut(d) { const sh = ui.rvShut ||= {}; sh[d.v] = !sh[d.v]; draw(); },
+  /** 3.9.0: search by activity or milestone: every month back to the first report is loaded, then the matches show. */
+  async revFind() {
+    const rv = revScope();
+    if (!ui.revFind) return draw();
+    rv.findBusy = true; draw();
+    try { for (let i = 0; i < 36 && moreMonths(rv.months); i++) { const keys = Object.keys(rv.months).sort(); await loadMonth(rv, keys.length ? monthShift(keys[0], -1) : realToday().slice(0, 7)); draw(); } }
+    catch (e) { toast(e.code === 'OFFLINE' ? 'No connection: searching the months kept on this phone.' : e.message); }
+    finally { rv.findBusy = false; draw(); }
+  },
+  revFindClear() { ui.revFind = ''; draw(); },
   revFilter(d) { (ui.rv ||= {}).f = d.v; draw(); },
   // 2.68.0 (owner): Remove in a report's details: off this phone's lists; Central Hub keeps it
   // 2.69.0 (owner): reports the database has not taken yet, sent again from the bar
@@ -2918,9 +2963,17 @@ document.getElementById('smCam').addEventListener('change', async e => {
   if (!f || !ui.sm) return;
   try { ui.sm.photo = await receiptUrl(f); draw(); } catch { toast('That picture could not be read.'); }
 });
+// 3.9.0: the next older month loads by itself when Review is scrolled to its end (not again for 20 s after a failure)
+document.addEventListener('scroll', e => {
+  const el = e.target;
+  if (route() !== 'review' || ui.revFind || !el || !el.scrollHeight || el.scrollTop + el.clientHeight < el.scrollHeight - 300) return;
+  const rv = ui.rv || {};
+  if (!rv.busy && Date.now() - (rv.stop || 0) > 20e3 && document.getElementById('revMore')) ACTS.revMore({ quiet: true });
+}, true);
 root.addEventListener('change', e => {
   // 3.4.0 (owner, 15 Nov): Review by day and by search
   if (e.target.dataset.ui === 'revDay' || e.target.dataset.ui === 'revQ') { ui[e.target.dataset.ui] = e.target.value; draw(); return; }
+  if (e.target.dataset.ui === 'revFind') { ui.revFind = e.target.value; ACTS.revFind(); return; }   // 3.9.0
   // 2.85.0 (D4): New chat by project, position and name
   if (e.target.dataset.ui === 'chatFP') { ui.chatFP = e.target.value; ui.chatFT = ''; draw(); return; }
   if (e.target.dataset.ui === 'chatFT') { ui.chatFT = e.target.value; draw(); return; }

@@ -5,7 +5,7 @@ import { html, icon } from '../core/dom.js';
 import { dayLabel, localDay } from '../core/util.js';
 import { head, stepHead, isGM } from './parts.js';
 import { STATUS, offlineLine, fewOf, fewLine } from '../model/follow.js';
-import { REVIEW_FILTERS, reviewRows, KIND_WORD } from '../model/review.js';
+import { REVIEW_FILTERS, reviewRows, KIND_WORD, monthWeeks, monthCounts, monthTitle, monthShift, moreMonths, findChoices, findReports } from '../model/review.js';
 import { crewCloses } from '../model/crew.js';
 import { engageChecks } from '../model/rating.js';
 import { thumb } from './work.js';
@@ -47,11 +47,52 @@ export function review(c) {
       <div class="chips">${REVIEW_FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="revFilter" data-v="${k}">${t}${rv.list ? ` · ${reviewRows(rv.list, all ? '' : c.project.code, k).length}` : ''}</button>`)}</div>
       <div class="row2"><input class="fld" type="date" data-ui="revDay" value="${c.ui.revDay || ''}" aria-label="Day"><input class="fld" type="search" data-ui="revQ" value="${c.ui.revQ || ''}" placeholder="Search: number, name, date" aria-label="Search the reports"></div>   <!-- 3.4.0 -->
       ${all ? '' : missingList(c)}
-      ${!rv.list ? html`<p class="muted">Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.</p>`
-        : list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
-          <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
-        : html`<p class="muted">No report here.</p>`}`,
+      ${findBox(c, all)}
+      ${c.ui.revFind ? findList(c, all, projOf) : grouped(c, all, f, projOf)}`,
   };
+}
+
+/* 3.9.0 (owner, 18 Nov): every past report by Month › Week, one month loaded at a time as the list scrolls */
+const counts = n => html`<span class="muted small">${n.sent} sent · ${n.approved} approved${n.missing == null ? '' : html` · <b class="${n.missing ? 'bad-t' : ''}">${n.missing} missing</b>`}</span>`;
+const rowOf = (c, x, all, projOf) => html`<button type="button" class="li" data-act="revOpen" data-v="${x.name}">
+  <div class="n"><b>${all ? `${projOf(x)} · ` : ''}${dayLabel(x.date)} · No. ${x.no}</b><span>${x.preparedBy || x.uploadedBy || 'Site'}${x.uploadedAt ? ` · sent ${when(x.uploadedAt)}` : ''}${x.reviewedBy ? ` · ${x.reviewedBy} ${when(x.reviewedAt)}` : ''} · ${x.crew || 0} crew${x.delayH ? ` · delays ${x.delayH} h` : ''}${x.requests ? ` · ${x.requests} requests` : ''}</span></div>${pill(x.status)}<span class="ch">${icon('chev')}</span></button>`;
+function grouped(c, all, f, projOf) {
+  const rv = c.ui.rv || {}, months = rv.months || {}, keys = Object.keys(months).sort().reverse(), shut = c.ui.rvShut || {}, code = all ? '' : c.project.code;
+  if (!keys.length) return html`<p class="muted">${rv.busy ? 'Getting this month’s reports…' : `Reports sent by the site appear here for you to ${c.kind === 'viewer' ? 'read' : 'approve, send back or comment on'}.`}</p>`;
+  const mine = (rv.list || []).filter(x => !code || String(x.name || '').includes(`_${code}_`));
+  const start = mine.reduce((a, x) => (!a || x.date < a ? x.date : a), '');
+  const off = [...(c.project.nonWorking || []), ...(((c.s.others || {})[c.project.code]) || []).filter(o => o.off).map(o => o.date)];
+  const out = keys.map(m => {
+    const allM = reviewRows(months[m], code, ''), rows = reviewRows(months[m], code, f, { day: c.ui.revDay || '', q: c.ui.revQ || '' });
+    const nowork = ((rv.nowork || {})[m] || []).filter(k => !code || k.startsWith(`${code}|`)).map(k => k.split('|')[1]);
+    const weeks = monthWeeks(m, rows, allM, all ? { today: c.realToday, start: '9999' } : { today: c.realToday, nwDow: c.project.nwDow || [0], off, nowork, start });
+    const n = monthCounts(weeks); if (all) n.missing = null;
+    const open = !shut[m];
+    return html`<div class="rv-m"><button type="button" class="li rv-h" data-act="revShut" data-v="${m}" aria-expanded="${open}"><div class="n"><b>${open ? '▾' : '▸'} ${monthTitle(m)}</b>${counts(n)}</div></button>
+      ${open ? weeks.map(w => { const wo = !shut[w.key], wn = { ...w, missing: all ? null : w.missing }; return html`<div class="rv-w"><button type="button" class="li rv-h sub" data-act="revShut" data-v="${w.key}" aria-expanded="${wo}"><div class="n"><b>${wo ? '▾' : '▸'} ${monthTitle(m).split(' ')[0]} › ${w.title}</b>${counts(wn)}</div></button>
+        ${wo ? (w.rows.length ? html`<div class="box">${w.rows.map(x => rowOf(c, x, all, projOf))}</div>` : html`<p class="muted small">No report${f || c.ui.revDay || c.ui.revQ ? ' matches' : ''} this week.</p>`) : ''}</div>`; }) : ''}</div>`;
+  });
+  const prev = monthShift(keys[keys.length - 1], -1);
+  return html`${out}${moreMonths(months) ? html`<button type="button" class="btn o" id="revMore" data-act="revMore" ${rv.busy ? 'disabled' : ''}>${rv.busy ? 'Getting the reports…' : `Show ${monthTitle(prev)}`}</button>` : html`<p class="muted small">That is every report.</p>`}`;
+}
+/* 3.9.0: search by an activity or milestone of the schedule (option B): the reports that name it, the first and the last */
+function findBox(c, all) {
+  const ch = findChoices((c.project || {}).setup);
+  if (!ch.length || all) return '';
+  return html`<label class="k" for="revFind">Find by activity or milestone</label>
+    <select class="fld" id="revFind" data-ui="revFind"><option value="">— Choose from the schedule —</option>
+    ${ch.map(t => html`<option value="${t.id}" ${c.ui.revFind === t.id ? 'selected' : ''}>${t.kind}: ${t.name}</option>`)}</select>`;
+}
+function findList(c, all, projOf) {
+  const rv = c.ui.rv || {}, t = findChoices((c.project || {}).setup).find(x => x.id === c.ui.revFind) || { name: '' };
+  const r = findReports(reviewRows(rv.list, all ? '' : c.project.code, ''), c.ui.revFind, t.name);
+  const mark = (line, hit) => { const i = hit ? line.indexOf(hit) : -1; return i < 0 ? line : html`${line.slice(0, i)}<mark>${hit}</mark>${line.slice(i + hit.length)}`; };
+  return html`<div class="row2"><b>${t.name}</b><button type="button" class="btn t slim" data-act="revFindClear">Clear</button></div>
+    ${rv.findBusy ? html`<p class="muted small">Looking through older months…</p>` : ''}
+    ${r.first ? html`<div class="box pad"><div class="two"><span>First report</span><b>${dayLabel(r.first.x.date)} · No. ${r.first.x.no}</b></div>
+      <div class="two"><span>Last report</span><b>${dayLabel(r.last.x.date)} · No. ${r.last.x.no}</b></div><div class="two"><span>Reports</span><b>${r.hits.length}</b></div></div>
+      <div class="box">${r.hits.map(h => html`<button type="button" class="li" data-act="revOpen" data-v="${h.x.name}"><div class="n"><b>${dayLabel(h.x.date)} · No. ${h.x.no} · ${projOf(h.x) || h.x.project || ''}</b><span>${mark(h.line, h.hit)}${h.more ? ` (+${h.more} more)` : ''}</span></div>${pill(h.x.status)}<span class="ch">${icon('chev')}</span></button>`)}</div>`
+      : rv.findBusy ? '' : html`<p class="muted">No report names it${moreMonths(rv.months || {}) ? ' in the months loaded' : ''}.</p>`}`;
 }
 
 /** The project code in a report's file name (YYYY-MM-DD_CC_PROJ_NNN.pdf). */

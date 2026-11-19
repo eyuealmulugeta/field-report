@@ -246,6 +246,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['doc', 'Review by month and week (3.9.0)', 'Review shows every past report grouped by month and week, with sent, approved and missing counts. Older months load as you scroll and stay on the phone for reading without signal. Find by activity or milestone lists the reports that name it, with the first and the last.'],
   ['bell', 'Request report (3.8.0)', 'The GM and the project engineer press Request report on a missing day: the site engineer gets a notification and a pop-up each time the app opens, with Start report and Later, until the report is sent. The day shows Requested, Seen and Submitted.'],
   ['check', 'Fewer than 12 photos (3.7.0)', 'A report can be sent with fewer than 12 photos: Send asks why (at least 10 characters). Only the office sees the reason; the PDF shows the photos from the top left. The app now updates by itself when it opens.'],
   ['check', 'Mark as day-off (3.6.0)', 'On Reports, the GM and the project engineer open a Missing day and mark it as a day off with the reason (holiday, weather, client stop or other). It is then not missing: no alert, the report numbers skip it, and Central Hub adds it to the project calendar.'],

@@ -21,7 +21,7 @@ function simServer(action, body) {
     case 'getconfig': return { ok: true, rev: 1, projects: [p] };
     case 'myProjects': return { ok: true, projects: [{ proj: p.code, cc: p.cc, name: p.name, location: p.location, staff: S.setup.staff, ...(q.has('pm') ? { crewApprove: true, hoursEdit: true, tradeWages: S.tradeWages || {}, crewWait: [] } : {}) }] };
     case 'getSetup': return { ok: true, proj: body.proj, setup: S.setup };
-    case 'list': return { ok: true, reports: S.review, events: [] };
+    case 'list': return { ok: true, reports: body.month ? S.review.filter(x => x.date.startsWith(body.month)) : S.review, events: [] };
     case 'projectDays': return { ok: true, days: S.review.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name, at: x.uploadedAt })) };
     case 'dayOff': return { ok: true, dayOff: body.undo ? {} : { [body.date]: { k: body.k || 'Holiday', note: body.note || '', by: 'Demo', at: new Date().toISOString() } } };   // 3.6.0
     case 'reqList': return { ok: true, reqs: {}, engineers: [{ id: 'SE1', name: 'Demo engineer', n: 5 }] };   // 3.8.0
@@ -128,7 +128,7 @@ export async function demoServer(action, body) {
     case 'spotPut': return { ok: true, note: { id: body.id, proj: body.proj, at: new Date().toISOString(), madeAt: body.madeAt || '', by: 'demo@amistad.test', byName: 'Demo Engineer', about: body.about || 'The project', tone: body.tone || '', cat: body.visit ? 'Visit' : body.cat || 'Other', note: body.note || '', media: [], ...(body.visit ? { visit: body.visit } : {}) } };   // 2.92.0: as the script answers
     case 'hoursPut': Object.assign(project, { defStart: body.defStart, defEnd: body.defEnd, remindAt: body.remindAt, nwDow: body.nwDow }); return { ok: true, project: { code: body.proj } };
     case 'crewOk': { let n = 0; for (const x of CREW_WAIT) if (body.wages[x.id]) { x.ok = true; x.wage = body.wages[x.id]; n++; } return { ok: true, approved: n, crewWait: CREW_WAIT.filter(x => !x.ok), tradeWages: { Mason: 450 } }; }
-    case 'list': return { ok: true, reports: REVIEW, events: [] };
+    case 'list': return { ok: true, reports: body.month ? REVIEW.filter(x => x.date.startsWith(body.month)) : REVIEW, events: [] };   // 3.9.0: one month
     case 'projectDays': return { ok: true, days: REVIEW.map(x => ({ date: x.date, no: x.no, status: x.status, version: x.version, by: x.preparedBy, name: x.name })) };
     case 'dayOff': return { ok: true, dayOff: body.undo ? {} : { [body.date]: { k: body.k || 'Holiday', note: body.note || '', by: 'Demo', at: new Date().toISOString() } } };   // 3.6.0
     case 'reqList': return { ok: true, reqs: {}, engineers: [{ id: 'SE1', name: 'Demo engineer', n: 5 }] };   // 3.8.0

@@ -13,6 +13,7 @@ const blank = () => ({
   siteZones: {},       // 'MJO' -> zones the site added to the office's list
   known: {},           // file name -> the office's answer { status, version, comments, checked }
   gone: {},            // 2.42.0: project code -> ids of the crew deleted in Central Hub (kept out before the team arrives)
+  revCache: {},        // 3.9.0: 'CODE|yyyy-mm' -> { at, l (the month's reports), n (no-work days) }, 12 kept
   reqs: {},            // 3.8.0: project code -> the report requests of its days (script REQ map)
   myReqs: [],          // 3.8.0: the open requests to this person (the pop-up)
   others: {},          // 2.9.0: project code -> the reports sent from any phone [{ date, no, status, version, by, name }]
