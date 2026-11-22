@@ -3,7 +3,7 @@
 import { html, icon } from '../core/dom.js';
 import { cachedUrl } from '../core/photos.js';
 import { canListen } from '../core/voice.js';
-import { UNITS, CAPTIONS, zonesOf, itemLine } from '../model/items.js';
+import { UNITS, CAPTIONS, zonesOf, itemLine, qtyCheck } from '../model/items.js';
 import { openPlanned } from '../model/report.js';
 import { stepHead, chips } from './parts.js';
 
@@ -74,6 +74,8 @@ export function item(c) {
       <div class="two"><div class="stp"><button type="button" data-act="qty" data-d="-1" aria-label="Less">−</button>
         <input class="num" inputmode="decimal" data-f="item.qty" value="${it.qty ?? ''}" placeholder="0" aria-label="Amount"><button type="button" data-act="qty" data-d="1" aria-label="More">+</button></div>
         ${chips('item.unit', UNITS, it.unit)}</div>
+      ${(k => k.bad ? html`<p class="bad small">${k.bad}</p>` : k.over ? html`<p class="bad small">This brings ${it.task || 'the task'} to ${k.after} of ${k.total} ${k.unit}: ${k.over} over the total. Write why.</p>
+        <textarea class="fld" data-f="item.overWhy" rows="2" placeholder="Why it goes over the total (the office sees it)">${it.overWhy || ''}</textarea>` : k.total ? html`<p class="muted small">So far ${k.after} of ${k.total} ${k.unit} with this item.</p>` : '')(qtyCheck(it, c.report.items, setup))}
       <div class="lab">Photos</div>
       <div class="thumbs big">${it.photos.map(p => thumb(p))}${camTile('itemPhoto')}</div>
       ${mile.length ? html`<button type="button" class="box pad tog" data-act="toggleMile"><span><b>Reached a milestone</b>${it.milestoneId ? html`<br><span class="muted small">${(mile.find(m => m.id === it.milestoneId) || {}).name || ''}</span>` : ''}</span><span class="sw ${it.milestoneId || c.ui.mileOpen ? 'on' : ''}"></span></button>

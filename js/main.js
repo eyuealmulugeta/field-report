@@ -11,7 +11,7 @@ import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
 import { mergeStaff, withPreparer, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
-import { newItem, itemFromPlan, parseSpeech, zonesOf } from './model/items.js';
+import { newItem, itemFromPlan, parseSpeech, zonesOf, qtyCheck } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, photoKeys, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
 import { listen } from './core/voice.js';
 import * as S from './ui/screens.js';
@@ -2754,6 +2754,11 @@ const ACTS = {
     const it = ui.item;
     if (!it.text.trim() && !it.task && !it.type) return toast('Say or write what was done, or pick a task.');
     it.qty = num(it.qty);
+    // 3.14.0 (owner, 22 Nov): never negative; over the task's total only with a reason
+    const chk = qtyCheck(it, report().items, (project() || {}).setup || {});
+    if (chk.bad) return toast(chk.bad);
+    if (chk.over && !String(it.overWhy || '').trim()) return toast(`${chk.over} ${chk.unit} over the total: write why.`);
+    if (!chk.over) delete it.overWhy;
     edit(r => {
       const i = r.items.findIndex(x => x.id === it.id);
       if (i >= 0) r.items[i] = it; else r.items.push(it);
