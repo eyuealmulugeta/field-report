@@ -1004,7 +1004,7 @@ function sigFetch() {
 }
 
 /** trial.2: only the Admin may see, share or download the report PDF (the script also keeps the Drive link from the others). */
-const adminRole = () => ((store.get().auth || {}).role || '') === 'admin';
+const adminRole = () => ['admin', 'exec'].includes((store.get().auth || {}).role || '');   // 3.15.0: the GM like the Admin
 const dropPdf = () => { if (ui.pdf) { URL.revokeObjectURL(ui.pdf.url); ui.pdf = null; } };
 const pdfRefused = () => { toast('The report PDF goes to the office only. Use View the report.'); return true; };
 

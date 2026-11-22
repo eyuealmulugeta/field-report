@@ -4,7 +4,7 @@
 import { html, icon } from '../core/dom.js';
 
 const when = iso => { const d = new Date(iso); return Number.isNaN(+d) ? '' : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
-export const isAdmin = c => ((c.s.auth || {}).role || '') === 'admin';
+export const isAdmin = c => ['admin', 'exec'].includes((c.s.auth || {}).role || '');   // 3.15.0: the GM like the Admin
 export const waiting = c => (c.ui.devs || []).filter(d => d.st === 'wait');
 
 /** Today: a line for the Admin when a device waits. */

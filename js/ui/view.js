@@ -11,7 +11,7 @@ import { stepHead, kpi } from './parts.js';
 import { thumb } from './work.js';
 
 /** Only the Admin may see, share or download the report PDF. */
-export const canPdf = c => ((c.s.auth || {}).role || 'engineer') === 'admin';
+export const canPdf = c => ['admin', 'exec'].includes((c.s.auth || {}).role || 'engineer');   // 3.15.0: the GM like the Admin
 
 const sec = (title, inner) => html`<div class="k">${title}</div><div class="box pad rv-sec">${inner}</div>`;
 const none = text => html`<p class="small muted">${text}</p>`;

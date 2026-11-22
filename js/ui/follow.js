@@ -114,9 +114,9 @@ export function daySheet(c) {
       <button type="button" class="btn o" data-act="noAct" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>${icon('pause')}Mark No activity</button>` : ''}   <!-- 3.10.0 (owner, 19 Nov) -->
     ${x.kind === 'noact' ? html`<p class="callout na-c">${icon('pause')} No activity · <b>${x.na.why}</b> · marked by ${x.na.by}${x.na.at ? `, ${stampOf(x.na.at)}` : ''}. Not missing; it keeps report #${x.no || '–'}.</p>
       <div class="box">${naLog(x.na).map(m => html`<div class="li"><span class="ic">${icon('pause')}</span><div class="n"><b>${m.e}: ${m.why}</b><span>${m.by || ''} · ${stampOf(m.at)}</span></div></div>`)}</div>
-      ${isGM(c) ? html`<input class="fld" maxlength="120" data-ui="naWhy" placeholder="New reason" value="${c.ui.naWhy || ''}">
+      ${['admin', 'exec'].includes((c.s.auth || {}).role) ? html`<input class="fld" maxlength="120" data-ui="naWhy" placeholder="New reason" value="${c.ui.naWhy || ''}">
         <div class="day-acts"><button type="button" class="btn o slim" data-act="noAct" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Change reason</button>
-        <button type="button" class="btn t slim bad-t" data-act="noActUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Remove</button></div>` : html`<p class="muted tiny">Only the Admin changes or removes it.</p>`}` : ''}
+        <button type="button" class="btn t slim bad-t" data-act="noActUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Remove</button></div>` : html`<p class="muted tiny">Only the Admin or the GM changes or removes it.</p>`}` : ''}
     ${x.kind === 'dayoff' ? html`<p class="callout">Day off · <b>${x.off.k}</b>${x.off.note ? ` · ${x.off.note}` : ''} · marked by ${x.off.by}${x.off.at ? `, ${stampOf(x.off.at)}` : ''}. No report is needed.</p>
       ${may ? html`<button type="button" class="btn t slim bad-t" data-act="dayOffUndo" data-v="${x.date}" ${c.ui.busy ? 'disabled' : ''}>Change back to Missing</button>` : ''}` : ''}
     ${x.name ? html`<textarea class="fld" rows="2" data-ui="replyText" placeholder="${may ? 'Comment, or what to change' : 'Comment to the office'}">${c.ui.replyText || ''}</textarea>` : ''}
