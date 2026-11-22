@@ -10,7 +10,6 @@ import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
 import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
 import { mergeStaff, withPreparer, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
-import { demoServer, demoDrafts, demoToday, loadSim } from './demo.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf, qtyCheck } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, photoKeys, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
 import { listen } from './core/voice.js';
@@ -36,15 +35,11 @@ import * as SP from './ui/spot.js';
 import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
 import { newVisit, visitMissing, visitRecord, VISIT_PHOTOS, PURPOSES } from './model/visit.js';
 import { shrinkVideo } from './core/video.js';
-import { openLiveCam } from './ui/livecam.js';   // 2.76.0
 import { videoWaiting, videoAdd } from './model/video.js';
 import { kindOf, crewWages } from './model/review.js';
 import * as V from './ui/view.js';
 import * as Q from './ui/quick.js';
 import { presence, BEAT_MS, newEntry as newLog, actEntry, inputClock } from './core/signlog.js';   // 2.58.0 (G2)
-import * as SL from './ui/spotlive.js';   // 2.92.0
-import * as PN from './ui/penalty.js';   // 2.57.0 (R3)
-import * as SM from './ui/store.js';   // 2.61.0 (R5)
 import * as CHAT from './ui/chat.js';   // 2.73.0 (R4): Discuss
 import { messageOf, freshOf, mayEdit, takeBackOk, threadOf } from './model/chat.js';
 import { receiptWrites, chatKey, keep as keepReceipt } from './model/receipts.js';   // 2.84.0: Sent / Delivered / Seen
@@ -53,38 +48,45 @@ import { qualityOf, shotProblem, shotRecord, MAX_PHOTOS, PHOTO_CHARS } from './m
 import { cleanRules, has as ruleHas, screenOk, actOk, firstOk, hideOff, setOff, isOff, screenOffOnly, actOffOnly } from './model/rules.js';   // 2.60.0 (G6)
 import { penaltyProblem, penaltyRecord } from './model/penalty.js';
 import { moveProblem, moveRecord, bookOf, itemsOf, moveLine, itemKey } from './model/store.js';   // 2.61.0 (R5)
-import { openPad } from './ui/sigpad.js';
-import * as MD from './ui/media.js';   // 2.54.0: the GM's Dashboard
 import { onSwipe } from './core/swipe.js';
 import { offerInstall } from './core/install.js';   // 2.32.0
 import { showUrgent } from './ui/urgent.js';   // 2.34.0
 
 const demo = new URLSearchParams(location.search).has('demo');
-if (demo) useFake(demoServer);
-if (demo && new URLSearchParams(location.search).has('sim')) await loadSim();   // 2.46.0: the project simulation (test mode only)
+const DM = demo ? await import('./demo.js') : null;   // 3.16.0 (S1): the demo's code only in the demo
+if (demo) useFake(DM.demoServer);
+if (demo && new URLSearchParams(location.search).has('sim')) await DM.loadSim();   // 2.46.0: the project simulation (test mode only)
 // 2.53.0: when even the smaller copy does not fit, say so instead of losing the work
 const store = createStore(demo ? memoryStorage() : localStorage, () => { if (Date.now() - (window.fullAt || 0) > 60e3) { window.fullAt = Date.now(); setTimeout(() => toast('The phone storage for Field Report is full: send your report now, then remove old photos or videos.'), 0); } });
-if (demo) store.set({ drafts: demoDrafts() });
+if (demo) store.set({ drafts: DM.demoDrafts() });
 
 await deviceRestore().catch(() => '');   // 2.56.0: the device id back from IndexedDB or its cache before any request
 const ui = { busy: false, error: '', sheet: '', toast: '', attTab: (() => { try { return ['', 'crew', 'emp'].includes(localStorage.getItem('fr2_attTab')) ? localStorage.getItem('fr2_attTab') : ''; } catch { return ''; } })() };
 if (demo) ui.spotLive = [];   // 2.92.0: Spotlight live starts empty in the demo
 const finalLocked = () => { const r = report(), p = project(); return !r || !p || finalStamp(r, p) === 'APPROVED'; };   // 2.94.0
-const realToday = () => (demo ? demoToday() : todayIn());
+const realToday = () => (demo ? DM.demoToday() : todayIn());
 /** The day being reported: today, or an earlier day opened from Reports to write or correct. */
 const today = () => ui.date || realToday();
 const now = () => timeIn();
 
 try { setOff(JSON.parse(localStorage.getItem('fr2_off') || '[]')); } catch { /* private mode */ }   // 2.74.0: what Central Hub switched off, offline too
+/* 3.16.0 (owner, 22 Nov, S1): the screens few people open load when first opened, so the app shows sooner on a weak site
+ * network; a few seconds after the start they are fetched anyway, so they are on the phone for offline use. */
+const LAZY_AT = { penalty: './ui/penalty.js', spotlive: './ui/spotlive.js', store: './ui/store.js', media: './ui/media.js', livecam: './ui/livecam.js', sigpad: './ui/sigpad.js' };
+const LZ = {};
+const lazy = k => (LZ[k] ? Promise.resolve(LZ[k]) : (LZ['@' + k] ||= import(LAZY_AT[k]).then(m => { LZ[k] = m; if (ui.lazyFor === k) { ui.lazyFor = ''; draw(); } return m; })
+  .catch(e => { delete LZ['@' + k]; if (ui.lazyFor === k) { ui.lazyFor = ''; toast('Not loaded. Check the network and try again.'); } throw e; })));
+const lazyScreen = (k, fn) => c => { if (LZ[k]) return LZ[k][fn](c); ui.lazyFor = k; lazy(k).catch(() => {}); return { head: P.stepHead('Loading…', '', 'today'), body: html`<p class="muted">Loading…</p>` }; };
+setTimeout(() => Object.keys(LAZY_AT).forEach(k => lazy(k).catch(() => {})), 5000);
 const SCREENS = {
   today: S.today, start: S.start, crew: S.crew, att: S.att, me: S.me, work: W.work, item: W.item, photo: W.photo,
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
   end: E.end, request: E.request, send: E.send,
   // 2.55.0 (owner): Reports and Requests are the two tabs inside Review
   reports: c => { const v = F.reports(c); return { ...v, head: v.head, body: html`${P.reviewTabs('reports', c)}${v.body}` }; },
-  penalties: PN.penalties,   // 2.57.0
-  spotlive: SL.spotlive,   // 2.92.0
-  store: SM.store,   // 2.61.0 (R5)
+  penalties: lazyScreen('penalty', 'penalties'),   // 2.57.0; 3.16.0 loaded when opened
+  spotlive: lazyScreen('spotlive', 'spotlive'),   // 2.92.0
+  store: lazyScreen('store', 'store'),   // 2.61.0 (R5)
   share: SH.share, shots: SH.shots,   // 2.66.0
   requests: c => { const v = F.requests(c); return { ...v, body: html`${P.reviewTabs('requests', c)}${v.body}` }; },
   view: V.view,
@@ -95,7 +97,7 @@ const SCREENS = {
   spot: c => { if (!ui.spot) { ui.spot = newSpot(); c = { ...c, ui }; }   // 2.92.0: opened from an address, the form is made here
     if (c.ui.spotTab !== 'attention' || !c.report) return SP.spot(c); const v = S.attention(c); return { head: P.stepHead('Spotlight', `${c.project.name} · Attention: for the client`, 'today'), body: html`${SP.spotTabs('attention')}${v.body}` }; },
   attention: S.attention,              // 2.7.0
-  media: MD.media,                                     // 2.54.0: the GM's Dashboard
+  media: lazyScreen('media', 'media'),                                    // 2.54.0: the GM's Dashboard
   chat: CHAT.chat,                                     // 2.73.0 (owner, R4): Discuss
 };
 const NEEDS_REPORT = new Set(['attention', 'start', 'crew', 'work', 'item', 'photo', 'equipment', 'materials', 'delivery', 'safety', 'delay', 'photos', 'end', 'request', 'send', 'final', 'check']);
@@ -1623,13 +1625,13 @@ repVid.addEventListener('change', () => keepVideo(repVid.files?.[0], false));
 /** 2.76.0 (owner, 8 Nov): the report camera inside the app, PHOTO and VIDEO; the phone's own camera when it cannot be shown. */
 function liveCam(mode) {
   const p = project();
-  openLiveCam({
+  lazy('livecam').then(m => m.openLiveCam({   // 3.16.0: loaded when first used
     mode, title: p ? p.name || p.code : '', maxBytes: VIDEO_AIM,
     count: () => { const r = store.get().drafts?.[key()]; return (r?.photos || []).length + (store.get().videos || []).filter(v => v.proj === p?.code && v.date === realToday()).length; },
     onPhoto: f => { ui.camFor = 'photo'; addPhotos([f]); },
     onVideo: (f, secs) => keepVideo(f, false, secs),
     fallback: m => { if (m === 'photo') camera(); else { repVid.value = ''; repVid.click(); } },
-  });
+  })).catch(() => camera());
 }
 async function keepVideo(f, gal, secs = 0) {
   const p = project();
@@ -1719,7 +1721,7 @@ const ACTS = {
   signin: () => signedIn(signIn(store.get().profile.name || '')),
   /** 2.4.0: sign full screen (or choose a PNG); kept on this phone and in Drive. d.v === 'report' also signs today's report. */
   async sigFull(d) {
-    const png = await openPad(d.v === 'report' ? 'Sign the report' : 'Your signature');
+    const png = await (await lazy('sigpad')).openPad(d.v === 'report' ? 'Sign the report' : 'Your signature');
     if (!png) return;
     sigSaved(png);
     if (d.v === 'report' && report()) edit(r => { r.signed = new Date().toISOString(); });
@@ -2043,7 +2045,7 @@ const ACTS = {
   visitCam() { ui.camFor = 'visit'; spotIn(spotCam); },
   visitDrop(d) { const [m] = ui.visit.media.splice(Number(d.v), 1); if (m) deletePhoto(m.id).catch(() => {}); draw(); },
   async visitSign() {
-    const png = await openPad('Visitor signature');
+    const png = await (await lazy('sigpad')).openPad('Visitor signature');
     if (!png || !ui.visit) return;
     const blob = await jpegOf(png), id = uid();
     await putPhoto(id, blob); await photoUrl(id);
@@ -2450,7 +2452,7 @@ const ACTS = {
   smClose() { ui.sm = null; draw(); },
   smCard(d) { ui.smCard = d.v || ''; draw(); },
   smCam() { const i = document.getElementById('smCam'); i.value = ''; i.click(); },
-  async smSign() { const sig = await openPad("Receiver's signature"); if (sig && ui.sm) { ui.sm.sig = sig; draw(); } },
+  async smSign() { const sig = await (await lazy('sigpad')).openPad("Receiver's signature"); if (sig && ui.sm) { ui.sm.sig = sig; draw(); } },
   async smSave() {
     const p = project(), f = ui.sm;
     if (!f) return;

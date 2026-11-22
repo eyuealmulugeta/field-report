@@ -257,6 +257,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Opens faster (3.16.0)', 'The app shows sooner on a weak network: screens few people use load when you open them, and stay on the phone for offline use.'],
   ['shield', 'The GM does all the Admin does (3.15.0)', 'The GM account approves, sends back, requests reports, marks day-off and No activity, and changes or removes a mark, like the Admin. Every day-off, No activity and report request is now kept for good.'],
   ['check', 'No activity and the project start (3.10.0)', 'The GM or the PE can mark a missing day as No activity, with a reason. It keeps its report number but is not missing and gets no Request report. Only the Admin changes or removes it. Reports and Review start at the project start date.'],
   ['doc', 'Review by month and week (3.9.0)', 'Review shows every past report grouped by month and week, with sent, approved and missing counts. Older months load as you scroll and stay on the phone for reading without signal. Find by activity or milestone lists the reports that name it, with the first and the last.'],
