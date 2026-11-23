@@ -20,7 +20,8 @@ import * as Y from './ui/day.js';
 import { newEquipment, newReceived, newDelay } from './model/day.js';
 import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
-import { buildPdf, loadPdfLib, loadPdfView, photoCaption, weatherFile } from './pdf.js';
+import { photoCaption, weatherFile } from './pdfbits.js';   // 3.18.0 (Release C): the PDF maker loads when a PDF is made
+const PDF = () => import('./pdf.js');
 import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds, fewOk, FEW_MIN } from './model/pdfplan.js';
 import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbers.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
@@ -30,7 +31,6 @@ import { monthDays, needsYou, toCheck, draftChoice, unsharedRequests, keepMine, 
 import { monthShift, moreMonths } from './model/review.js';   // 3.9.0
 import * as FM from './model/follow.js';   // 2.80.0: Reports by month
 import { nav } from './ui/parts.js';
-import * as R from './ui/review.js';
 import * as SP from './ui/spot.js';
 import { newSpot, spotMissing, mediaKind, SPOT_MAX, VIDEO_AIM, VIDEO_SECONDS, aboutList } from './model/spot.js';
 import { newVisit, visitMissing, visitRecord, VISIT_PHOTOS, PURPOSES } from './model/visit.js';
@@ -72,12 +72,12 @@ const now = () => timeIn();
 try { setOff(JSON.parse(localStorage.getItem('fr2_off') || '[]')); } catch { /* private mode */ }   // 2.74.0: what Central Hub switched off, offline too
 /* 3.16.0 (owner, 22 Nov, S1): the screens few people open load when first opened, so the app shows sooner on a weak site
  * network; a few seconds after the start they are fetched anyway, so they are on the phone for offline use. */
-const LAZY_AT = { penalty: './ui/penalty.js', spotlive: './ui/spotlive.js', store: './ui/store.js', media: './ui/media.js', livecam: './ui/livecam.js', sigpad: './ui/sigpad.js' };
+const LAZY_AT = { review: './ui/review.js', penalty: './ui/penalty.js', spotlive: './ui/spotlive.js', store: './ui/store.js', media: './ui/media.js', livecam: './ui/livecam.js', sigpad: './ui/sigpad.js' };
 const LZ = {};
 const lazy = k => (LZ[k] ? Promise.resolve(LZ[k]) : (LZ['@' + k] ||= import(LAZY_AT[k]).then(m => { LZ[k] = m; if (ui.lazyFor === k) { ui.lazyFor = ''; draw(); } return m; })
   .catch(e => { delete LZ['@' + k]; if (ui.lazyFor === k) { ui.lazyFor = ''; toast('Not loaded. Check the network and try again.'); } throw e; })));
 const lazyScreen = (k, fn) => c => { if (LZ[k]) return LZ[k][fn](c); ui.lazyFor = k; lazy(k).catch(() => {}); return { head: P.stepHead('Loading…', '', 'today'), body: html`<p class="muted">Loading…</p>` }; };
-setTimeout(() => Object.keys(LAZY_AT).forEach(k => lazy(k).catch(() => {})), 5000);
+setTimeout(() => { Object.keys(LAZY_AT).forEach(k => lazy(k).catch(() => {})); PDF().catch(() => {}); }, 5000);
 const SCREENS = {
   today: S.today, start: S.start, crew: S.crew, att: S.att, me: S.me, work: W.work, item: W.item, photo: W.photo,
   equipment: Y.equipment, materials: Y.materials, delivery: Y.delivery, safety: Y.safety, delay: Y.delay, photos: Y.photos,
@@ -92,7 +92,7 @@ const SCREENS = {
   view: V.view,
   final: V.final,   // 2.94.0 (owner R5)
   check: V.check,   // 3.0.0 (owner, 12 Nov): Sign, then Check the report, then Submit
-  review: R.review, rev: R.rev, crewrev: R.crewrev,   // 2.6.0: reviewer accounts
+  review: lazyScreen('review', 'review'), rev: lazyScreen('review', 'rev'), crewrev: lazyScreen('review', 'crewrev'),   // 3.18.0: loaded when opened   // 2.6.0: reviewer accounts
   // 2.87.0 (owner, 9 Nov): Attention is the third tab of Spotlight
   spot: c => { if (!ui.spot) { ui.spot = newSpot(); c = { ...c, ui }; }   // 2.92.0: opened from an address, the form is made here
     if (c.ui.spotTab !== 'attention' || !c.report) return SP.spot(c); const v = S.attention(c); return { head: P.stepHead('Spotlight', `${c.project.name} · Attention: for the client`, 'today'), body: html`${SP.spotTabs('attention')}${v.body}` }; },
@@ -878,6 +878,7 @@ async function approverFor(name) {
 }
 
 async function pdfDoc(r, p, view = null) {
+  const { buildPdf, loadPdfLib } = await PDF();
   const JsPDF = await loadPdfLib();
   const photos = [];
   // 3.2.0 (owner, 15 Nov: one report for everyone): the 12 chosen photos at full resolution; the rest stay on the Dashboard and in Drive
@@ -926,7 +927,7 @@ async function renderFinal() {
   if (ui.finalFor === k && (ui.finalPages || ui.finalBusy)) return;
   ui.finalFor = k; ui.finalBusy = true; ui.finalErr = ''; draw();
   try {
-    const [doc, L] = await Promise.all([pdfDoc(r, p, { stamp }), loadPdfView()]);
+    const [doc, L] = await Promise.all([pdfDoc(r, p, { stamp }), PDF().then(m => m.loadPdfView())]);
     const pdf = await L.getDocument({ data: new Uint8Array(doc.output('arraybuffer')) }).promise;
     const pages = [], w = Math.min(1000, Math.max(320, (root.clientWidth || 360) - 32)) * Math.min(2, window.devicePixelRatio || 1);
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -950,8 +951,8 @@ function fitSoon() {
   const key = `${draftKey(r.proj, r.date)}|${r.updated}`;
   if (ui.fit && ui.fit.key === key) return;
   ui.fit = { key };
-  loadPdfLib().then(J => {
-    const doc = buildPdf(J, { r, project: p, profile: store.get().profile, progress: progressRows(p.setup, r.items), photos: r.photos.map(ph => ({ data: '', w: 4, h: 3, at: ph.at, cap: photoCaption(ph, r.items) })), signedAt: '00:00' });
+  PDF().then(m => m.loadPdfLib().then(J => [m, J])).then(([m, J]) => {
+    const doc = m.buildPdf(J, { r, project: p, profile: store.get().profile, progress: progressRows(p.setup, r.items), photos: r.photos.map(ph => ({ data: '', w: 4, h: 3, at: ph.at, cap: photoCaption(ph, r.items) })), signedAt: '00:00' });
     if (ui.fit.key === key) { ui.fit = { key, ...doc.photoFit }; draw(); }
   }).catch(() => {});   // offline and never loaded: no hint
 }

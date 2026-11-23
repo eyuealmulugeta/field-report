@@ -6,7 +6,7 @@ import { dayLabel } from '../core/util.js';
 import { pdfName } from '../core/names.js';
 import { totals } from '../model/crew.js';
 import { summary, byZone, requestReady, planReady, planLine } from '../model/end.js';
-import { photoCaption, approvedWhen } from '../pdf.js';
+import { photoCaption, approvedWhen } from '../pdfbits.js';
 import { stepHead, kpi } from './parts.js';
 import { thumb } from './work.js';
 
@@ -37,7 +37,7 @@ export function final(c) {
   return {
     head: stepHead('Final report', `#${r.no} · ${dayLabel(r.date)}`, 'send'),
     body: html`<p class="${ok ? 'soft' : 'callout warn'} small"><span class="pill ${ok ? 'ok' : 'warn'}">${ok ? 'APPROVED' : 'DRAFT'}</span> ${ok ? 'The Project Engineer or the GM approved this report.' : 'Until the Project Engineer or the GM approves it.'}</p>
-      <div class="box pad small approved-by"><div class="k">Approved by</div>${ap ? html`<b>${ap.name}</b>${ap.position ? html` · ${ap.position}` : ''}<br><span class="muted">${approvedWhen(ap.at)}</span>${(c.ui.apSig || {})[pdfName(p, r.date, r.no)] ? html`<br><img class="ap-sig" src="${c.ui.apSig[pdfName(p, r.date, r.no)]}" alt="Signature of ${ap.name}">` : ''}` : html`<span class="muted">${ok ? 'Approved' : 'Not approved yet'}</span>`}</div>
+      <div class="box pad small approved-by"><div class="k">Approved by</div>${ap ? html`<b>${ap.name}</b>${ap.position ? html` · ${ap.position}` : ''}<br><span class="muted">${approvedWhen(ap.at)}</span><br><span class="muted tiny">Signature: on the PDF only.</span>` : html`<span class="muted">${ok ? 'Approved' : 'Not approved yet'}</span>`}</div>
       <p class="tiny muted">View only: this report cannot be shared, downloaded or printed from this phone. The office sends it to the client.</p>
       ${layout}
       ${c.ui.finalErr ? html`<p class="callout warn small">The report could not be shown: ${c.ui.finalErr}</p>` : ''}

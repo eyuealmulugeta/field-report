@@ -11,7 +11,7 @@ import { zonesOf } from '../model/items.js';
 import { offlineLine } from '../model/follow.js';
 import { stepHead, chips, kpi } from './parts.js';
 import { canPdf } from './view.js';
-import { fitLine } from '../pdf.js';
+import { fitLine } from '../pdfbits.js';
 import { rateReport, rateLine, checkLines } from '../model/rating.js';
 
 const STEP_NAMES = { start: 'Start of day', crew: 'Attendance', work: 'Work done', equipment: 'Equipment', materials: 'Materials', safety: 'Safety', photos: 'Photos', end: 'Tomorrow', me: 'Me', sign: 'Signature' };

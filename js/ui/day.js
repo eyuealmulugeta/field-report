@@ -6,7 +6,7 @@ import { plural } from '../core/util.js';
 import { EQUIP_STATES, MATERIAL_UNITS, DELAY_CAUSES, PARTIES, INCIDENTS, equipmentChoices, materialChoices, photoNeedsCaption } from '../model/day.js';
 import { stepHead, chips, stepper, mayGallery } from './parts.js';
 import { thumb } from './work.js';
-import { fitLine } from '../pdf.js';
+import { fitLine } from '../pdfbits.js';
 import { CLIENT_PHOTOS, clientNeed, clientProblem } from '../model/pdfplan.js';
 import { videosOf, VIDEO_KEEP_DAYS } from '../model/video.js';
 
