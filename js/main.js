@@ -315,6 +315,28 @@ async function dayOffSend(date, undo) {
   } catch (e) { toast(e.code === 'OFFLINE' ? 'No connection. Nothing was changed.' : `Not changed: ${e.message}`); }
   finally { ui.busy = false; draw(); }
 }
+/* 3.19.0 (owner, 23 Nov): tick several missing days in Reports (Missing) and mark them together, one day per call. */
+async function markMany(kind) {
+  const p = project(), days = Object.keys(ui.pick || {}).filter(d => ui.pick[d]).sort(), why = String(ui.naWhy || '').trim();
+  if (!p || ui.busy) return;
+  if (!days.length) { toast('Tick the days first.'); return; }
+  if (kind === 'noAct' && !why) { toast('Write the reason first.'); return; }
+  const what = kind === 'noAct' ? `No activity (${why})` : `day off (${ui.offK || 'Holiday'})`;
+  if (!confirm(`Mark ${days.length} day${days.length === 1 ? '' : 's'} as ${what}? ${days.join(', ')}`)) return;
+  ui.busy = true; draw();
+  let last = null; const bad = [], got = {};   // every answer joined (the script sends all marks; the demo only the newest)
+  for (const date of days) {
+    try { last = await call(kind, kind === 'noAct' ? { proj: p.code, date, undo: false, why } : { proj: p.code, date, undo: false, k: ui.offK || 'Holiday', note: String(ui.offNote || '').trim() }); Object.assign(got, (kind === 'noAct' ? last.noAct : last.dayOff) || {}); }
+    catch (e) { bad.push(`${date}: ${e.code === 'OFFLINE' ? 'no connection' : e.message}`); if (e.code === 'OFFLINE') break; }
+  }
+  if (last) {
+    const others = store.get().others || {}, keep = (others[p.code] || []).filter(o => (kind === 'noAct' ? !o.na : !o.off));
+    store.set({ others: { ...others, [p.code]: [...keep, ...(kind === 'noAct' ? naEntries(got) : offEntries(got))] } });
+  }
+  ui.pick = {}; if (kind === 'noAct') ui.naWhy = ''; else ui.offNote = '';
+  ui.busy = false; draw();
+  toast(bad.length ? `Not marked: ${bad.join('; ')}` : `${days.length} day${days.length === 1 ? '' : 's'} marked. Central Hub is told.`);
+}
 /* 3.9.0 (owner, 18 Nov): Review by month. The months loaded are kept on the phone (revCache) for reading without signal. */
 const REV_KEEP = 12;
 function revScope() {
@@ -1780,6 +1802,10 @@ const ACTS = {
   projPop: () => { ui.projPop = !ui.projPop; draw(); },
   // 3.6.0 (owner, 17 Nov): the GM or the PE marks a missing day as a day off, with the reason; or changes it back
   dayOff(d) { return dayOffSend(d.v, false); },
+  pickDay(d) { ui.pick = { ...(ui.pick || {}), [d.v]: !(ui.pick || {})[d.v] }; draw(); },   // 3.19.0
+  pickAllDays(d) { const all = String(d.v || '').split(',').filter(Boolean), on = all.some(x => !(ui.pick || {})[x]); ui.pick = on ? Object.fromEntries(all.map(x => [x, true])) : {}; draw(); },
+  dayOffMany() { return markMany('dayOff'); },
+  noActMany() { return markMany('noAct'); },
   /* 3.8.0: Request report */
   async reqOpen(d) {
     const p = project();

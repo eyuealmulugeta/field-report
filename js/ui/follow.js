@@ -48,6 +48,22 @@ function allReports(c) {
   };
 }
 
+/* 3.19.0 (owner, 23 Nov): under Missing, the GM and the PE tick several days and mark them together (day-off or No activity). */
+const manyOn = (c, f, list) => f === 'missing' && c.kind === 'reviewer' && list.filter(x => x.kind === 'missing').length >= 2;
+export const manyTick = (c, f, list, x) => (manyOn(c, f, list) && x.kind === 'missing'
+  ? html`<button type="button" class="tick ${(c.ui.pick || {})[x.date] ? 'on' : ''}" data-act="pickDay" data-v="${x.date}" aria-pressed="${(c.ui.pick || {})[x.date] ? 'true' : 'false'}" aria-label="Choose ${dayLabel(x.date)}">${(c.ui.pick || {})[x.date] ? '✓' : ''}</button>` : '');
+export function manyBar(c, f, list) {
+  if (!manyOn(c, f, list)) return '';
+  const days = list.filter(x => x.kind === 'missing').map(x => x.date), n = days.filter(d => (c.ui.pick || {})[d]).length, busy = c.ui.busy ? 'disabled' : '';
+  return html`<div class="box pad many-bar"><b>Mark several days</b> <span class="muted small">${n} of ${days.length} ticked</span>
+    <button type="button" class="btn t slim" data-act="pickAllDays" data-v="${days.join(',')}">${n === days.length ? 'Untick all' : 'Tick all'}</button>
+    <div class="k">Day-off</div><div class="chips">${DAYOFF_KINDS.map(k => html`<button type="button" class="chip ${(c.ui.offK || 'Holiday') === k ? 'on' : ''}" data-act="pick" data-f="ui.offK" data-v="${k}">${k}</button>`)}</div>
+    <input class="fld" maxlength="80" data-ui="offNote" placeholder="Note (optional)" value="${c.ui.offNote || ''}">
+    <button type="button" class="btn o" data-act="dayOffMany" ${busy}>Mark ticked as day-off</button>
+    <div class="k">No activity</div><input class="fld" maxlength="120" data-ui="naWhy" placeholder="Reason (required)" value="${c.ui.naWhy || ''}">
+    <button type="button" class="btn o" data-act="noActMany" ${busy}>${icon('pause')}Mark ticked No activity</button></div>`;
+}
+
 export function reports(c) {
   if (allOn(c)) return allReports(c);
   const rows = monthRows(monthOf(c), c.realToday, c.project, c.s.drafts, c.s.known, othersFor(c, c.project.code) || []).filter(x => !(c.s.hidden || {})[`${c.project.code}|${x.date}`]);
@@ -59,7 +75,8 @@ export function reports(c) {
     // 2.1.1: the button sits at the top; a footer hides the bottom bar (Home, Today…) on a tab page
     body: html`<button type="button" class="btn o" data-act="checkStatus" ${c.ui.checking ? 'disabled' : ''}>${c.ui.checking ? 'Refreshing…' : 'Refresh'}</button>
       ${monthBar(c, [c.project.code])}<div class="chips">${FILTERS.map(([k, t]) => html`<button type="button" class="chip ${f === k ? 'on' : ''}" data-act="pick" data-f="ui.rf" data-v="${k}">${t}${k && n[k] ? ` ${n[k]}` : ''}</button>`)}</div>
-      ${list.length ? html`<div class="box">${list.map(x => html`<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
+      ${manyBar(c, f, list)}
+      ${list.length ? html`<div class="box ${manyOn(c, f, list) ? 'picking' : ''}">${list.map(x => html`${manyTick(c, f, list, x)}<button type="button" class="li day" data-act="openDay" data-v="${x.date}">
         <span class="dnum"><b>${x.date.slice(8)}</b>${dayLabel(x.date).slice(0, 3)}</span>
         <div class="n"><b>${x.no ? `Report #${x.no}` : x.kind === 'off' ? 'Day off' : x.kind === 'dayoff' ? `Day off · ${x.off.k}` : x.kind === 'noact' ? 'No activity' : x.kind === 'today' ? 'Today' : 'No report'}${x.version > 1 ? ` · version ${x.version}` : ''}</b>
           <span>${x.other ? `Sent by ${x.by || 'another phone'}` : x.comment ? (x.comment.text ? `${x.comment.by || 'Office'}: ${x.comment.text}` : x.comment.kind === 'approve' ? `Approved by ${x.comment.by || 'the office'}` : '') : x.kind === 'dayoff' ? `Marked by ${x.off.by}${x.off.note ? `: ${x.off.note}` : ''}` : x.kind === 'noact' ? html`<span title="${x.na.why}">${x.na.why} · ${x.na.by}</span>` : x.changed ? 'Changed since sent' : x.kind === 'nowork' ? `No work: ${x.report.nowork.reason}` : ''}${x.last && x.last.at ? ` · ${stepLine(x.last)}` : ''}</span></div>

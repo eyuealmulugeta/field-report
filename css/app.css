@@ -792,3 +792,9 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 2px; 
 /* 3.13.0: This week on Today: each day is a button that opens Reports */
 .weekrow .wk-day { background: none; border: 0; padding: 4px 0; font: inherit; color: inherit; cursor: pointer; border-radius: 8px; }
 .weekrow .wk-day:active { background: var(--soft, #eef3f4); }
+
+/* 3.19.0: tick several missing days (Reports, Missing) */
+.box.picking { display: grid; grid-template-columns: 44px 1fr; align-items: center; }
+.tick { width: 28px; height: 28px; margin: 0 auto; border: 2px solid var(--muted); border-radius: 6px; background: none; color: #fff; font-weight: 700; padding: 0; }
+.tick.on { background: var(--brand); border-color: var(--brand); }
+.many-bar .btn { margin-top: 6px; }

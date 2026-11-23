@@ -257,6 +257,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Mark several missing days at once (3.19.0)', 'Reports › Missing: tick the days (or Tick all), then mark them together as day-off or No activity. For the GM and the PE.'],
   ['check', 'Signature on the PDF only (3.17.0)', 'The approver’s signature is no longer shown on the phone screen; it is printed only on the approved PDF.'],
   ['check', 'Opens faster (3.16.0)', 'The app shows sooner on a weak network: screens few people use load when you open them, and stay on the phone for offline use.'],
   ['shield', 'The GM does all the Admin does (3.15.0)', 'The GM account approves, sends back, requests reports, marks day-off and No activity, and changes or removes a mark, like the Admin. Every day-off, No activity and report request is now kept for good.'],
