@@ -257,6 +257,7 @@ export function keepMine(remote, mine) {
 
 /** What's new in 2.0, shown once. */
 export const WHATS_NEW = [
+  ['check', 'Next step by itself, easier marking (3.20.0)', 'Ticking a step done opens the next step not done yet. The tick boxes for missing days show under every filter, from one missing day. The reason for fewer than 12 photos needs no letter count (up to 1,000 letters).'],
   ['check', 'Mark several missing days at once (3.19.0)', 'Reports › Missing: tick the days (or Tick all), then mark them together as day-off or No activity. For the GM and the PE.'],
   ['check', 'Signature on the PDF only (3.17.0)', 'The approver’s signature is no longer shown on the phone screen; it is printed only on the approved PDF.'],
   ['check', 'Opens faster (3.16.0)', 'The app shows sooner on a weak network: screens few people use load when you open them, and stay on the phone for offline use.'],

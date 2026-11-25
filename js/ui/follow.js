@@ -49,7 +49,8 @@ function allReports(c) {
 }
 
 /* 3.19.0 (owner, 23 Nov): under Missing, the GM and the PE tick several days and mark them together (day-off or No activity). */
-const manyOn = (c, f, list) => f === 'missing' && c.kind === 'reviewer' && list.filter(x => x.kind === 'missing').length >= 2;
+// 3.20.0 (owner, 25 Nov: "no box to tick"): on every filter, as soon as one missing day is listed (was Missing only, 2+ days)
+const manyOn = (c, f, list) => c.kind === 'reviewer' && list.some(x => x.kind === 'missing');
 export const manyTick = (c, f, list, x) => (manyOn(c, f, list) && x.kind === 'missing'
   ? html`<button type="button" class="tick ${(c.ui.pick || {})[x.date] ? 'on' : ''}" data-act="pickDay" data-v="${x.date}" aria-pressed="${(c.ui.pick || {})[x.date] ? 'true' : 'false'}" aria-label="Choose ${dayLabel(x.date)}">${(c.ui.pick || {})[x.date] ? '✓' : ''}</button>` : '');
 export function manyBar(c, f, list) {

@@ -447,7 +447,7 @@ export function fewSheet(c) {
   const n = ((c.report || {}).photos || []).length;
   return html`<div class="dim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="Fewer than 12 photos">
     <div class="grab"></div><b class="big-t">Only ${n} of 12 photos. Submit report anyway?</b>
-    <textarea class="fld" rows="3" maxlength="300" data-ui="fewWhy" placeholder="Why fewer photos? (at least 10 characters)" aria-label="Reason for fewer photos">${c.ui.fewWhy || ''}</textarea>
+    <textarea class="fld" rows="3" maxlength="1000" data-ui="fewWhy" placeholder="Why fewer photos?" aria-label="Reason for fewer photos">${c.ui.fewWhy || ''}</textarea>
     <p class="muted small">Only the office sees the reason. It is not on the PDF.</p>
     <div class="two"><button type="button" class="btn o" data-act="fewAdd">Add photos</button>
     <button type="button" class="btn p" data-act="fewSubmit" ${c.ui.sending ? 'disabled' : ''}>Submit anyway</button></div></div>`;

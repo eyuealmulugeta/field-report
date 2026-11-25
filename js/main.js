@@ -8,7 +8,7 @@ import { html } from './core/dom.js';
 import { createStore, memoryStorage } from './core/store.js';
 import { todayIn, timeIn, num, weekday, uid } from './core/util.js';
 import { codesOf, pdfName } from './core/names.js';
-import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting } from './model/report.js';
+import { newReport, draftKey, STEPS, weatherTerm, stepOfScreen, doneCount, dbWaiting, nextStep } from './model/report.js';
 import { mergeStaff, withPreparer, attendanceRows, crewPhotoState, crewCloses, CREW_ST_WORD, withTeam, normTrade, markKey, applyMarks } from './model/crew.js';
 import { newItem, itemFromPlan, parseSpeech, zonesOf, qtyCheck } from './model/items.js';
 import { putPhoto, getPhoto, deletePhoto, photoKeys, shrink, photoUrl, original, screenCopy, tileCopy, ORIG } from './core/photos.js';
@@ -22,7 +22,7 @@ import * as E from './ui/end.js';
 import { newRequest, newPlanLine, unfinishedWork, reportMeta, fromLive, mergeRequests } from './model/end.js';
 import { photoCaption, weatherFile } from './pdfbits.js';   // 3.18.0 (Release C): the PDF maker loads when a PDF is made
 const PDF = () => import('./pdf.js');
-import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds, fewOk, FEW_MIN } from './model/pdfplan.js';
+import { progressRows, CLIENT_PHOTOS, spreadIds, clientIds, fewOk, FEW_MIN, FEW_MAX } from './model/pdfplan.js';
 import { workDaysAfter, renumbered, staleDrafts, KEEP_DAYS } from './model/numbers.js';   // 2.96.0 (R7)
 import { forecastUrl, forecastOf } from './model/forecast.js';   // 2.64.0 (R8)
 
@@ -316,6 +316,11 @@ async function dayOffSend(date, undo) {
   finally { ui.busy = false; draw(); }
 }
 /* 3.19.0 (owner, 23 Nov): tick several missing days in Reports (Missing) and mark them together, one day per call. */
+/** 3.20.0 (owner, 25 Nov): "when one tab is ticked finished, move to the next by default". The Today list when all are done. */
+function goNext(id) {
+  const n = report() ? nextStep(report(), id) : '';
+  go(n && S.READY.has(n) ? n : 'today');
+}
 async function markMany(kind) {
   const p = project(), days = Object.keys(ui.pick || {}).filter(d => ui.pick[d]).sort(), why = String(ui.naWhy || '').trim();
   if (!p || ui.busy) return;
@@ -847,9 +852,10 @@ function oneSignal(appId, who) {
     }
     const base = location.pathname.replace(/[^/]*$/, '');
     window.OneSignalDeferred.push(async OS => {
-      try { await OS.init({ appId, serviceWorkerPath: base.replace(/^\//, '') + 'push/OneSignalSDKWorker.js', serviceWorkerParam: { scope: base + 'push/' }, notifyButton: { enable: false } }); }
-      catch (e) { if (!/already init/i.test(String(e && e.message || e))) return fail(e); }
-      try { if (who) await OS.login(who); ok(OS); } catch (e) { fail(e); }
+      try { await OS.init({ appId, serviceWorkerPath: base.replace(/^\//, '') + 'push/OneSignalSDKWorker.js', serviceWorkerParam: { scope: base + 'push/' }, notifyButton: { enable: false }, welcomeNotification: { disable: true } }); }   // 3.20.0: no welcome text (its missing 'en' broke the switch)
+      catch (e) { if (!/already init|reading 'en'/i.test(String(e && e.message || e))) return fail(e); }
+      try { if (who) await OS.login(who); } catch (e) { if (!/reading 'en'/i.test(String(e && e.message || e))) return fail(e); }
+      ok(OS);
     });
   });
 }
@@ -2231,7 +2237,7 @@ const ACTS = {
   startDone() {
     edit(r => { r.start.done = true; });
     store.set({ lastNo: { ...store.get().lastNo, [store.get().proj]: report().no } });
-    go(report().crew.done ? 'today' : 'crew');
+    goNext('start');   // 3.20.0
   },
   mark: d => { edit(r => { const x = r.crew.rows[d.i]; x.state = d.v; x.markAt = Date.now(); if (d.v !== 'present') x.ot = 0; }); ui.ot = null; shareRows([report().crew.rows[d.i]]); },
   otOpen: d => { ui.ot = ui.ot === Number(d.i) ? null : Number(d.i); draw(); },
@@ -2356,7 +2362,7 @@ const ACTS = {
     if (open && !confirm(`${open} ${open === 1 ? 'person is' : 'people are'} not marked. They are not sent. Done anyway?`)) return;
     edit(r => { r.crew.done = true; r.crew.extra = r.crew.extra.filter(x => x.qty > 0); });
     const p = project(), r = report(), rows = attendanceRows(r.crew);
-    go('today');
+    goNext('crew');
     if (!rows.length) return;
     try {
       const how = await sendOrQueue('attendance', { proj: p.code, cc: codesOf(p).cc, date: r.date, by: store.get().profile.name, rows });
@@ -2543,7 +2549,13 @@ const ACTS = {
       try { OS.User.PushSubscription.optIn().catch(() => {}); } catch { /* older service: already in */ }
       store.set({ profile: { ...store.get().profile, push: true } });
       toast('Notifications on.');
-    } catch (e) { toast(e.message || String(e)); }
+    } catch (e) {
+      // 3.20.0 (owner, 25 Nov: "Cannot read properties of undefined (reading 'en')"): the service's own text error; when the
+      // phone allows notifications it is on all the same
+      if (/reading 'en'/.test(String(e && e.message || e)) && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        store.set({ profile: { ...store.get().profile, push: true } }); toast('Notifications on.');
+      } else toast(e.message || String(e));
+    }
     finally { ui.pushBusy = false; draw(); }
   },
   inboxClear() { ui.inboxOpen = false; store.set({ inboxSeen: ((store.get().inbox || [])[0] || {}).t || '' }); },
@@ -2667,8 +2679,8 @@ const ACTS = {
   // 3.7.0 (owner, 18 Nov): fewer than 12 photos: the reason, then Send; or back to Photos
   fewSubmit() {
     const why = String(ui.fewWhy || '').trim();
-    if (why.length < FEW_MIN) return toast(`Write the reason (at least ${FEW_MIN} characters).`);
-    editKey(key(), r => { r.fewWhy = why.slice(0, 300); });   // not edit(): the signature stays
+    if (why.length < FEW_MIN) return toast('Write the reason.');   // 3.20.0: no letter count
+    editKey(key(), r => { r.fewWhy = why.slice(0, FEW_MAX); });   // not edit(): the signature stays
     ui.sheet = ''; return ACTS.sendReport();
   },
   fewAdd() { ui.sheet = ''; go('photos'); },
@@ -2685,12 +2697,12 @@ const ACTS = {
   pickNone() { edit(r => { r.photos.forEach(p => { delete p.client; }); }); },
   dayDone(d) {
     edit(r => { r.done[d.v] = !r.done[d.v]; if (d.v === 'safety') r.safety.done = r.done.safety; });
-    if (report().done[d.v]) go('today');
+    if (report().done[d.v]) goNext(d.v);   // 3.20.0: the next step, not the list
   },
   flip: d => edit(r => { setPath(r, d.f, !getPath(r, d.f)); if (d.f === 'safety.incident') { r.safety.done = false; r.done.safety = false; } if (d.f === 'safety.toolbox' && r.safety.toolbox && !r.safety.toolboxAt) r.safety.toolboxAt = now(); }),
   allClear() {
     edit(r => { Object.assign(r.safety, { incident: false, kind: '', note: '', done: true }); r.delays = []; r.done.safety = true; });
-    toast('Ticked: no incidents, no delays.'); go('today');
+    toast('Ticked: no incidents, no delays.'); goNext('safety');
   },
   addEq(d) {
     const name = d.v || (prompt('Name of the machine or equipment') || '').trim();
@@ -2803,7 +2815,7 @@ const ACTS = {
     edit(r => { r.items = r.items.filter(x => x.id !== id); r.photos.forEach(p => { if (p.itemId === id) p.itemId = ''; }); });
     go('work');
   },
-  workDone() { edit(r => { r.done.work = !r.done.work; }); if (report().done.work) go('today'); },
+  workDone() { edit(r => { r.done.work = !r.done.work; }); if (report().done.work) goNext('work'); },
 
   /* photos */
   logPhoto() { ui.sheet = ''; ui.camFor = 'photo'; liveCam('photo'); },   // 2.76.0: the camera inside the app
